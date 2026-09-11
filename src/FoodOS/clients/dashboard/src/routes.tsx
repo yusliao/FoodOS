@@ -109,6 +109,15 @@ const GroupDetailPage = lazyNamed(
 );
 const MyFilesPage = lazyNamed(() => import("@/pages/files/my-files"), "MyFilesPage");
 const ChatPage = lazyNamed(() => import("@/pages/chat/chat-page"), "ChatPage");
+const ShopLayout = lazyNamed(() => import("@/pages/shop/layout"), "ShopLayout");
+const ShopCatalogPage = lazyNamed(() => import("@/pages/shop/catalog"), "ShopCatalogPage");
+const ShopProductPage = lazyNamed(() => import("@/pages/shop/product"), "ShopProductPage");
+const ShopCartPage = lazyNamed(() => import("@/pages/shop/cart"), "ShopCartPage");
+const ShopOrdersPage = lazyNamed(() => import("@/pages/shop/orders"), "ShopOrdersPage");
+const ShopOrderDetailPage = lazyNamed(
+  () => import("@/pages/shop/order-detail"),
+  "ShopOrderDetailPage",
+);
 
 /**
  * RouteFallback — what shows while a lazy chunk is downloading. Mirrors
@@ -214,6 +223,18 @@ export const router = createBrowserRouter([
           { path: "identity/roles/:roleId", element: withSuspense(<RoleDetailPage />) },
           { path: "identity/groups", element: withSuspense(<GroupsPage />) },
           { path: "identity/groups/:groupId", element: withSuspense(<GroupDetailPage />) },
+          {
+            path: "shop",
+            element: withSuspense(<ShopLayout />),
+            children: [
+              { index: true, element: <Navigate to="catalog" replace /> },
+              { path: "catalog", element: withSuspense(<ShopCatalogPage />) },
+              { path: "products/:productId", element: withSuspense(<ShopProductPage />) },
+              { path: "cart", element: withSuspense(<ShopCartPage />) },
+              { path: "orders", element: withSuspense(<ShopOrdersPage />) },
+              { path: "orders/:orderId", element: withSuspense(<ShopOrderDetailPage />) },
+            ],
+          },
           { path: "catalog", element: <Navigate to="/catalog/brands" replace /> },
           { path: "catalog/brands", element: withSuspense(<BrandsPage />) },
           { path: "catalog/categories", element: withSuspense(<CategoriesPage />) },

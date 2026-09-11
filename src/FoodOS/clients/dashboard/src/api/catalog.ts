@@ -212,6 +212,14 @@ export type ProductDto = {
   price: MoneyDto;
   stock: number;
   isActive: boolean;
+  /** Fulfillment zone. Shop uses this for ATP; catalog list price is never the customer price. */
+  temperatureZone?: string;
+  shelfLifeDays?: number | null;
+  minRemainingDaysOnShip?: number;
+  baseUom?: string;
+  catchWeight?: boolean;
+  barcode?: string | null;
+  storageNote?: string | null;
   /** Convenience: the URL of the thumbnail image (if any). Derived server-side from images[]. */
   thumbnailUrl?: string | null;
   images: ProductImageDto[];
@@ -383,6 +391,35 @@ export async function deleteProduct(id: string): Promise<void> {
   await apiFetch<void>(`/api/v1/catalog/products/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+// ─── Quotes (customer price) ─────────────────────────────────────────
+// Shop MUST use this for display. ProductDto.price is catalog list price
+// and must not be shown as the customer's unit price.
+
+export type PriceQuoteDto = {
+  customerOrgId: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  currency: string;
+  source: string;
+};
+
+export type QuoteProductPriceParams = {
+  customerOrgId: string;
+  productId: string;
+  quantity: number;
+  asOf?: string;
+};
+
+export function quoteProductPrice(params: QuoteProductPriceParams): Promise<PriceQuoteDto> {
+  const query = new URLSearchParams();
+  query.set("customerOrgId", params.customerOrgId);
+  query.set("productId", params.productId);
+  query.set("quantity", String(params.quantity));
+  if (params.asOf) query.set("asOf", params.asOf);
+  return apiFetch<PriceQuoteDto>(`/api/v1/catalog/quotes?${query.toString()}`);
 }
 
 // ─── Trash + Restore ──────────────────────────────────────────────────

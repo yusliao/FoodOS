@@ -1,5 +1,6 @@
 import {
   Activity,
+  ClipboardList,
   CreditCard,
   FolderOpen,
   FolderTree,
@@ -11,6 +12,8 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  ShoppingCart,
+  Store,
   Tags,
   Ticket,
   Trash2,
@@ -18,6 +21,7 @@ import {
   UsersRound,
   Wifi,
 } from "lucide-react";
+import { SHOP_PERMISSIONS } from "@/api/ordering";
 import { ALL_TRASH_PERMISSIONS } from "@/lib/trash-permissions";
 
 export type NavSpec = {
@@ -66,6 +70,16 @@ export const topNavBottom: NavSpec[] = [
 
 // Section accordion. Single-select — only one section open at a time.
 export const sections: NavSection[] = [
+  {
+    id: "shop",
+    caption: "Shop",
+    icon: ShoppingCart,
+    items: [
+      { to: "/shop/catalog", label: "Order", icon: Store, perm: SHOP_PERMISSIONS.view },
+      { to: "/shop/cart", label: "Cart", icon: ShoppingCart, perm: SHOP_PERMISSIONS.order },
+      { to: "/shop/orders", label: "Orders", icon: ClipboardList, perm: SHOP_PERMISSIONS.view },
+    ],
+  },
   {
     id: "operations",
     caption: "Operations",
