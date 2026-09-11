@@ -21,7 +21,7 @@ public static class OperatingCutoff
         {
             var local = date.ToDateTime(cutoffLocal, DateTimeKind.Unspecified);
             TimeSpan offset = tz.GetUtcOffset(local);
-            return new DateTimeOffset(local, offset);
+            return new DateTimeOffset(local, offset).ToUniversalTime();
         }
 
         DateTimeOffset todayCutoff = CutoffOn(today);

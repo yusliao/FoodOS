@@ -281,7 +281,10 @@ public class EndpointConventionTests
                                name.StartsWith("Receive", StringComparison.Ordinal) ||
                                name.StartsWith("Reserve", StringComparison.Ordinal) ||
                                name.StartsWith("Unreserve", StringComparison.Ordinal) ||
-                               name.StartsWith("Isolate", StringComparison.Ordinal);
+                               name.StartsWith("Isolate", StringComparison.Ordinal) ||
+                               name.StartsWith("Place", StringComparison.Ordinal) ||
+                               name.StartsWith("Amend", StringComparison.Ordinal) ||
+                               name.StartsWith("Cancel", StringComparison.Ordinal);
 
                 if (!hasVerb)
                 {

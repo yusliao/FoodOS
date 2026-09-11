@@ -1,0 +1,132 @@
+using System.Globalization;
+using System.Net;
+using FSH.Framework.Core.Exceptions;
+using FSH.Modules.Inventory.Contracts;
+using FSH.Modules.Inventory.Contracts.v1.Warehouses;
+using FSH.Modules.Ordering.Contracts.v1.Orders;
+using FSH.Modules.Ordering.Data;
+using FSH.Modules.Ordering.Domain;
+using Mediator;
+using Microsoft.EntityFrameworkCore;
+
+namespace FSH.Modules.Ordering.Features.v1.Orders.PlaceOrder;
+
+public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMediator mediator, TimeProvider clock)
+    : ICommandHandler<PlaceOrderCommand, Guid>
+{
+    public async ValueTask<Guid> Handle(PlaceOrderCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var store = await dbContext.Stores
+            .FirstOrDefaultAsync(s => s.Id == command.StoreId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new NotFoundException($"Store {command.StoreId} not found.");
+
+        var org = await dbContext.CustomerOrgs
+            .FirstOrDefaultAsync(o => o.Id == store.CustomerOrgId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new NotFoundException($"Customer organization {store.CustomerOrgId} not found.");
+
+        if (org.CreditHold)
+        {
+            throw new CustomException(
+                "Customer is on credit hold.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
+        var cart = await dbContext.Carts
+            .FirstOrDefaultAsync(c => c.StoreId == store.Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (cart is null || cart.Lines.Count == 0)
+        {
+            throw new CustomException(
+                "Cart is empty.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.BadRequest);
+        }
+
+        var warehouse = await mediator.Send(new GetWarehouseByIdQuery(store.DefaultWarehouseId), cancellationToken)
+            .ConfigureAwait(false);
+
+        DateTimeOffset utcNow = clock.GetUtcNow();
+        TimeOnly cutoffLocal = TimeOnly.ParseExact(
+            warehouse.Clock.CutoffLocal,
+            "HH:mm",
+            CultureInfo.InvariantCulture);
+        var (businessDate, cutoffAt) = OperatingCutoff.Resolve(warehouse.Clock.TimeZoneId, cutoffLocal, utcNow);
+
+        var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
+        var zones = new Dictionary<Guid, TemperatureZoneKind>();
+        foreach (var line in cart.Lines)
+        {
+            var (product, zone) = await ShopCatalog.GetActiveAsync(mediator, line.ProductId, cancellationToken)
+                .ConfigureAwait(false);
+            string currency = string.IsNullOrWhiteSpace(product.Price.Currency)
+                ? "USD"
+                : product.Price.Currency;
+            draftLines.Add((line.ProductId, zone.ToString(), line.Quantity, product.Price.Amount, currency));
+            zones[line.ProductId] = zone;
+        }
+
+        string number = await OrderNumbers.NextAsync(dbContext, businessDate, cancellationToken).ConfigureAwait(false);
+        var order = SalesOrder.CreateDraft(
+            number,
+            store.Id,
+            org.Id,
+            warehouse.Id,
+            businessDate,
+            cutoffAt,
+            draftLines);
+        dbContext.SalesOrders.Add(order);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        var reserved = new List<(Guid LineId, Guid ReservationId)>();
+        try
+        {
+            foreach (var line in order.Lines)
+            {
+                Guid reservationId = await InventoryStockOps.ReserveAsync(
+                        mediator,
+                        warehouse.Id,
+                        zones[line.ProductId],
+                        line.ProductId,
+                        line.OrderedQty,
+                        order.Id,
+                        line.Id,
+                        order.Revision,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                line.BindReservation(reservationId, line.OrderedQty);
+                reserved.Add((line.Id, reservationId));
+            }
+
+            order.Place(utcNow);
+            dbContext.CartLines.RemoveRange(cart.Lines);
+            cart.Clear();
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return order.Id;
+        }
+        catch (Exception)
+        {
+            foreach (var (lineId, reservationId) in reserved)
+            {
+                await InventoryStockOps.UnreserveAsync(
+                        mediator,
+                        reservationId,
+                        order.Id,
+                        lineId,
+                        order.Revision,
+                        "place-compensate",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            order.FailPlace();
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+}

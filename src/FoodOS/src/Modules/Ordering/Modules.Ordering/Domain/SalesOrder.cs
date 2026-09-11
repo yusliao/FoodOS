@@ -101,11 +101,6 @@ public sealed class SalesOrder : AggregateRoot<Guid>
     {
         EnsureBeforeCutoff(utcNow);
         SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Reserved);
-        foreach (var line in _lines)
-        {
-            line.ClearReservation();
-        }
-
         Revision++;
     }
 

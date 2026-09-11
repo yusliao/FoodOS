@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 # Stage 1: build the SPA bundle
 FROM node:22-alpine AS build
 WORKDIR /app

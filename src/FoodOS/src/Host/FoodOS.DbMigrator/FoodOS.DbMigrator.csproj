@@ -40,6 +40,8 @@
     <ProjectReference Include="..\..\Modules\Catalog\Modules.Catalog.Contracts\Modules.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Inventory\Modules.Inventory\Modules.Inventory.csproj" />
     <ProjectReference Include="..\..\Modules\Inventory\Modules.Inventory.Contracts\Modules.Inventory.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Ordering\Modules.Ordering\Modules.Ordering.csproj" />
+    <ProjectReference Include="..\..\Modules\Ordering\Modules.Ordering.Contracts\Modules.Ordering.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Chat\Modules.Chat\Modules.Chat.csproj" />
     <ProjectReference Include="..\..\Modules\Chat\Modules.Chat.Contracts\Modules.Chat.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Files\Modules.Files\Modules.Files.csproj" />

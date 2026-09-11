@@ -3,6 +3,11 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Ordering.Domain;
 
+/// <summary>
+/// Sales order status machine. <see cref="Reserved"/> is the documented Shop hold state
+/// (not an unused placeholder), so CA1700 does not apply.
+/// </summary>
+#pragma warning disable CA1700 // Reserved is the PlaceOrder success state in the design
 public enum SalesOrderStatus
 {
     Draft = 0,
@@ -15,6 +20,7 @@ public enum SalesOrderStatus
     Reconciled = 7,
     Cancelled = 8
 }
+#pragma warning restore CA1700
 
 public static class SalesOrderTransitions
 {
