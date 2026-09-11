@@ -13,7 +13,7 @@ RUN dotnet publish src/Host/FoodOS.DbMigrator/FoodOS.DbMigrator.csproj \
     --no-restore \
     -o /publish
 
-FROM mcr.microsoft.com/dotnet/nightly/aspnet:10.0-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS runtime
 WORKDIR /app
 COPY --from=build /publish .
 

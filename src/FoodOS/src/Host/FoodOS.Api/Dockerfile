@@ -18,7 +18,9 @@ RUN dotnet publish src/Host/FoodOS.Api/FoodOS.Api.csproj \
 # ── Runtime stage ──────────────────────────────────────────────────
 # Chiseled = no shell, no apt, no debugger. Smaller pull + smaller CVE
 # surface. APP_UID (1654) is the non-root user baked into the image.
-FROM mcr.microsoft.com/dotnet/nightly/aspnet:10.0-noble-chiseled AS runtime
+# chiseled-extra includes ICU; the default chiseled image is globalization-invariant
+# and cannot construct CultureInfo("en-US") required by FoodOS localization.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS runtime
 WORKDIR /app
 COPY --from=build /publish .
 

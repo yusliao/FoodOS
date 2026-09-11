@@ -2,9 +2,9 @@ using System.Globalization;
 using System.Net;
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Catalog.Contracts.Dtos;
+using FSH.Modules.Catalog.Contracts.v1.PriceLists;
 using FSH.Modules.Catalog.Contracts.v1.Products;
 using FSH.Modules.Inventory.Contracts;
-using FSH.Modules.Inventory.Contracts.v1.Stock;
 using Mediator;
 
 namespace FSH.Modules.Ordering.Features.v1;
@@ -35,4 +35,12 @@ internal static class ShopCatalog
 
         return (product, zone);
     }
+
+    public static ValueTask<PriceQuoteDto> QuoteAsync(
+        IMediator mediator,
+        Guid customerOrgId,
+        Guid productId,
+        decimal quantity,
+        CancellationToken cancellationToken)
+        => mediator.Send(new QuoteProductPriceQuery(customerOrgId, productId, quantity), cancellationToken);
 }

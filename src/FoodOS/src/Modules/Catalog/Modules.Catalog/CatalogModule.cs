@@ -34,6 +34,12 @@ using FSH.Modules.Catalog.Features.v1.Products.RestoreProduct;
 using FSH.Modules.Catalog.Features.v1.Products.SearchProducts;
 using FSH.Modules.Catalog.Features.v1.Products.SetProductThumbnail;
 using FSH.Modules.Catalog.Features.v1.Products.UpdateProduct;
+using FSH.Modules.Catalog.Features.v1.PriceLists.CreatePriceList;
+using FSH.Modules.Catalog.Features.v1.PriceLists.GetPriceListById;
+using FSH.Modules.Catalog.Features.v1.PriceLists.GetPriceLists;
+using FSH.Modules.Catalog.Features.v1.PriceLists.QuoteProductPrice;
+using FSH.Modules.Catalog.Features.v1.PriceLists.UpsertPriceListLine;
+using FSH.Modules.Catalog.Features.v1.PriceLists.UpsertProductPriceLock;
 using FSH.Modules.Catalog.Features.v1.Products.UpdateProductFulfillment;
 using FSH.Modules.Catalog.Features.v1.Products.UpsertProductTranslation;
 using Microsoft.AspNetCore.Builder;
@@ -126,5 +132,12 @@ public sealed class CatalogModule : IModule
 
         group.MapGetProductByIdEndpoint();
         group.MapSearchProductsEndpoint();
+
+        group.MapGetPriceListsEndpoint();
+        group.MapGetPriceListByIdEndpoint();
+        group.MapCreatePriceListEndpoint();
+        group.MapUpsertPriceListLineEndpoint();
+        group.MapUpsertProductPriceLockEndpoint();
+        group.MapGetProductPriceQuoteEndpoint();
     }
 }
