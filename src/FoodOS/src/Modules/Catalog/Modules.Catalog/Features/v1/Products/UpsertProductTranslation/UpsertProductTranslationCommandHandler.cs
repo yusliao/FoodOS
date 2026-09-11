@@ -1,6 +1,7 @@
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Catalog.Contracts.v1.Products;
 using FSH.Modules.Catalog.Data;
+using FSH.Modules.Catalog.Domain;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +19,20 @@ public sealed class UpsertProductTranslationCommandHandler(CatalogDbContext dbCo
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Product {command.ProductId} not found.");
 
-        product.UpsertTranslation(command.Culture, command.Name, command.Description);
+        string culture = ProductTranslation.NormalizeCulture(command.Culture);
+        var existing = product.Translations.FirstOrDefault(t =>
+            string.Equals(t.Culture, culture, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            existing.Update(command.Name, command.Description);
+        }
+        else
+        {
+            dbContext.ProductTranslations.Add(
+                ProductTranslation.Create(product.Id, culture, command.Name, command.Description));
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return product.Id;
     }

@@ -2,7 +2,12 @@ namespace FSH.Modules.Inventory.Domain;
 
 public static class AvailableQtyCalculator
 {
-    public static decimal Compute(IEnumerable<LotBalance> balances, IReadOnlyDictionary<Guid, Lot> lots, DateOnly today, int minRemainingDaysOnShip = 0)
+    public static decimal Compute(
+        IEnumerable<LotBalance> balances,
+        IReadOnlyDictionary<Guid, Lot> lots,
+        DateOnly today,
+        int minRemainingDaysOnShip = 0,
+        decimal skuReservedQty = 0)
     {
         ArgumentNullException.ThrowIfNull(balances);
         ArgumentNullException.ThrowIfNull(lots);
@@ -33,6 +38,7 @@ public static class AvailableQtyCalculator
             }
         }
 
-        return total;
+        decimal remainingAfterReserve = total - skuReservedQty;
+        return remainingAfterReserve > 0 ? remainingAfterReserve : 0m;
     }
 }

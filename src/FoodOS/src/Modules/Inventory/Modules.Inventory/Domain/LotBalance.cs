@@ -45,12 +45,24 @@ public sealed class LotBalance : BaseEntity<Guid>
     public void Isolate(decimal qty)
     {
         EnsurePositive(qty);
-        if (OnHand - Isolated < qty)
+        if (Available < qty)
         {
-            throw new InvalidOperationException("Insufficient on-hand quantity to isolate.");
+            throw new InvalidOperationException("Insufficient available quantity to isolate.");
         }
 
         Isolated += qty;
+        Version++;
+    }
+
+    public void ReleaseIsolate(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Isolated < qty)
+        {
+            throw new InvalidOperationException("Insufficient isolated quantity to release.");
+        }
+
+        Isolated -= qty;
         Version++;
     }
 
@@ -65,6 +77,20 @@ public sealed class LotBalance : BaseEntity<Guid>
         Reserved += qty;
         Version++;
     }
+
+    public void Unreserve(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Reserved < qty)
+        {
+            throw new InvalidOperationException("Insufficient reserved quantity to unreserve.");
+        }
+
+        Reserved -= qty;
+        Version++;
+    }
+
+    public bool IsFullyIsolated => Isolated == OnHand && Reserved == 0 && Allocated == 0;
 
     public void Allocate(decimal qty)
     {

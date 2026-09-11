@@ -1,8 +1,7 @@
-using FSH.Modules.Inventory.Contracts;
 using FSH.Modules.Inventory.Contracts.Dtos;
 using FSH.Modules.Inventory.Contracts.v1.Stock;
 using FSH.Modules.Inventory.Data;
-using FSH.Modules.Inventory.Domain;
+using FSH.Modules.Inventory.Features.v1.Stock;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,28 +14,30 @@ public sealed class GetAvailableQtyQueryHandler(InventoryDbContext dbContext, Ti
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var balancesQuery = dbContext.LotBalances.AsNoTracking()
-            .Where(b => b.WarehouseId == query.WarehouseId && b.ProductId == query.ProductId);
-
+        Guid? zoneId = null;
         if (query.Zone is { } zoneKind)
         {
-            var zoneIds = await dbContext.TemperatureZones.AsNoTracking()
+            zoneId = await dbContext.TemperatureZones.AsNoTracking()
                 .Where(z => z.WarehouseId == query.WarehouseId && z.Kind == zoneKind)
-                .Select(z => z.Id)
-                .ToListAsync(cancellationToken)
+                .Select(z => (Guid?)z.Id)
+                .FirstOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
-            balancesQuery = balancesQuery.Where(b => zoneIds.Contains(b.ZoneId));
+
+            if (zoneId is null)
+            {
+                return new AvailableQtyDto(query.WarehouseId, query.ProductId, 0m, zoneKind.ToString());
+            }
         }
 
-        var balances = await balancesQuery.ToListAsync(cancellationToken).ConfigureAwait(false);
-        var lotIds = balances.Select(b => b.LotId).Distinct().ToArray();
-        var lots = await dbContext.Lots.AsNoTracking()
-            .Where(l => lotIds.Contains(l.Id))
-            .ToDictionaryAsync(l => l.Id, cancellationToken)
-            .ConfigureAwait(false);
-
         DateOnly today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
-        decimal available = AvailableQtyCalculator.Compute(balances, lots, today);
+        decimal available = await StockAvailability.ComputeAsync(
+                dbContext,
+                query.WarehouseId,
+                query.ProductId,
+                zoneId,
+                today,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         return new AvailableQtyDto(
             query.WarehouseId,

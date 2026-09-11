@@ -23,7 +23,7 @@ public sealed class ProductFulfillmentTests
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var (brandId, categoryId) = await CreateBrandAndCategoryAsync(client);
-        var productId = await CreateProductAsync(client, brandId, categoryId, "Canonical salmon");
+        var productId = await CreateProductAsync(client, brandId, categoryId, UniqueName("Salmon"));
 
         using var response = await client.GetAsync($"{TestConstants.CatalogBasePath}/products/{productId}");
         var product = await response.DeserializeAsync<ProductDto>();
@@ -41,7 +41,8 @@ public sealed class ProductFulfillmentTests
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var (brandId, categoryId) = await CreateBrandAndCategoryAsync(client);
-        var productId = await CreateProductAsync(client, brandId, categoryId, "Canonical salmon");
+        var productName = UniqueName("Salmon");
+        var productId = await CreateProductAsync(client, brandId, categoryId, productName);
 
         using var fulfillmentResponse = await client.PutAsJsonAsync(
             $"{TestConstants.CatalogBasePath}/products/{productId}/fulfillment",
@@ -85,7 +86,7 @@ public sealed class ProductFulfillmentTests
         enRequest.Headers.AcceptLanguage.ParseAdd("en-US");
         using var enResponse = await client.SendAsync(enRequest);
         var enProduct = await enResponse.DeserializeAsync<ProductDto>();
-        enProduct.Name.ShouldBe("Canonical salmon");
+        enProduct.Name.ShouldBe(productName);
     }
 
     private static async Task<(Guid BrandId, Guid CategoryId)> CreateBrandAndCategoryAsync(HttpClient client)

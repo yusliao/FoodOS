@@ -23,6 +23,7 @@ public sealed class InventoryDbContext : BaseDbContext
     public DbSet<TemperatureZone> TemperatureZones => Set<TemperatureZone>();
     public DbSet<Lot> Lots => Set<Lot>();
     public DbSet<LotBalance> LotBalances => Set<LotBalance>();
+    public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

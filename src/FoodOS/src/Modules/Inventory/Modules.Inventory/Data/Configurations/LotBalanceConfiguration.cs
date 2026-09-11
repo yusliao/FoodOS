@@ -21,6 +21,7 @@ public sealed class LotBalanceConfiguration : IEntityTypeConfiguration<LotBalanc
         builder.Property(x => x.Isolated).HasPrecision(18, 4);
         builder.Property(x => x.Version).IsConcurrencyToken();
         builder.Ignore(x => x.Available);
+        builder.Ignore(x => x.IsFullyIsolated);
         builder.Ignore(x => x.DomainEvents);
     }
 }

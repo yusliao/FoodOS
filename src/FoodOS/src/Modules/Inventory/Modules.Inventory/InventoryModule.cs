@@ -5,7 +5,10 @@ using FSH.Framework.Web.Modules;
 using FSH.Modules.Inventory.Contracts.Authorization;
 using FSH.Modules.Inventory.Data;
 using FSH.Modules.Inventory.Features.v1.Stock.GetAvailableQty;
+using FSH.Modules.Inventory.Features.v1.Stock.IsolateStock;
 using FSH.Modules.Inventory.Features.v1.Stock.ReceiveInventory;
+using FSH.Modules.Inventory.Features.v1.Stock.ReserveStock;
+using FSH.Modules.Inventory.Features.v1.Stock.UnreserveStock;
 using FSH.Modules.Inventory.Features.v1.Warehouses.CreateWarehouse;
 using FSH.Modules.Inventory.Features.v1.Warehouses.GetWarehouseById;
 using FSH.Modules.Inventory.Features.v1.Warehouses.SearchWarehouses;
@@ -62,5 +65,8 @@ public sealed class InventoryModule : IModule
         group.MapGetWarehouseByIdEndpoint();
         group.MapReceiveInventoryEndpoint();
         group.MapGetAvailableQtyEndpoint();
+        group.MapReserveStockEndpoint();
+        group.MapUnreserveStockEndpoint();
+        group.MapIsolateStockEndpoint();
     }
 }

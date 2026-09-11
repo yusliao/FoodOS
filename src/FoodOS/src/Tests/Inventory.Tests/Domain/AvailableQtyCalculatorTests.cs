@@ -60,4 +60,25 @@ public sealed class AvailableQtyCalculatorTests
 
         available.ShouldBe(0m);
     }
+
+    [Fact]
+    public void Compute_Should_SubtractSkuLevelReservations()
+    {
+        var productId = Guid.CreateVersion7();
+        var warehouseId = Guid.CreateVersion7();
+        var zoneId = Guid.CreateVersion7();
+        DateOnly today = new(2026, 9, 11);
+
+        var lot = Lot.Create("L-ATP", productId, today.AddDays(10));
+        var balance = LotBalance.Create(warehouseId, zoneId, lot.Id, productId);
+        balance.Receive(10);
+
+        decimal available = AvailableQtyCalculator.Compute(
+            [balance],
+            new Dictionary<Guid, Lot> { [lot.Id] = lot },
+            today,
+            skuReservedQty: 8m);
+
+        available.ShouldBe(2m);
+    }
 }

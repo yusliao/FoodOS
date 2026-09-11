@@ -18,6 +18,8 @@ public static class InventoryPermissions
         public const string View = $"Permissions.{Resource}.View";
         public const string Receive = $"Permissions.{Resource}.Receive";
         public const string Adjust = $"Permissions.{Resource}.Adjust";
+        public const string Reserve = $"Permissions.{Resource}.Reserve";
+        public const string Isolate = $"Permissions.{Resource}.Isolate";
     }
 
     public static IReadOnlyList<FshPermission> All { get; } =
@@ -28,5 +30,7 @@ public static class InventoryPermissions
         new("View Stock", ActionConstants.View, Stock.Resource, IsBasic: true),
         new("Receive Stock", ActionConstants.Receive, Stock.Resource),
         new("Adjust Stock", ActionConstants.Adjust, Stock.Resource),
+        new("Reserve Stock", "Reserve", Stock.Resource),
+        new("Isolate Stock", "Isolate", Stock.Resource),
     ];
 }

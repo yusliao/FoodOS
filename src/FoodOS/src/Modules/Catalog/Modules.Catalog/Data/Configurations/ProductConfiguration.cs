@@ -52,7 +52,10 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .WithOne()
             .HasForeignKey(t => t.ProductId)
             .OnDelete(DeleteBehavior.Cascade);
-        builder.Navigation(x => x.Translations).AutoInclude();
+        builder.Navigation(x => x.Translations)
+            .HasField("_translations")
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .AutoInclude();
 
         builder.OwnsOne(x => x.Price, m =>
         {
