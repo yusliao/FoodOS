@@ -1,0 +1,64 @@
+{
+  "chrome": {
+    "skipToMain": "Saltar al contenido principal",
+    "search": "Buscar",
+    "language": "Idioma",
+    "theme": "Tema",
+    "account": "Cuenta",
+    "profile": "Perfil",
+    "settings": "Ajustes",
+    "apiKeys": "Claves API",
+    "signOut": "Cerrar sesión",
+    "primaryNav": "Navegación principal",
+    "collapseSidebar": "Contraer barra lateral",
+    "expandSidebar": "Expandir barra lateral",
+    "openProfile": "Abrir menú de perfil",
+    "dashboard": "Panel"
+  },
+  "languages": {
+    "en-US": "English",
+    "es-ES": "Español",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "zh-CN": "中文"
+  },
+  "nav": {
+    "sections": {
+      "operations": "Operaciones",
+      "catalog": "Catálogo",
+      "helpdesk": "Soporte",
+      "identity": "Identidad",
+      "system": "Sistema"
+    },
+    "items": {
+      "home": "Resumen",
+      "chat": "Chat",
+      "files": "Mis archivos",
+      "settings": "Ajustes",
+      "activity": "Actividad en vivo",
+      "subscription": "Suscripción",
+      "invoices": "Facturas",
+      "catalog": {
+        "products": "Productos",
+        "brands": "Marcas",
+        "categories": "Categorías"
+      },
+      "tickets": "Tickets",
+      "identity": {
+        "users": "Usuarios",
+        "roles": "Roles",
+        "groups": "Grupos"
+      },
+      "system": {
+        "health": "Estado",
+        "audits": "Auditoría",
+        "sessions": "Sesiones",
+        "trash": "Papelera"
+      }
+    }
+  },
+  "settings": {
+    "languageTitle": "Idioma",
+    "languageDescription": "El panel y la API siguen este idioma. Los nombres de producto vuelven al inglés si falta la traducción."
+  }
+}

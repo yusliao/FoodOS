@@ -1,0 +1,116 @@
+using FSH.Framework.Core.Domain;
+
+namespace FSH.Modules.Inventory.Domain;
+
+/// <summary>
+/// Quantity buckets for one lot in one warehouse zone. Every mutation must also write an <see cref="InventoryTransaction"/>.
+/// </summary>
+public sealed class LotBalance : BaseEntity<Guid>
+{
+    public Guid WarehouseId { get; private set; }
+    public Guid ZoneId { get; private set; }
+    public Guid LotId { get; private set; }
+    public Guid ProductId { get; private set; }
+    public decimal OnHand { get; private set; }
+    public decimal Reserved { get; private set; }
+    public decimal Allocated { get; private set; }
+    public decimal Picked { get; private set; }
+    public decimal InTransit { get; private set; }
+    public decimal Isolated { get; private set; }
+    public uint Version { get; private set; }
+
+    private LotBalance() { }
+
+    public static LotBalance Create(Guid warehouseId, Guid zoneId, Guid lotId, Guid productId)
+    {
+        return new LotBalance
+        {
+            Id = Guid.CreateVersion7(),
+            WarehouseId = warehouseId,
+            ZoneId = zoneId,
+            LotId = lotId,
+            ProductId = productId
+        };
+    }
+
+    public decimal Available => OnHand - Reserved - Allocated - Isolated;
+
+    public void Receive(decimal qty)
+    {
+        EnsurePositive(qty);
+        OnHand += qty;
+        Version++;
+    }
+
+    public void Isolate(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (OnHand - Isolated < qty)
+        {
+            throw new InvalidOperationException("Insufficient on-hand quantity to isolate.");
+        }
+
+        Isolated += qty;
+        Version++;
+    }
+
+    public void Reserve(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Available < qty)
+        {
+            throw new InvalidOperationException("Insufficient available quantity to reserve.");
+        }
+
+        Reserved += qty;
+        Version++;
+    }
+
+    public void Allocate(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Reserved < qty)
+        {
+            throw new InvalidOperationException("Insufficient reserved quantity to allocate.");
+        }
+
+        Reserved -= qty;
+        Allocated += qty;
+        Version++;
+    }
+
+    public void Pick(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Allocated < qty || OnHand < qty)
+        {
+            throw new InvalidOperationException("Insufficient allocated on-hand quantity to pick.");
+        }
+
+        Allocated -= qty;
+        OnHand -= qty;
+        Picked += qty;
+        Version++;
+    }
+
+    public void Ship(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Picked < qty)
+        {
+            throw new InvalidOperationException("Insufficient picked quantity to ship.");
+        }
+
+        Picked -= qty;
+        InTransit += qty;
+        Version++;
+    }
+
+    private static void EnsurePositive(decimal qty)
+    {
+        if (qty <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(qty), "Quantity must be positive.");
+        }
+    }
+}

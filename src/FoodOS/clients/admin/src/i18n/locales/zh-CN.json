@@ -1,0 +1,46 @@
+{
+  "chrome": {
+    "skipToMain": "跳到主要内容",
+    "language": "语言",
+    "theme": "主题",
+    "account": "账户",
+    "profile": "个人资料",
+    "settings": "设置",
+    "signOut": "退出登录",
+    "primaryNav": "主导航",
+    "collapseSidebar": "收起侧栏",
+    "expandSidebar": "展开侧栏",
+    "openProfile": "打开个人菜单",
+    "admin": "管理后台"
+  },
+  "languages": {
+    "en-US": "English",
+    "es-ES": "Español",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "zh-CN": "中文"
+  },
+  "nav": {
+    "sections": {
+      "multitenancy": "租户",
+      "identity": "身份",
+      "operations": "运营"
+    },
+    "items": {
+      "home": "总览",
+      "settings": "设置",
+      "tenants": "租户",
+      "users": "用户",
+      "roles": "角色",
+      "impersonation": "身份模拟",
+      "billing": "计费",
+      "webhooks": "Webhooks",
+      "audits": "审计",
+      "health": "健康检查"
+    }
+  },
+  "settings": {
+    "languageTitle": "语言",
+    "languageDescription": "控制台和 API 跟随此语言。"
+  }
+}

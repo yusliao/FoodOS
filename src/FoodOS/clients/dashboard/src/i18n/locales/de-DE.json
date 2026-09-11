@@ -1,0 +1,64 @@
+{
+  "chrome": {
+    "skipToMain": "Zum Hauptinhalt springen",
+    "search": "Suchen",
+    "language": "Sprache",
+    "theme": "Darstellung",
+    "account": "Konto",
+    "profile": "Profil",
+    "settings": "Einstellungen",
+    "apiKeys": "API-Schlüssel",
+    "signOut": "Abmelden",
+    "primaryNav": "Hauptnavigation",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "expandSidebar": "Seitenleiste ausklappen",
+    "openProfile": "Profilmenü öffnen",
+    "dashboard": "Dashboard"
+  },
+  "languages": {
+    "en-US": "English",
+    "es-ES": "Español",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "zh-CN": "中文"
+  },
+  "nav": {
+    "sections": {
+      "operations": "Betrieb",
+      "catalog": "Katalog",
+      "helpdesk": "Support",
+      "identity": "Identität",
+      "system": "System"
+    },
+    "items": {
+      "home": "Übersicht",
+      "chat": "Chat",
+      "files": "Meine Dateien",
+      "settings": "Einstellungen",
+      "activity": "Live-Aktivität",
+      "subscription": "Abonnement",
+      "invoices": "Rechnungen",
+      "catalog": {
+        "products": "Produkte",
+        "brands": "Marken",
+        "categories": "Kategorien"
+      },
+      "tickets": "Tickets",
+      "identity": {
+        "users": "Benutzer",
+        "roles": "Rollen",
+        "groups": "Gruppen"
+      },
+      "system": {
+        "health": "Status",
+        "audits": "Prüfprotokoll",
+        "sessions": "Sitzungen",
+        "trash": "Papierkorb"
+      }
+    }
+  },
+  "settings": {
+    "languageTitle": "Sprache",
+    "languageDescription": "Dashboard und API folgen dieser Kultur. Produktnamen fallen auf Englisch zurück, wenn keine Übersetzung vorliegt."
+  }
+}

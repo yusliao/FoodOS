@@ -1,0 +1,64 @@
+{
+  "chrome": {
+    "skipToMain": "Skip to main content",
+    "search": "Search",
+    "language": "Language",
+    "theme": "Theme",
+    "account": "Account",
+    "profile": "Profile",
+    "settings": "Settings",
+    "apiKeys": "API keys",
+    "signOut": "Sign out",
+    "primaryNav": "Primary navigation",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "openProfile": "Open profile menu",
+    "dashboard": "Dashboard"
+  },
+  "languages": {
+    "en-US": "English",
+    "es-ES": "Español",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "zh-CN": "中文"
+  },
+  "nav": {
+    "sections": {
+      "operations": "Operations",
+      "catalog": "Catalog",
+      "helpdesk": "Helpdesk",
+      "identity": "Identity",
+      "system": "System"
+    },
+    "items": {
+      "home": "Overview",
+      "chat": "Chat",
+      "files": "My Files",
+      "settings": "Settings",
+      "activity": "Live activity",
+      "subscription": "Subscription",
+      "invoices": "Invoices",
+      "catalog": {
+        "products": "Products",
+        "brands": "Brands",
+        "categories": "Categories"
+      },
+      "tickets": "Tickets",
+      "identity": {
+        "users": "Users",
+        "roles": "Roles",
+        "groups": "Groups"
+      },
+      "system": {
+        "health": "Health",
+        "audits": "Audit trail",
+        "sessions": "Sessions",
+        "trash": "Trash"
+      }
+    }
+  },
+  "settings": {
+    "languageTitle": "Language",
+    "languageDescription": "The dashboard and API follow this culture. Product names fall back to English when a translation is missing."
+  }
+}

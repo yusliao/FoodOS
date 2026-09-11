@@ -1,0 +1,64 @@
+{
+  "chrome": {
+    "skipToMain": "Aller au contenu principal",
+    "search": "Rechercher",
+    "language": "Langue",
+    "theme": "Thème",
+    "account": "Compte",
+    "profile": "Profil",
+    "settings": "Paramètres",
+    "apiKeys": "Clés API",
+    "signOut": "Se déconnecter",
+    "primaryNav": "Navigation principale",
+    "collapseSidebar": "Réduire la barre latérale",
+    "expandSidebar": "Développer la barre latérale",
+    "openProfile": "Ouvrir le menu du profil",
+    "dashboard": "Tableau de bord"
+  },
+  "languages": {
+    "en-US": "English",
+    "es-ES": "Español",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "zh-CN": "中文"
+  },
+  "nav": {
+    "sections": {
+      "operations": "Opérations",
+      "catalog": "Catalogue",
+      "helpdesk": "Assistance",
+      "identity": "Identité",
+      "system": "Système"
+    },
+    "items": {
+      "home": "Aperçu",
+      "chat": "Discussion",
+      "files": "Mes fichiers",
+      "settings": "Paramètres",
+      "activity": "Activité en direct",
+      "subscription": "Abonnement",
+      "invoices": "Factures",
+      "catalog": {
+        "products": "Produits",
+        "brands": "Marques",
+        "categories": "Catégories"
+      },
+      "tickets": "Tickets",
+      "identity": {
+        "users": "Utilisateurs",
+        "roles": "Rôles",
+        "groups": "Groupes"
+      },
+      "system": {
+        "health": "Santé",
+        "audits": "Journal d'audit",
+        "sessions": "Sessions",
+        "trash": "Corbeille"
+      }
+    }
+  },
+  "settings": {
+    "languageTitle": "Langue",
+    "languageDescription": "Le tableau de bord et l'API suivent cette culture. Les noms de produits reviennent à l'anglais si la traduction est absente."
+  }
+}

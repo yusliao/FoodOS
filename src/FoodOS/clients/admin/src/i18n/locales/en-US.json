@@ -1,0 +1,46 @@
+{
+  "chrome": {
+    "skipToMain": "Skip to content",
+    "language": "Language",
+    "theme": "Theme",
+    "account": "Account",
+    "profile": "Profile",
+    "settings": "Settings",
+    "signOut": "Sign out",
+    "primaryNav": "Primary navigation",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "openProfile": "Open profile menu",
+    "admin": "Admin"
+  },
+  "languages": {
+    "en-US": "English",
+    "es-ES": "Español",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "zh-CN": "中文"
+  },
+  "nav": {
+    "sections": {
+      "multitenancy": "Tenants",
+      "identity": "Identity",
+      "operations": "Operations"
+    },
+    "items": {
+      "home": "Overview",
+      "settings": "Settings",
+      "tenants": "Tenants",
+      "users": "Users",
+      "roles": "Roles",
+      "impersonation": "Impersonation",
+      "billing": "Billing",
+      "webhooks": "Webhooks",
+      "audits": "Audits",
+      "health": "Health"
+    }
+  },
+  "settings": {
+    "languageTitle": "Language",
+    "languageDescription": "The console and API follow this culture."
+  }
+}

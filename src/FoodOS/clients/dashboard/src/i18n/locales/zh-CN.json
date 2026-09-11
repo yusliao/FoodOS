@@ -1,0 +1,64 @@
+{
+  "chrome": {
+    "skipToMain": "跳到主要内容",
+    "search": "搜索",
+    "language": "语言",
+    "theme": "主题",
+    "account": "账户",
+    "profile": "个人资料",
+    "settings": "设置",
+    "apiKeys": "API 密钥",
+    "signOut": "退出登录",
+    "primaryNav": "主导航",
+    "collapseSidebar": "收起侧栏",
+    "expandSidebar": "展开侧栏",
+    "openProfile": "打开个人菜单",
+    "dashboard": "工作台"
+  },
+  "languages": {
+    "en-US": "English",
+    "es-ES": "Español",
+    "fr-FR": "Français",
+    "de-DE": "Deutsch",
+    "zh-CN": "中文"
+  },
+  "nav": {
+    "sections": {
+      "operations": "运营",
+      "catalog": "商品",
+      "helpdesk": "工单",
+      "identity": "身份",
+      "system": "系统"
+    },
+    "items": {
+      "home": "总览",
+      "chat": "聊天",
+      "files": "我的文件",
+      "settings": "设置",
+      "activity": "实时动态",
+      "subscription": "订阅",
+      "invoices": "发票",
+      "catalog": {
+        "products": "商品",
+        "brands": "品牌",
+        "categories": "分类"
+      },
+      "tickets": "工单",
+      "identity": {
+        "users": "用户",
+        "roles": "角色",
+        "groups": "用户组"
+      },
+      "system": {
+        "health": "健康检查",
+        "audits": "审计日志",
+        "sessions": "会话",
+        "trash": "回收站"
+      }
+    }
+  },
+  "settings": {
+    "languageTitle": "语言",
+    "languageDescription": "工作台和 API 跟随此语言。商品名称缺少翻译时回退到英语。"
+  }
+}

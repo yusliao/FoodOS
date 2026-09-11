@@ -1,0 +1,13 @@
+# Secrets and local env — never commit real values.
+.env
+.env.*
+!.env.example
+**/.env
+!**/.env.example
+
+# OS / editor noise at the repo root (engine ignores live under src/FoodOS/.gitignore).
+Thumbs.db
+.DS_Store
+*.swp
+.idea/
+.vs/

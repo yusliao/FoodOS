@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    working-directory: src/FoodOS
+
+jobs:
+  backend:
+    name: Backend build and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore
+        run: dotnet restore src/FoodOS.slnx
+      - name: Build
+        run: dotnet build src/FoodOS.slnx --no-restore -c Release /p:NuGetAudit=false
+      - name: Unit tests
+        run: >
+          dotnet test src/FoodOS.slnx --no-build -c Release /p:NuGetAudit=false
+          --filter "FullyQualifiedName!~Integration.Tests&FullyQualifiedName!~Integration.Middleware.Tests"
+
+  frontend:
+    name: Frontend typecheck
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [admin, dashboard]
+    defaults:
+      run:
+        working-directory: src/FoodOS/clients/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/FoodOS/clients/${{ matrix.app }}/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
