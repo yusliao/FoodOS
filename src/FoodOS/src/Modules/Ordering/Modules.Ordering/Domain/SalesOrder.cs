@@ -1,0 +1,199 @@
+using System.Net;
+using FSH.Framework.Core.Domain;
+using FSH.Framework.Core.Exceptions;
+using FSH.Modules.Ordering.Domain.Events;
+
+namespace FSH.Modules.Ordering.Domain;
+
+public sealed class SalesOrder : AggregateRoot<Guid>
+{
+    private readonly List<SalesOrderLine> _lines = [];
+
+    public string Number { get; private set; } = default!;
+    public Guid StoreId { get; private set; }
+    public Guid CustomerOrgId { get; private set; }
+    public Guid WarehouseId { get; private set; }
+    public SalesOrderStatus Status { get; private set; }
+    public DateOnly BusinessDate { get; private set; }
+    public DateTimeOffset CutoffAt { get; private set; }
+    public DateTimeOffset? PlacedAt { get; private set; }
+    public DateTimeOffset CreatedAt { get; private set; }
+    public int Revision { get; private set; }
+
+    public IReadOnlyList<SalesOrderLine> Lines => _lines;
+
+    private SalesOrder() { }
+
+    public static SalesOrder CreateDraft(
+        string number,
+        Guid storeId,
+        Guid customerOrgId,
+        Guid warehouseId,
+        DateOnly businessDate,
+        DateTimeOffset cutoffAt,
+        IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(number);
+        ArgumentNullException.ThrowIfNull(lines);
+
+        if (storeId == Guid.Empty)
+        {
+            throw new ArgumentException("StoreId is required.", nameof(storeId));
+        }
+
+        if (customerOrgId == Guid.Empty)
+        {
+            throw new ArgumentException("CustomerOrgId is required.", nameof(customerOrgId));
+        }
+
+        if (warehouseId == Guid.Empty)
+        {
+            throw new ArgumentException("WarehouseId is required.", nameof(warehouseId));
+        }
+
+        if (lines.Count == 0)
+        {
+            throw new CustomException(
+                "An order must contain at least one line.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.BadRequest);
+        }
+
+        var order = new SalesOrder
+        {
+            Id = Guid.CreateVersion7(),
+            Number = number.Trim().ToUpperInvariant(),
+            StoreId = storeId,
+            CustomerOrgId = customerOrgId,
+            WarehouseId = warehouseId,
+            Status = SalesOrderStatus.Draft,
+            BusinessDate = businessDate,
+            CutoffAt = cutoffAt,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        foreach (var (productId, zone, qty, unitPrice, currency) in lines)
+        {
+            order._lines.Add(SalesOrderLine.Create(order.Id, productId, zone, qty, unitPrice, currency));
+        }
+
+        return order;
+    }
+
+    public void Place(DateTimeOffset utcNow)
+    {
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Reserved);
+        if (_lines.Exists(l => l.ReservationId is null))
+        {
+            throw new CustomException(
+                "All order lines must be reserved before placing.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
+        Status = SalesOrderStatus.Reserved;
+        PlacedAt = utcNow;
+        AddDomainEvent(DomainEvent.Create((id, ts) =>
+            new SalesOrderPlacedDomainEvent(Id, Number, StoreId, WarehouseId, id, ts)));
+    }
+
+    public void BeginAmend(DateTimeOffset utcNow)
+    {
+        EnsureBeforeCutoff(utcNow);
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Reserved);
+        foreach (var line in _lines)
+        {
+            line.ClearReservation();
+        }
+
+        Revision++;
+    }
+
+    public void ReplaceLines(
+        IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (Status != SalesOrderStatus.Reserved)
+        {
+            throw new CustomException(
+                "Only reserved orders can be amended.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
+        if (lines.Count == 0)
+        {
+            throw new CustomException(
+                "An order must contain at least one line.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.BadRequest);
+        }
+
+        _lines.Clear();
+        foreach (var (productId, zone, qty, unitPrice, currency) in lines)
+        {
+            _lines.Add(SalesOrderLine.Create(Id, productId, zone, qty, unitPrice, currency));
+        }
+    }
+
+    public void CompleteAmend()
+    {
+        if (Status != SalesOrderStatus.Reserved)
+        {
+            throw new CustomException(
+                "Only reserved orders can be amended.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
+        if (_lines.Exists(l => l.ReservationId is null))
+        {
+            throw new CustomException(
+                "All order lines must be reserved after amend.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
+        AddDomainEvent(DomainEvent.Create((id, ts) =>
+            new SalesOrderAmendedDomainEvent(Id, Revision, id, ts)));
+    }
+
+    public void Cancel(DateTimeOffset utcNow)
+    {
+        EnsureBeforeCutoff(utcNow);
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Cancelled);
+        foreach (var line in _lines)
+        {
+            line.ClearReservation();
+        }
+
+        Status = SalesOrderStatus.Cancelled;
+        AddDomainEvent(DomainEvent.Create((id, ts) =>
+            new SalesOrderCancelledDomainEvent(Id, id, ts)));
+    }
+
+    public void FailPlace()
+    {
+        if (Status != SalesOrderStatus.Draft)
+        {
+            return;
+        }
+
+        Status = SalesOrderStatus.Cancelled;
+        foreach (var line in _lines)
+        {
+            line.ClearReservation();
+        }
+    }
+
+    private void EnsureBeforeCutoff(DateTimeOffset utcNow)
+    {
+        if (OperatingCutoff.IsPastCutoff(CutoffAt, utcNow))
+        {
+            throw new CustomException(
+                "Order is locked after cutoff.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+    }
+}
