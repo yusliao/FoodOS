@@ -65,8 +65,9 @@ internal sealed record MigratorCommand(
           apply           Apply pending migrations (default). Use --seed to also run SeedAsync.
           seed            Run only the SeedAsync step per tenant.
           seed-demo       Provision the demo tenants (acme, globex) with users, catalog,
-                          tickets, and chat. Dev-only — refuses to run unless
-                          DOTNET_ENVIRONMENT=Development.
+                          tickets, and chat. Acme also gets the FoodOS demo chain
+                          (1 DC / 3 zones / ~22 food SKUs / 4 stores / 1 route).
+                          Dev-only — refuses to run unless DOTNET_ENVIRONMENT=Development.
           list-pending    Print pending migrations without applying anything.
 
         Options:

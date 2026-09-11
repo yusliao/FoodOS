@@ -11,6 +11,8 @@ using FSH.Modules.Catalog.Contracts.Authorization;
 using FSH.Modules.Catalog.Data;
 using FSH.Modules.Procurement.Contracts.Authorization;
 using FSH.Modules.Warehouse.Contracts.Authorization;
+using FSH.Modules.Logistics.Contracts.Authorization;
+using FSH.Modules.Ordering.Contracts.Authorization;
 using FSH.Modules.Catalog.Domain;
 using FSH.Modules.Chat.Data;
 using FSH.Modules.Chat.Domain;
@@ -93,10 +95,12 @@ internal sealed class DemoSeeder
             await SeedTenantChatAsync(demo, cancellationToken).ConfigureAwait(false);
         }
 
+        await FoodOsOperationalSeeder.SeedAcmeAsync(_services, _logger, cancellationToken).ConfigureAwait(false);
+
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "[demo-seed] complete · root superadmin + {Acme} + {Globex} populated with users / catalog / tickets / chat",
+                "[demo-seed] complete · root superadmin + {Acme} + {Globex} populated with users / catalog / tickets / chat / FoodOS ops",
                 Acme.Id, Globex.Id);
         }
     }
@@ -423,9 +427,9 @@ internal sealed class DemoSeeder
     // ─── Catalog ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Idempotently seeds the Catalog demo dataset (4 brands / 11 categories /
-    /// 10 products) into the demo tenant. Bails when any catalog row already
-    /// exists for that tenant.
+    /// Idempotently upserts the Catalog demo dataset (brands / categories /
+    /// ~32 products with fulfillment attributes) by name/SKU so re-runs
+    /// backfill FoodOS SKUs onto an already-seeded tenant.
     /// </summary>
     private async Task SeedTenantCatalogAsync(DemoTenant demo, CancellationToken cancellationToken)
     {
@@ -438,31 +442,115 @@ internal sealed class DemoSeeder
             .MultiTenantContext = new MultiTenantContext<AppTenantInfo>(tenant);
 
         var dbContext = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
-        bool alreadySeeded = await dbContext.Brands.AnyAsync(cancellationToken).ConfigureAwait(false)
-            || await dbContext.Categories.AnyAsync(cancellationToken).ConfigureAwait(false)
-            || await dbContext.Products.AnyAsync(cancellationToken).ConfigureAwait(false);
-        if (alreadySeeded) return;
+        int brandsAdded = 0;
+        int categoriesAdded = 0;
+        int productsAdded = 0;
 
-        var brands = CatalogSeedData.BuildBrands();
-        dbContext.Brands.AddRange(brands);
+        foreach (var spec in CatalogSeedData.BrandSpecs)
+        {
+            bool exists = await dbContext.Brands
+                .AnyAsync(b => b.Name == spec.Name, cancellationToken)
+                .ConfigureAwait(false);
+            if (exists)
+            {
+                continue;
+            }
 
-        var (roots, children) = CatalogSeedData.BuildCategories();
-        dbContext.Categories.AddRange(roots);
-        dbContext.Categories.AddRange(children);
+            dbContext.Brands.Add(Brand.Create(spec.Name, spec.Description, null));
+            brandsAdded++;
+        }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        var brandsByName = brands.ToDictionary(b => b.Name, b => b);
-        var categoriesByName = roots.Concat(children).ToDictionary(c => c.Name, c => c);
-        var products = CatalogSeedData.BuildProducts(brandsByName, categoriesByName);
-        dbContext.Products.AddRange(products);
+        var brandsByName = await dbContext.Brands
+            .ToDictionaryAsync(b => b.Name, b => b, StringComparer.OrdinalIgnoreCase, cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var spec in CatalogSeedData.CategorySpecs.Where(s => s.ParentName is null))
+        {
+            bool exists = await dbContext.Categories
+                .AnyAsync(c => c.Name == spec.Name, cancellationToken)
+                .ConfigureAwait(false);
+            if (exists)
+            {
+                continue;
+            }
+
+            dbContext.Categories.Add(Category.Create(spec.Name, spec.Description, null));
+            categoriesAdded++;
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        if (_logger.IsEnabled(LogLevel.Information))
+        var categoriesByName = await dbContext.Categories
+            .ToDictionaryAsync(c => c.Name, c => c, StringComparer.OrdinalIgnoreCase, cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var spec in CatalogSeedData.CategorySpecs.Where(s => s.ParentName is not null))
+        {
+            bool exists = await dbContext.Categories
+                .AnyAsync(c => c.Name == spec.Name, cancellationToken)
+                .ConfigureAwait(false);
+            if (exists)
+            {
+                continue;
+            }
+
+            if (!categoriesByName.TryGetValue(spec.ParentName!, out var parent))
+            {
+                continue;
+            }
+
+            var child = Category.Create(spec.Name, spec.Description, parent.Id);
+            dbContext.Categories.Add(child);
+            categoriesByName[spec.Name] = child;
+            categoriesAdded++;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        categoriesByName = await dbContext.Categories
+            .ToDictionaryAsync(c => c.Name, c => c, StringComparer.OrdinalIgnoreCase, cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var spec in CatalogSeedData.ProductSpecs)
+        {
+            string sku = spec.Sku.Trim().ToUpperInvariant();
+            bool exists = await dbContext.Products
+                .AnyAsync(p => p.Sku == sku, cancellationToken)
+                .ConfigureAwait(false);
+            if (exists)
+            {
+                continue;
+            }
+
+            if (!brandsByName.TryGetValue(spec.BrandName, out var brand)
+                || !categoriesByName.TryGetValue(spec.CategoryName, out var category))
+            {
+                continue;
+            }
+
+            dbContext.Products.Add(Product.Create(
+                spec.Sku,
+                spec.Name,
+                spec.Description,
+                brand.Id,
+                category.Id,
+                new Money(spec.Price, "USD"),
+                spec.Stock,
+                spec.TemperatureZone,
+                spec.ShelfLifeDays,
+                spec.MinRemainingDaysOnShip));
+            productsAdded++;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_logger.IsEnabled(LogLevel.Information) && (brandsAdded > 0 || categoriesAdded > 0 || productsAdded > 0))
         {
             _logger.LogInformation(
-                "[demo-seed] [{Tenant}] seeded {BrandCount} brands, {CategoryCount} categories, {ProductCount} products",
-                tenant.Id, brands.Count, roots.Count + children.Count, products.Count);
+                "[demo-seed] [{Tenant}] catalog upsert +{Brands} brands, +{Categories} categories, +{Products} products",
+                tenant.Id, brandsAdded, categoriesAdded, productsAdded);
         }
     }
 
@@ -728,6 +816,9 @@ internal sealed class DemoSeeder
         new("acme.qc",       "qc@acme.com",       "Quinn",  "Diaz",     ["QcInspector"]),
         new("acme.whlead",   "whlead@acme.com",   "Wendy",  "Lee",      ["WarehouseLead"]),
         new("acme.picker",   "picker@acme.com",   "Pete",   "Park",     ["WarehousePicker"]),
+        new("acme.dispatch", "dispatch@acme.com", "Dana",   "Cole",     ["Dispatcher"]),
+        new("acme.driver",   "driver@acme.com",   "Drew",   "Nash",     ["Driver"]),
+        new("acme.finance",  "finance@acme.com",  "Faye",   "Ortiz",    ["FinanceClerk"]),
         new("acme.alice",    "alice@acme.com",    "Alice",  "Nguyen",   [RoleConstants.Basic]),
         new("acme.bob",      "bob@acme.com",      "Bob",    "Patel",    [RoleConstants.Basic]),
         new("acme.carol",    "carol@acme.com",    "Carol",  "Smith",    [RoleConstants.Basic]),
@@ -833,6 +924,38 @@ internal sealed class DemoSeeder
                 WarehousePermissions.Waves.View,
                 WarehousePermissions.Picks.View,
                 WarehousePermissions.Picks.Confirm,
+            ]),
+
+        new(
+            "Dispatcher",
+            "Builds routes and trucks, loads packed orders, and departs shipments. Does not sign POD.",
+            [
+                LogisticsPermissions.Vehicles.View,
+                LogisticsPermissions.Vehicles.Create,
+                LogisticsPermissions.Drivers.View,
+                LogisticsPermissions.Drivers.Create,
+                LogisticsPermissions.Routes.View,
+                LogisticsPermissions.Routes.Create,
+                LogisticsPermissions.Shipments.View,
+                LogisticsPermissions.Shipments.Create,
+                LogisticsPermissions.Shipments.Load,
+                LogisticsPermissions.Shipments.Depart,
+            ]),
+
+        new(
+            "Driver",
+            "Confirms electronic proof of delivery. Cannot create or depart shipments.",
+            [
+                LogisticsPermissions.Shipments.View,
+                LogisticsPermissions.ProofOfDelivery.Confirm,
+            ]),
+
+        new(
+            "FinanceClerk",
+            "Closes received orders after operational reconcile.",
+            [
+                OrderingPermissions.Orders.Reconcile,
+                OrderingPermissions.Shop.View,
             ]),
     ];
 

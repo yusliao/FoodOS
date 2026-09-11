@@ -27,6 +27,12 @@ public static class OrderingPermissions
         public const string Update = $"Permissions.{Resource}.Update";
     }
 
+    public static class Orders
+    {
+        public const string Resource = "Ordering.Orders";
+        public const string Reconcile = $"Permissions.{Resource}.Reconcile";
+    }
+
     public static IReadOnlyList<FshPermission> All { get; } =
     [
         new("View Shop", ActionConstants.View, Shop.Resource, IsBasic: true),
@@ -37,5 +43,6 @@ public static class OrderingPermissions
         new("View Stores", ActionConstants.View, Stores.Resource, IsBasic: true),
         new("Create Stores", ActionConstants.Create, Stores.Resource),
         new("Update Stores", ActionConstants.Update, Stores.Resource),
+        new("Reconcile Orders", "Reconcile", Orders.Resource),
     ];
 }

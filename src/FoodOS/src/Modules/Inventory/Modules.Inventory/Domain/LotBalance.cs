@@ -160,6 +160,37 @@ public sealed class LotBalance : BaseEntity<Guid>
         Version++;
     }
 
+    /// <summary>
+    /// Goods left the company at POD. InTransit decreases; OnHand already left at Pick.
+    /// </summary>
+    public void Deliver(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (InTransit < qty)
+        {
+            throw new InvalidOperationException("Insufficient in-transit quantity to deliver.");
+        }
+
+        InTransit -= qty;
+        Version++;
+    }
+
+    /// <summary>
+    /// Rejected quantity returns to the warehouse dock (OnHand). Shrink/putaway is Warehouse.
+    /// </summary>
+    public void ReturnToWarehouse(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (InTransit < qty)
+        {
+            throw new InvalidOperationException("Insufficient in-transit quantity to return.");
+        }
+
+        InTransit -= qty;
+        OnHand += qty;
+        Version++;
+    }
+
     private static void EnsurePositive(decimal qty)
     {
         if (qty <= 0)

@@ -191,6 +191,10 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<decimal>("DeliveredQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<decimal>("OrderedQty")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
@@ -205,6 +209,10 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<decimal>("ReturnedQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<Guid>("SalesOrderId")
                         .HasColumnType("uuid");
 
@@ -216,6 +224,10 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<string>("VarianceReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<string>("Zone")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -226,6 +238,50 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.HasIndex("SalesOrderId");
 
                     b.ToTable("SalesOrderLines", "ordering");
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrderLineLot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("DeliveredQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid>("LotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LotNo")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<decimal>("ReturnedQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid>("SalesOrderLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ShippedQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LotId");
+
+                    b.HasIndex("SalesOrderLineId");
+
+                    b.ToTable("SalesOrderLineLots", "ordering");
 
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
@@ -302,6 +358,15 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrderLineLot", b =>
+                {
+                    b.HasOne("FSH.Modules.Ordering.Domain.SalesOrderLine", null)
+                        .WithMany("Lots")
+                        .HasForeignKey("SalesOrderLineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.Cart", b =>
                 {
                     b.Navigation("Lines");
@@ -310,6 +375,11 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrder", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrderLine", b =>
+                {
+                    b.Navigation("Lots");
                 });
 #pragma warning restore 612, 618
         }

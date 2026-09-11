@@ -200,6 +200,68 @@ public sealed class SalesOrder : AggregateRoot<Guid>
         Status = SalesOrderStatus.Packed;
     }
 
+    public void MarkInTransit(IReadOnlyList<(Guid OrderLineId, Guid LotId, string LotNo, decimal Qty)> lots)
+    {
+        ArgumentNullException.ThrowIfNull(lots);
+        if (Status == SalesOrderStatus.InTransit)
+        {
+            return;
+        }
+
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.InTransit);
+        foreach (var group in lots.GroupBy(l => l.OrderLineId))
+        {
+            var line = _lines.Find(l => l.Id == group.Key)
+                ?? throw new CustomException(
+                    $"Order line {group.Key} was not found on this order.",
+                    (IEnumerable<string>?)null,
+                    HttpStatusCode.BadRequest);
+            line.BindShipmentLots(group.Select(x => (x.LotId, x.LotNo, x.Qty)).ToList());
+        }
+
+        Status = SalesOrderStatus.InTransit;
+    }
+
+    public void MarkReceived(IReadOnlyList<(Guid OrderLineId, Guid LotId, decimal DeliveredQty, decimal ReturnedQty, string? Reason)> receipts)
+    {
+        ArgumentNullException.ThrowIfNull(receipts);
+        if (Status == SalesOrderStatus.Received)
+        {
+            return;
+        }
+
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Received);
+        foreach (var receipt in receipts)
+        {
+            var line = _lines.Find(l => l.Id == receipt.OrderLineId)
+                ?? throw new CustomException(
+                    $"Order line {receipt.OrderLineId} was not found on this order.",
+                    (IEnumerable<string>?)null,
+                    HttpStatusCode.BadRequest);
+            try
+            {
+                line.RecordReceipt(receipt.LotId, receipt.DeliveredQty, receipt.ReturnedQty, receipt.Reason);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new CustomException(ex.Message, (IEnumerable<string>?)null, HttpStatusCode.BadRequest);
+            }
+        }
+
+        Status = SalesOrderStatus.Received;
+    }
+
+    public void Reconcile()
+    {
+        if (Status == SalesOrderStatus.Reconciled)
+        {
+            return;
+        }
+
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Reconciled);
+        Status = SalesOrderStatus.Reconciled;
+    }
+
     public void FailPlace()
     {
         if (Status != SalesOrderStatus.Draft)

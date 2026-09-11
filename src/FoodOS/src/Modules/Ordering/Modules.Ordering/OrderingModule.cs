@@ -12,6 +12,7 @@ using FSH.Modules.Ordering.Features.v1.Orders.AmendOrder;
 using FSH.Modules.Ordering.Features.v1.Orders.CancelOrder;
 using FSH.Modules.Ordering.Features.v1.Orders.GetOrderById;
 using FSH.Modules.Ordering.Features.v1.Orders.PlaceOrder;
+using FSH.Modules.Ordering.Features.v1.Orders.ReconcileOrder;
 using FSH.Modules.Ordering.Features.v1.Orders.SearchOrders;
 using FSH.Modules.Ordering.Features.v1.Stores.CreateStore;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStoreById;
@@ -76,5 +77,6 @@ public sealed class OrderingModule : IModule
         group.MapAmendOrderEndpoint();
         group.MapCancelOrderEndpoint();
         group.MapGetOrderByIdEndpoint();
+        group.MapConfirmReconcileOrderEndpoint();
     }
 }

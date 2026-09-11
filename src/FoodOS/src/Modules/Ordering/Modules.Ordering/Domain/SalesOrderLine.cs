@@ -4,14 +4,21 @@ namespace FSH.Modules.Ordering.Domain;
 
 public sealed class SalesOrderLine : BaseEntity<Guid>
 {
+    private readonly List<SalesOrderLineLot> _lots = [];
+
     public Guid SalesOrderId { get; private set; }
     public Guid ProductId { get; private set; }
     public string Zone { get; private set; } = default!;
     public decimal OrderedQty { get; private set; }
     public decimal ReservedQty { get; private set; }
+    public decimal DeliveredQty { get; private set; }
+    public decimal ReturnedQty { get; private set; }
+    public string? VarianceReason { get; private set; }
     public decimal UnitPrice { get; private set; }
     public string Currency { get; private set; } = "USD";
     public Guid? ReservationId { get; private set; }
+
+    public IReadOnlyList<SalesOrderLineLot> Lots => _lots;
 
     private SalesOrderLine() { }
 
@@ -74,5 +81,30 @@ public sealed class SalesOrderLine : BaseEntity<Guid>
     {
         ReservationId = null;
         ReservedQty = 0;
+    }
+
+    internal void BindShipmentLots(IReadOnlyList<(Guid LotId, string LotNo, decimal Qty)> lots)
+    {
+        ArgumentNullException.ThrowIfNull(lots);
+        if (_lots.Count > 0)
+        {
+            return;
+        }
+
+        foreach (var (lotId, lotNo, qty) in lots)
+        {
+            _lots.Add(SalesOrderLineLot.Create(Id, lotId, lotNo, qty));
+        }
+    }
+
+    internal void RecordReceipt(Guid lotId, decimal deliveredQty, decimal returnedQty, string? varianceReason)
+    {
+        var lot = _lots.Find(l => l.LotId == lotId)
+            ?? throw new InvalidOperationException($"Lot {lotId} was not shipped on this order line.");
+
+        lot.RecordReceipt(deliveredQty, returnedQty);
+        DeliveredQty = _lots.Sum(l => l.DeliveredQty);
+        ReturnedQty = _lots.Sum(l => l.ReturnedQty);
+        VarianceReason = string.IsNullOrWhiteSpace(varianceReason) ? VarianceReason : varianceReason.Trim();
     }
 }

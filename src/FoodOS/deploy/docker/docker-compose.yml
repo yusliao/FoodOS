@@ -113,6 +113,29 @@ services:
       Seed__DefaultAdminPassword: ${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD is required}
     command: ["apply", "--seed"]
 
+  # Opt-in: `docker compose --profile demo run --rm demo-seeder`
+  # Development-only acme/globex content (users, catalog, FoodOS warehouse/SKU/route).
+  # Production `apply --seed` never runs this verb.
+  demo-seeder:
+    profiles: ["demo"]
+    build:
+      context: ../..
+      dockerfile: src/Host/FoodOS.DbMigrator/Dockerfile
+    image: fsh/dbmigrator:local
+    container_name: fsh-demo-seeder
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrator: { condition: service_completed_successfully }
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      DatabaseOptions__ConnectionString: Host=postgres;Database=fsh;Username=fsh;Password=${POSTGRES_PASSWORD}
+      CachingOptions__Redis: redis,password=${REDIS_PASSWORD}
+      JwtOptions__SigningKey: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}
+      Seed__DefaultAdminPassword: ${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD is required}
+      Seed__DemoPassword: Password123!
+    command: ["seed-demo"]
+
   api:
     build:
       context: ../..

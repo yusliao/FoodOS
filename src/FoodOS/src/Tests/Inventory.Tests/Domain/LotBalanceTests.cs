@@ -89,4 +89,37 @@ public sealed class LotBalanceTests
         Should.Throw<InvalidOperationException>(() => balance.AllocateFromAvailable(3));
         balance.Allocated.ShouldBe(0m);
     }
+
+    [Fact]
+    public void ShipThenDeliver_Should_LeaveOnHandUnchangedAfterPick()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        balance.Receive(10);
+        balance.AllocateFromAvailable(6);
+        balance.Pick(6);
+
+        balance.Ship(6);
+        balance.Picked.ShouldBe(0m);
+        balance.InTransit.ShouldBe(6m);
+        balance.OnHand.ShouldBe(4m);
+
+        balance.Deliver(4);
+        balance.ReturnToWarehouse(2);
+
+        balance.InTransit.ShouldBe(0m);
+        balance.OnHand.ShouldBe(6m);
+    }
+
+    [Fact]
+    public void Deliver_Should_Throw_When_ExceedsInTransit()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        balance.Receive(3);
+        balance.AllocateFromAvailable(3);
+        balance.Pick(3);
+        balance.Ship(3);
+
+        Should.Throw<InvalidOperationException>(() => balance.Deliver(4));
+        balance.InTransit.ShouldBe(3m);
+    }
 }

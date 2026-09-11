@@ -106,6 +106,32 @@ public sealed class SalesOrderTests
         order.Status.ShouldBe(SalesOrderStatus.Picking);
         order.MarkPacked();
         order.Status.ShouldBe(SalesOrderStatus.Packed);
+        var lotId = Guid.CreateVersion7();
+        order.MarkInTransit([(order.Lines[0].Id, lotId, "LOT-A", 4m)]);
+        order.Status.ShouldBe(SalesOrderStatus.InTransit);
+        order.Lines[0].Lots.ShouldHaveSingleItem().LotNo.ShouldBe("LOT-A");
+        order.MarkReceived([(order.Lines[0].Id, lotId, 4m, 0m, (string?)null)]);
+        order.Status.ShouldBe(SalesOrderStatus.Received);
+        order.Lines[0].DeliveredQty.ShouldBe(4m);
+        order.Reconcile();
+        order.Status.ShouldBe(SalesOrderStatus.Reconciled);
+    }
+
+    [Fact]
+    public void MarkReceived_Should_RecordReturnVarianceOnSameLine()
+    {
+        var order = CreateReserved(DateTimeOffset.UtcNow.AddHours(2));
+        order.LockForCutoff();
+        order.StartPicking();
+        order.MarkPacked();
+        var lotId = Guid.CreateVersion7();
+        order.MarkInTransit([(order.Lines[0].Id, lotId, "LOT-B", 4m)]);
+        order.MarkReceived([(order.Lines[0].Id, lotId, 3m, 1m, "partial-reject")]);
+
+        order.Lines[0].DeliveredQty.ShouldBe(3m);
+        order.Lines[0].ReturnedQty.ShouldBe(1m);
+        order.Lines[0].VarianceReason.ShouldBe("partial-reject");
+        order.Lines[0].Lots[0].ReturnedQty.ShouldBe(1m);
     }
 
     private static SalesOrder CreateDraft()

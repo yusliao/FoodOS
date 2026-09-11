@@ -45,9 +45,18 @@ internal static class OrderingMappings
                 l.Zone,
                 l.OrderedQty,
                 l.ReservedQty,
+                l.DeliveredQty,
+                l.ReturnedQty,
+                l.VarianceReason,
                 l.UnitPrice,
                 l.Currency,
-                l.ReservationId)).ToList());
+                l.ReservationId,
+                l.Lots.Select(lot => new SalesOrderLineLotDto(
+                    lot.LotId,
+                    lot.LotNo,
+                    lot.ShippedQty,
+                    lot.DeliveredQty,
+                    lot.ReturnedQty)).ToList())).ToList());
 
     public static CartDto EmptyCart(Guid storeId)
         => new(Guid.Empty, storeId, [], DateTimeOffset.MinValue);

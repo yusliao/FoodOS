@@ -41,8 +41,9 @@ dotnet run --project src/Host/FoodOS.DbMigrator -- apply --seed
 dotnet run --project src/Host/FoodOS.DbMigrator -- seed
 
 # Dev only — provision the demo tenants (acme, globex) with users,
-# custom roles, sample catalog, tickets, and chat. Hard-refuses outside
-# Development. Idempotent: safe to re-run.
+# custom roles, sample catalog, tickets, chat, and (acme) the FoodOS
+# demo chain: 1 DC / 3 zones / locations / QC'd lots / 4 stores / 1 route.
+# Hard-refuses outside Development. Idempotent: safe to re-run.
 DOTNET_ENVIRONMENT=Development \
   dotnet run --project src/Host/FoodOS.DbMigrator -- seed-demo
 ```
@@ -142,7 +143,7 @@ schema OR data. The two convenient ways to run it locally are:
   ```
 
 `seed-demo` is the **only** way to get the demo tenants and their
-users / catalog / tickets / chat. Fresh tenants created via
+users / catalog / tickets / chat / FoodOS operational master data. Fresh tenants created via
 `POST /api/v1/tenants` come up with just a tenant admin user — no
 catalogue, no demo content. This matches production behaviour.
 
