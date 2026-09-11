@@ -24,7 +24,9 @@ public class DomainEntityTests
                 .Where(t => t.IsClass && !t.IsAbstract)
                 .Where(t => t.Name.EndsWith("DomainEvent", StringComparison.Ordinal)
                          || t.Name.EndsWith("Event", StringComparison.Ordinal)
-                             && t.Namespace?.Contains(".Domain", StringComparison.Ordinal) == true);
+                             && t.Namespace?.Contains(".Domain", StringComparison.Ordinal) == true)
+                // Persisted entities named *Event (e.g. TraceEvent) are not domain events.
+                .Where(t => !IsSubclassOfGeneric(t, typeof(BaseEntity<>)));
 
             foreach (var eventType in eventTypes)
             {

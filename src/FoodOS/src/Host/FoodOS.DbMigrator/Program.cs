@@ -8,6 +8,7 @@ using FSH.Modules.Billing;
 using FSH.Modules.Catalog;
 using FSH.Modules.Inventory;
 using FSH.Modules.Ordering;
+using FSH.Modules.Procurement;
 using FSH.Modules.Identity;
 using FSH.Modules.Identity.Contracts.v1.Tokens.TokenGeneration;
 using FSH.Modules.Identity.Features.v1.Tokens.TokenGeneration;
@@ -99,6 +100,8 @@ builder.Services.AddMediator(o =>
         typeof(FSH.Modules.Inventory.InventoryModule),
         typeof(FSH.Modules.Ordering.Contracts.OrderingContractsMarker),
         typeof(FSH.Modules.Ordering.OrderingModule),
+        typeof(FSH.Modules.Procurement.Contracts.ProcurementContractsMarker),
+        typeof(FSH.Modules.Procurement.ProcurementModule),
         typeof(FSH.Modules.Tickets.Contracts.TicketsContractsMarker),
         typeof(FSH.Modules.Tickets.TicketsModule),
         typeof(FSH.Modules.Files.Contracts.v1.Commands.RequestUploadUrlCommand),
@@ -121,6 +124,7 @@ var moduleAssemblies = new Assembly[]
     typeof(CatalogModule).Assembly,
     typeof(InventoryModule).Assembly,
     typeof(OrderingModule).Assembly,
+    typeof(ProcurementModule).Assembly,
     typeof(TicketsModule).Assembly,
     typeof(FSH.Modules.Chat.ChatModule).Assembly,
     typeof(FSH.Modules.Notifications.NotificationsModule).Assembly,

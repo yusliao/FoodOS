@@ -45,6 +45,10 @@
     <Project Path="Modules/Ordering/Modules.Ordering.Contracts/Modules.Ordering.Contracts.csproj" />
     <Project Path="Modules/Ordering/Modules.Ordering/Modules.Ordering.csproj" />
   </Folder>
+  <Folder Name="/Modules/Procurement/">
+    <Project Path="Modules/Procurement/Modules.Procurement.Contracts/Modules.Procurement.Contracts.csproj" />
+    <Project Path="Modules/Procurement/Modules.Procurement/Modules.Procurement.csproj" />
+  </Folder>
   <Folder Name="/Modules/Multitenancy/">
     <Project Path="Modules/Multitenancy/Modules.Multitenancy.Contracts/Modules.Multitenancy.Contracts.csproj" Id="61165a24-94b0-402c-9d9f-345898ce79c4" />
     <Project Path="Modules/Multitenancy/Modules.Multitenancy/Modules.Multitenancy.csproj" Id="69bca64d-0cf5-4236-8da6-1d775aa2a1cc" />
@@ -85,6 +89,7 @@
     <Project Path="Tests/Identity.Tests/Identity.Tests.csproj" />
     <Project Path="Tests/Inventory.Tests/Inventory.Tests.csproj" />
     <Project Path="Tests/Ordering.Tests/Ordering.Tests.csproj" />
+    <Project Path="Tests/Procurement.Tests/Procurement.Tests.csproj" />
     <Project Path="Tests/Integration.Tests/Integration.Tests.csproj" />
     <Project Path="Tests/Integration.Middleware.Tests/Integration.Middleware.Tests.csproj" />
     <Project Path="Tests/Multitenancy.Tests/Multitenancy.Tests.csproj" Id="985345a2-edb4-4ef9-9a1b-59b704f523b6" />

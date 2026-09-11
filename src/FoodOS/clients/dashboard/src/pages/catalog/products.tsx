@@ -15,7 +15,6 @@ import {
   ArrowDown,
   ChevronRight,
   CircleDollarSign,
-  Minus,
   Package,
   PackageX,
   Pencil,
@@ -26,7 +25,6 @@ import {
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  adjustProductStock,
   changeProductPrice,
   createProduct,
   deleteProduct,
@@ -34,7 +32,6 @@ import {
   searchCategories,
   searchProducts,
   updateProduct,
-  type AdjustProductStockInput,
   type BrandDto,
   type CategoryDto,
   type ChangeProductPriceInput,
@@ -42,6 +39,7 @@ import {
   type ProductDto,
   type UpdateProductInput,
 } from "@/api/catalog";
+import { useDefaultWarehouse, useInventoryAtps } from "./use-inventory-atp";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -77,8 +75,7 @@ type EditorState =
   | { mode: "create" }
   | { mode: "edit"; product: ProductDto }
   | { mode: "delete"; product: ProductDto }
-  | { mode: "price"; product: ProductDto }
-  | { mode: "stock"; product: ProductDto };
+  | { mode: "price"; product: ProductDto };
 
 // ───────────────────────────────────────────────────────────────────────
 //  Filter row — simple inline filter chips above the table.
@@ -233,7 +230,13 @@ export function ProductsPage() {
   });
 
   const data = query.data;
-  const items = data?.items ?? [];
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const { warehouse } = useDefaultWarehouse();
+  const atpItems = useMemo(
+    () => items.map((p) => ({ productId: p.id, zone: p.temperatureZone })),
+    [items],
+  );
+  const atp = useInventoryAtps(warehouse?.id, atpItems);
 
   const brandsById = useMemo(() => {
     const map = new Map<string, BrandDto>();
@@ -257,7 +260,7 @@ export function ProductsPage() {
         icon={Package}
         title="Products"
         total={data?.totalCount ?? null}
-        description="Browse and manage the catalog. Each product carries a SKU, brand, category, price, and live stock count."
+        description="Browse and manage the catalog. Each product carries a SKU, brand, category, and list price. Available quantity is Inventory ATP."
       >
         <Button
           onClick={() => setEditor({ mode: "create" })}
@@ -339,6 +342,9 @@ export function ProductsPage() {
                 product={product}
                 brand={brandsById.get(product.brandId)}
                 category={categoriesById.get(product.categoryId)}
+                available={atp.byProductId.get(product.id)?.available}
+                atpLoading={atp.isLoading}
+                warehouseName={warehouse?.name}
                 onEdit={() => setEditor({ mode: "edit", product })}
               />
             ))}
@@ -363,10 +369,12 @@ export function ProductsPage() {
                 brand={brandsById.get(product.brandId)}
                 category={categoriesById.get(product.categoryId)}
                 isLast={i === items.length - 1}
+                available={atp.byProductId.get(product.id)?.available}
+                atpLoading={atp.isLoading}
+                warehouseName={warehouse?.name}
                 onEdit={() => setEditor({ mode: "edit", product })}
                 onDelete={() => setEditor({ mode: "delete", product })}
                 onPriceChange={() => setEditor({ mode: "price", product })}
-                onStockAdjust={() => setEditor({ mode: "stock", product })}
               />
             ))}
           </div>
@@ -399,7 +407,6 @@ export function ProductsPage() {
         categories={categoriesQuery.data?.items ?? []}
       />
       <PriceDialog state={editor} onClose={() => setEditor({ mode: "closed" })} />
-      <StockDialog state={editor} onClose={() => setEditor({ mode: "closed" })} />
       <DeleteProductDialog state={editor} onClose={() => setEditor({ mode: "closed" })} />
     </div>
   );
@@ -413,11 +420,17 @@ function MobileCard({
   product,
   brand,
   category,
+  available,
+  atpLoading,
+  warehouseName,
   onEdit,
 }: {
   product: ProductDto;
   brand: BrandDto | undefined;
   category: CategoryDto | undefined;
+  available: number | undefined;
+  atpLoading: boolean;
+  warehouseName?: string;
   onEdit: () => void;
 }) {
   return (
@@ -486,7 +499,7 @@ function MobileCard({
         <span className="ml-auto font-display text-[13px] font-semibold tabular-nums text-[var(--color-foreground)]">
           {formatMoney(product.price.amount, product.price.currency)}
         </span>
-        <StockChip stock={product.stock} />
+        <AtpChip available={available} loading={atpLoading} warehouseName={warehouseName} />
       </div>
     </Link>
   );
@@ -502,19 +515,23 @@ function DesktopRow({
   brand,
   category,
   isLast,
+  available,
+  atpLoading,
+  warehouseName,
   onEdit,
   onDelete,
   onPriceChange,
-  onStockAdjust,
 }: {
   product: ProductDto;
   brand: BrandDto | undefined;
   category: CategoryDto | undefined;
   isLast: boolean;
+  available: number | undefined;
+  atpLoading: boolean;
+  warehouseName?: string;
   onEdit: () => void;
   onDelete: () => void;
   onPriceChange: () => void;
-  onStockAdjust: () => void;
 }) {
   return (
     <div
@@ -582,7 +599,7 @@ function DesktopRow({
         >
           {formatMoney(product.price.amount, product.price.currency)}
         </button>
-        <StockChip stock={product.stock} onClick={onStockAdjust} />
+        <AtpChip available={available} loading={atpLoading} warehouseName={warehouseName} />
       </div>
 
       {/* Trailing actions + chevron */}
@@ -641,7 +658,7 @@ function EmptyResults({
           ? search
             ? `Nothing matches "${search}". Try a different term or clear the filters.`
             : "No products match the current filters."
-          : "Add your first product to start selling. Each carries its own SKU, price, stock, and image."}
+          : "Add your first product to start selling. Each carries its own SKU, price, and image. Stock is received in Inventory."}
       </p>
       {searchActive ? (
         <Button variant="outline" onClick={onClear} className="h-9 rounded-lg px-4 text-[13px]">
@@ -706,37 +723,50 @@ function LoadingList() {
 //  Stock chip — tone-tinted pill with the count.
 // ───────────────────────────────────────────────────────────────────────
 
-function StockChip({
-  stock,
-  onClick,
+function AtpChip({
+  available,
+  loading,
+  warehouseName,
 }: {
-  stock: number;
-  onClick?: () => void;
+  available: number | undefined;
+  loading: boolean;
+  warehouseName?: string;
 }) {
+  if (loading && available === undefined) {
+    return <Skeleton className="h-6 w-12 rounded-full" />;
+  }
+
   const tone =
-    stock === 0 ? "danger" : stock < LOW_STOCK ? "warning" : "default";
+    available === undefined
+      ? "default"
+      : available === 0
+        ? "danger"
+        : available < LOW_STOCK
+          ? "warning"
+          : "default";
   const tones = {
     default:
-      "bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-surface-1)]",
+      "bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
     warning:
-      "bg-[oklch(from_var(--color-warning)_l_c_h_/_0.14)] text-[var(--color-warning)] hover:bg-[oklch(from_var(--color-warning)_l_c_h_/_0.22)]",
+      "bg-[oklch(from_var(--color-warning)_l_c_h_/_0.14)] text-[var(--color-warning)]",
     danger:
-      "bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.14)] text-[var(--color-destructive)] hover:bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.22)]",
+      "bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.14)] text-[var(--color-destructive)]",
   } as const;
-  const Comp = onClick ? "button" : "span";
+  const title = warehouseName
+    ? `Available to promise at ${warehouseName}`
+    : "Available quantity is managed by Inventory";
   return (
-    <Comp
-      onClick={onClick}
-      title={onClick ? "Adjust stock" : undefined}
+    <span
+      data-testid="catalog-atp"
+      title={title}
       className={cn(
-        "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-semibold tabular-nums transition-colors",
-        onClick && "cursor-pointer",
+        "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-semibold tabular-nums",
         tones[tone],
       )}
     >
       <Package className="size-3" />
-      {stock}
-    </Comp>
+      {available === undefined ? "—" : available}
+    </span>
   );
 }
 
@@ -832,7 +862,6 @@ function ProductEditorDialog({
       categoryId: product?.categoryId ?? "",
       priceAmount: product?.price.amount ?? 0,
       priceCurrency: product?.price.currency ?? "USD",
-      stock: product?.stock ?? 0,
       isActive: product?.isActive ?? true,
     }),
     [product],
@@ -845,7 +874,6 @@ function ProductEditorDialog({
   const [categoryId, setCategoryId] = useState(initial.categoryId);
   const [priceAmount, setPriceAmount] = useState(String(initial.priceAmount));
   const [priceCurrency, setPriceCurrency] = useState(initial.priceCurrency);
-  const [stock, setStock] = useState(String(initial.stock));
   const [isActive, setIsActive] = useState(initial.isActive);
 
   useEffect(() => {
@@ -857,7 +885,6 @@ function ProductEditorDialog({
       setCategoryId(initial.categoryId);
       setPriceAmount(String(initial.priceAmount));
       setPriceCurrency(initial.priceCurrency);
-      setStock(String(initial.stock));
       setIsActive(initial.isActive);
     }
   }, [isOpen, initial]);
@@ -888,16 +915,13 @@ function ProductEditorDialog({
   const validBrand = brandId !== "";
   const validCategory = categoryId !== "";
   const priceNum = Number.parseFloat(priceAmount);
-  const stockNum = Number.parseInt(stock, 10);
   const valid =
     trimmedName.length > 0 &&
     (product || trimmedSku.length > 0) &&
     validBrand &&
     validCategory &&
     !Number.isNaN(priceNum) &&
-    priceNum >= 0 &&
-    !Number.isNaN(stockNum) &&
-    stockNum >= 0;
+    priceNum >= 0;
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -920,7 +944,7 @@ function ProductEditorDialog({
         categoryId,
         priceAmount: priceNum,
         priceCurrency,
-        stock: stockNum,
+        stock: 0,
       });
     }
   };
@@ -933,8 +957,8 @@ function ProductEditorDialog({
             <DialogTitle>{product ? "Edit product" : "Add a product"}</DialogTitle>
             <DialogDescription>
               {product
-                ? `Update details for ${product.name}. Use the inline price/stock chips on the row to change those — they emit domain events.`
-                : "Add a product to your catalog. Price and stock can be adjusted inline after creation."}
+                ? `Update details for ${product.name}. Use the inline price chip on the row to change list price.`
+                : "Add a product to your catalog. List price can be adjusted inline after creation. Stock is received in Inventory."}
             </DialogDescription>
           </DialogHeader>
 
@@ -993,7 +1017,7 @@ function ProductEditorDialog({
             </div>
 
             {!product && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field id="product-price" label="Price" required>
                   <Input
                     id="product-price"
@@ -1015,19 +1039,6 @@ function ProductEditorDialog({
                     required
                     maxLength={3}
                     className="font-mono uppercase tracking-tight"
-                  />
-                </Field>
-                <Field id="product-stock" label="Stock" required>
-                  <Input
-                    id="product-stock"
-                    type="number"
-                    inputMode="numeric"
-                    step="1"
-                    min="0"
-                    value={stock}
-                    onChange={(e) => setStock(e.target.value)}
-                    required
-                    className="tabular-nums"
                   />
                 </Field>
               </div>
@@ -1204,143 +1215,6 @@ function PriceDialog({
             </DialogClose>
             <Button type="submit" disabled={mutation.isPending || !valid}>
               {mutation.isPending ? "Saving…" : "Change price"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function StockDialog({
-  state,
-  onClose,
-}: {
-  state: EditorState;
-  onClose: () => void;
-}) {
-  const isOpen = state.mode === "stock";
-  const product = state.mode === "stock" ? state.product : undefined;
-  const queryClient = useQueryClient();
-
-  const [delta, setDelta] = useState("0");
-
-  useEffect(() => {
-    if (isOpen) setDelta("0");
-  }, [isOpen]);
-
-  const mutation = useMutation({
-    mutationFn: (input: AdjustProductStockInput) => adjustProductStock(input),
-    onSuccess: () => {
-      toast.success("Stock adjusted");
-      queryClient.invalidateQueries({ queryKey: ["catalog", "products"] });
-      onClose();
-    },
-    onError: (err) => toast.error("Adjustment failed", { description: describe(err) }),
-  });
-
-  const deltaNum = Number.parseInt(delta, 10);
-  const valid = !Number.isNaN(deltaNum) && deltaNum !== 0;
-  const newStock = (product?.stock ?? 0) + (Number.isNaN(deltaNum) ? 0 : deltaNum);
-  const willGoNegative = newStock < 0;
-
-  return (
-    <Dialog open={isOpen} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!valid || willGoNegative || !product) return;
-            mutation.mutate({ productId: product.id, delta: deltaNum });
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="size-4 text-[var(--color-primary)]" />
-              Adjust stock
-            </DialogTitle>
-            <DialogDescription>
-              Add or remove units for {product?.name}. Emits a{" "}
-              <code className="font-mono text-[11px]">ProductStockAdjusted</code> event.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] px-4 py-3 tabular-nums">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                  Current
-                </div>
-                <div className="mt-1 font-display text-[18px] font-semibold">
-                  {product?.stock ?? 0}
-                </div>
-              </div>
-              <ArrowDown className="size-4 -rotate-90 text-[var(--color-muted-foreground)]" />
-              <div className="text-right">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-primary)]">
-                  Becomes
-                </div>
-                <div
-                  className={cn(
-                    "mt-1 font-display text-[18px] font-semibold",
-                    willGoNegative
-                      ? "text-[var(--color-destructive)]"
-                      : deltaNum > 0
-                        ? "text-[var(--color-success)]"
-                        : deltaNum < 0
-                          ? "text-[var(--color-warning)]"
-                          : "",
-                  )}
-                >
-                  {newStock}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setDelta(String((Number.parseInt(delta, 10) || 0) - 1))}
-              >
-                <Minus className="size-3.5" />
-              </Button>
-              <Input
-                value={delta}
-                onChange={(e) => setDelta(e.target.value)}
-                type="number"
-                step="1"
-                className="text-center font-mono text-[15px] tabular-nums"
-                aria-label="Delta"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setDelta(String((Number.parseInt(delta, 10) || 0) + 1))}
-              >
-                <Plus className="size-3.5" />
-              </Button>
-            </div>
-
-            {willGoNegative && (
-              <div className="flex items-start gap-2 rounded-lg border border-[oklch(from_var(--color-destructive)_l_c_h_/_0.20)] bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.08)] px-3 py-2 text-[12.5px] text-[var(--color-destructive)]">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                <span>
-                  Stock cannot go negative. Maximum decrement is{" "}
-                  <span className="font-mono">{product?.stock ?? 0}</span>.
-                </span>
-              </div>
-            )}
-          </DialogBody>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={mutation.isPending}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={mutation.isPending || !valid || willGoNegative}>
-              {mutation.isPending ? "Adjusting…" : "Adjust stock"}
             </Button>
           </DialogFooter>
         </form>

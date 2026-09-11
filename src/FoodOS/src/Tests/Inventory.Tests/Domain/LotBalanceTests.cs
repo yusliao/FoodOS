@@ -42,6 +42,19 @@ public sealed class LotBalanceTests
     }
 
     [Fact]
+    public void ReceiveIsolated_Should_NotChangeAvailable_And_MarkFullyIsolated()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+
+        balance.ReceiveIsolated(8);
+
+        balance.OnHand.ShouldBe(8m);
+        balance.Isolated.ShouldBe(8m);
+        balance.Available.ShouldBe(0m);
+        balance.IsFullyIsolated.ShouldBeTrue();
+    }
+
+    [Fact]
     public void Unreserve_Should_RestoreAvailable()
     {
         var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());

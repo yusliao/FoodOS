@@ -210,6 +210,7 @@ export type ProductDto = {
   brandId: string;
   categoryId: string;
   price: MoneyDto;
+  /** Deprecated catalog field. Operational ATP comes from Inventory, never this number. */
   stock: number;
   isActive: boolean;
   /** Fulfillment zone. Shop uses this for ATP; catalog list price is never the customer price. */
@@ -264,11 +265,6 @@ export type ChangeProductPriceInput = {
   productId: string;
   amount: number;
   currency: string;
-};
-
-export type AdjustProductStockInput = {
-  productId: string;
-  delta: number;
 };
 
 export function searchProducts(
@@ -367,21 +363,6 @@ export async function changeProductPrice(input: ChangeProductPriceInput): Promis
         productId: input.productId,
         amount: input.amount,
         currency: input.currency,
-      }),
-    },
-  );
-}
-
-export async function adjustProductStock(
-  input: AdjustProductStockInput,
-): Promise<{ stock: number }> {
-  return apiFetch<{ stock: number }>(
-    `/api/v1/catalog/products/${encodeURIComponent(input.productId)}/stock`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({
-        productId: input.productId,
-        delta: input.delta,
       }),
     },
   );

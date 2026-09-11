@@ -39,6 +39,17 @@ const CATEGORY_OUTDOOR = {
   deletedBy: null,
 };
 
+const WAREHOUSE = {
+  id: "00000000-0000-0000-0000-0000000e4444",
+  code: "WH1",
+  name: "Austin DC",
+  city: "Austin",
+  timeZoneId: "America/Chicago",
+  createdAtUtc: "2026-05-01T10:00:00Z",
+};
+
+const PRODUCT_ATP = 7;
+
 const PRODUCT_TENT = {
   id: "00000000-0000-0000-0000-0000000d3333",
   sku: "GLX-TENT-001",
@@ -168,6 +179,13 @@ test.describe("catalog/products", () => {
     await mockJsonResponse(page, "**/api/v1/catalog/brands**", paged([BRAND_GLOBEX], { pageSize: 200 }));
     await mockJsonResponse(page, "**/api/v1/catalog/categories**", paged([CATEGORY_OUTDOOR], { pageSize: 200 }));
     await mockJsonResponse(page, "**/api/v1/catalog/products**", paged(products, { pageSize: 25 }));
+    await mockJsonResponse(page, "**/api/v1/inventory/warehouses**", paged([WAREHOUSE]));
+    await mockJsonResponse(page, "**/api/v1/inventory/stock/available**", {
+      warehouseId: WAREHOUSE.id,
+      productId: PRODUCT_TENT.id,
+      available: PRODUCT_ATP,
+      zoneKind: "Ambient",
+    });
   }
 
   test("renders the heading and a product row from mocked data", async ({ page }) => {
@@ -179,6 +197,8 @@ test.describe("catalog/products", () => {
     await expect(page.getByText("Trailhead Tent").last()).toBeVisible();
     await expect(page.getByText("GLX-TENT-001").last()).toBeVisible();
     await expect(page.getByText("1 product found")).toBeVisible();
+    await expect(page.getByTestId("catalog-atp").last()).toHaveText(String(PRODUCT_ATP));
+    await expect(page.getByTestId("catalog-atp").last()).not.toHaveText("42");
   });
 
   test("shows the empty state when no products match", async ({ page }) => {
@@ -216,6 +236,13 @@ test.describe("catalog/products/:productId", () => {
     await mockJsonResponse(page, `**/api/v1/catalog/brands/${BRAND_GLOBEX.id}`, BRAND_GLOBEX);
     await mockJsonResponse(page, `**/api/v1/catalog/categories/${CATEGORY_OUTDOOR.id}`, CATEGORY_OUTDOOR);
     await mockJsonResponse(page, `**/api/v1/catalog/products/${PRODUCT_TENT.id}`, PRODUCT_TENT);
+    await mockJsonResponse(page, "**/api/v1/inventory/warehouses**", paged([WAREHOUSE]));
+    await mockJsonResponse(page, "**/api/v1/inventory/stock/available**", {
+      warehouseId: WAREHOUSE.id,
+      productId: PRODUCT_TENT.id,
+      available: PRODUCT_ATP,
+      zoneKind: "Ambient",
+    });
   }
 
   test("renders the product name, SKU, and a back link", async ({ page }) => {
@@ -243,11 +270,22 @@ test.describe("catalog/products/:productId", () => {
   test("shows the not-found panel when the product 404s", async ({ page }) => {
     // A null/empty product body resolves the query without data → NotFound.
     await mockJsonResponse(page, `**/api/v1/catalog/products/${PRODUCT_TENT.id}`, null);
+    await mockJsonResponse(page, "**/api/v1/inventory/warehouses**", paged([]));
 
     await page.goto(`/catalog/products/${PRODUCT_TENT.id}`);
 
     await expect(
       page.getByRole("heading", { name: /product not found/i }),
     ).toBeVisible();
+  });
+
+  test("shows inventory ATP and has no adjust-stock action", async ({ page }) => {
+    await mockProductDetail(page);
+
+    await page.goto(`/catalog/products/${PRODUCT_TENT.id}`);
+
+    await expect(page.getByTestId("catalog-atp")).toHaveText(String(PRODUCT_ATP));
+    await expect(page.getByRole("button", { name: /adjust stock/i })).toHaveCount(0);
+    await expect(page.getByText(/catalog product stock is retired/i)).toBeVisible();
   });
 });

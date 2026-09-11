@@ -18,18 +18,15 @@ import {
   Image as ImageIcon,
   Info,
   Layers,
-  Minus,
   Package,
   PackageX,
   Pencil,
-  Plus,
   RefreshCw,
   Tag,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  adjustProductStock,
   changeProductPrice,
   deleteProduct,
   getBrandById,
@@ -38,13 +35,13 @@ import {
   searchBrands,
   searchCategories,
   updateProduct,
-  type AdjustProductStockInput,
   type BrandDto,
   type CategoryDto,
   type ChangeProductPriceInput,
   type ProductDto,
   type UpdateProductInput,
 } from "@/api/catalog";
+import { useDefaultWarehouse, useInventoryAtp } from "./use-inventory-atp";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -87,8 +84,7 @@ type DialogState =
   | { mode: "closed" }
   | { mode: "edit" }
   | { mode: "delete" }
-  | { mode: "price" }
-  | { mode: "stock" };
+  | { mode: "price" };
 
 // ───────────────────────────────────────────────────────────────────────
 //  Page
@@ -123,6 +119,13 @@ export function ProductDetailPage() {
 
   const brand = brandQuery.data;
   const category = categoryQuery.data;
+  const { warehouse } = useDefaultWarehouse();
+  const atpQuery = useInventoryAtp(
+    warehouse?.id,
+    product?.id,
+    product?.temperatureZone,
+  );
+  const available = atpQuery.data?.available;
 
   return (
     <div className="pb-12">
@@ -142,6 +145,8 @@ export function ProductDetailPage() {
             product={product}
             brand={brand}
             category={category}
+            available={available}
+            atpLoading={atpQuery.isLoading}
             isFetching={productQuery.isFetching}
             onRefresh={() => void productQuery.refetch()}
             onEdit={() => setDialog({ mode: "edit" })}
@@ -160,8 +165,10 @@ export function ProductDetailPage() {
 
               <EntityDetailSection title="Inventory" icon={Package}>
                 <InventoryPanel
-                  product={product}
-                  onStockAdjust={() => setDialog({ mode: "stock" })}
+                  available={available}
+                  atpLoading={atpQuery.isLoading}
+                  warehouseName={warehouse?.name}
+                  zone={product.temperatureZone}
                 />
               </EntityDetailSection>
 
@@ -229,11 +236,6 @@ export function ProductDetailPage() {
             product={product}
             onClose={() => setDialog({ mode: "closed" })}
           />
-          <StockDialog
-            open={dialog.mode === "stock"}
-            product={product}
-            onClose={() => setDialog({ mode: "closed" })}
-          />
         </>
       ) : (
         <NotFoundPanel />
@@ -250,6 +252,8 @@ function ProductHero({
   product,
   brand,
   category,
+  available,
+  atpLoading,
   isFetching,
   onRefresh,
   onEdit,
@@ -258,13 +262,15 @@ function ProductHero({
   product: ProductDto;
   brand: BrandDto | undefined;
   category: CategoryDto | undefined;
+  available: number | undefined;
+  atpLoading: boolean;
   isFetching: boolean;
   onRefresh: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const stockTone: "default" | "warning" | "danger" =
-    product.stock === 0 ? "danger" : product.stock < LOW_STOCK ? "warning" : "default";
+    available === 0 ? "danger" : available !== undefined && available < LOW_STOCK ? "warning" : "default";
 
   const subtitleParts: React.ReactNode[] = [
     <code
@@ -349,13 +355,13 @@ function ProductHero({
           />
           <EntityDetailStat
             icon={Package}
-            value={product.stock}
+            value={atpLoading && available === undefined ? "…" : available ?? "—"}
             label={
-              stockTone === "danger"
+              available === 0
                 ? "out of stock"
                 : stockTone === "warning"
                   ? `low (< ${LOW_STOCK})`
-                  : "in stock"
+                  : "available"
             }
             tone={stockTone}
           />
@@ -437,29 +443,38 @@ function PricingPanel({
 }
 
 function InventoryPanel({
-  product,
-  onStockAdjust,
+  available,
+  atpLoading,
+  warehouseName,
+  zone,
 }: {
-  product: ProductDto;
-  onStockAdjust: () => void;
+  available: number | undefined;
+  atpLoading: boolean;
+  warehouseName?: string;
+  zone?: string;
 }) {
   const tone: "default" | "warning" | "danger" =
-    product.stock === 0 ? "danger" : product.stock < LOW_STOCK ? "warning" : "default";
+    available === 0 ? "danger" : available !== undefined && available < LOW_STOCK ? "warning" : "default";
   return (
     <div className="space-y-3">
       <div>
-        <div
-          className={cn(
-            "font-display text-[24px] font-semibold leading-none tracking-[-0.02em] tabular-nums",
-            tone === "danger" && "text-[var(--color-destructive)]",
-            tone === "warning" && "text-[var(--color-warning)]",
-            tone === "default" && "text-[var(--color-foreground)]",
-          )}
-        >
-          {product.stock}
-        </div>
+        {atpLoading && available === undefined ? (
+          <Skeleton className="h-8 w-16" />
+        ) : (
+          <div
+            data-testid="catalog-atp"
+            className={cn(
+              "font-display text-[24px] font-semibold leading-none tracking-[-0.02em] tabular-nums",
+              tone === "danger" && "text-[var(--color-destructive)]",
+              tone === "warning" && "text-[var(--color-warning)]",
+              tone === "default" && "text-[var(--color-foreground)]",
+            )}
+          >
+            {available ?? "—"}
+          </div>
+        )}
         <div className="mt-1 flex items-center gap-1 text-[11.5px] text-[var(--color-muted-foreground)]">
-          {tone === "danger" ? (
+          {available === 0 ? (
             <>
               <AlertTriangle className="h-3 w-3 text-[var(--color-destructive)]" />
               <span className="text-[var(--color-destructive)]">Out of stock</span>
@@ -472,19 +487,17 @@ function InventoryPanel({
               </span>
             </>
           ) : (
-            <span>Units on hand</span>
+            <span>
+              Available to promise
+              {warehouseName ? ` · ${warehouseName}` : ""}
+              {zone ? ` · ${zone}` : ""}
+            </span>
           )}
         </div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onStockAdjust}
-        className="w-full gap-1.5"
-      >
-        <Package className="h-3.5 w-3.5" />
-        Adjust stock
-      </Button>
+      <p className="text-[12px] leading-relaxed text-[var(--color-muted-foreground)]">
+        Catalog product stock is retired. Receive, reserve, and isolate live in Inventory.
+      </p>
     </div>
   );
 }
@@ -745,8 +758,8 @@ function ProductEditorDialog({
           <DialogHeader>
             <DialogTitle>Edit product</DialogTitle>
             <DialogDescription>
-              Update details for {product.name}. Use the price/stock actions in
-              the sidebar to change those — they emit domain events.
+              Update details for {product.name}. Use the price action in
+              the sidebar to change list price. Available quantity lives in Inventory.
             </DialogDescription>
           </DialogHeader>
 
@@ -1018,136 +1031,3 @@ function PriceDialog({
   );
 }
 
-function StockDialog({
-  open,
-  product,
-  onClose,
-}: {
-  open: boolean;
-  product: ProductDto;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [delta, setDelta] = useState("0");
-
-  useEffect(() => {
-    if (open) setDelta("0");
-  }, [open]);
-
-  const mutation = useMutation({
-    mutationFn: (input: AdjustProductStockInput) => adjustProductStock(input),
-    onSuccess: () => {
-      toast.success("Stock adjusted");
-      queryClient.invalidateQueries({ queryKey: ["catalog", "products"] });
-      onClose();
-    },
-    onError: (err: unknown) => toast.error("Adjustment failed", { description: describe(err) }),
-  });
-
-  const deltaNum = Number.parseInt(delta, 10);
-  const valid = !Number.isNaN(deltaNum) && deltaNum !== 0;
-  const newStock = product.stock + (Number.isNaN(deltaNum) ? 0 : deltaNum);
-  const willGoNegative = newStock < 0;
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!valid || willGoNegative) return;
-            mutation.mutate({ productId: product.id, delta: deltaNum });
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Adjust stock</DialogTitle>
-            <DialogDescription>
-              {product.name} — add or remove units. Emits a{" "}
-              <code className="font-mono text-[11px]">ProductStockAdjusted</code> event.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] px-4 py-3 tabular-nums">
-              <div>
-                <div className="text-[11px] uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                  current
-                </div>
-                <div className="font-display mt-1 text-[18px] font-semibold">{product.stock}</div>
-              </div>
-              <ArrowDown className="h-4 w-4 -rotate-90 text-[var(--color-muted-foreground)]" />
-              <div className="text-right">
-                <div className="text-[11px] uppercase tracking-wider text-[var(--color-primary)]">
-                  becomes
-                </div>
-                <div
-                  className={cn(
-                    "font-display mt-1 text-[18px] font-semibold",
-                    willGoNegative
-                      ? "text-[var(--color-destructive)]"
-                      : deltaNum > 0
-                        ? "text-[var(--color-success)]"
-                        : deltaNum < 0
-                          ? "text-[var(--color-warning)]"
-                          : "",
-                  )}
-                >
-                  {newStock}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setDelta(String((Number.parseInt(delta, 10) || 0) - 1))}
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </Button>
-              <Input
-                value={delta}
-                onChange={(e) => setDelta(e.target.value)}
-                type="number"
-                step="1"
-                className="text-center font-mono text-[15px] tabular-nums"
-                aria-label="Delta"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setDelta(String((Number.parseInt(delta, 10) || 0) + 1))}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-
-            {willGoNegative && (
-              <div className="flex items-start gap-2 rounded-md bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.08)] px-3 py-2 text-[12.5px] text-[var(--color-destructive)]">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>
-                  Stock cannot go negative. The maximum decrement here is{" "}
-                  <span className="font-mono">{product.stock}</span>.
-                </span>
-              </div>
-            )}
-          </DialogBody>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={mutation.isPending}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              type="submit"
-              disabled={mutation.isPending || !valid || willGoNegative}
-            >
-              {mutation.isPending ? "Adjusting…" : "Adjust stock"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}

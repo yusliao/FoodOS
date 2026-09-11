@@ -148,7 +148,7 @@ public sealed class ProductsEndpointTests
     }
 
     [Fact]
-    public async Task AdjustProductStock_Should_Apply_Positive_Delta()
+    public async Task AdjustProductStock_Should_Return410_And_NotMutateCatalogStock()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var (brandId, categoryId) = await PickBrandAndCategoryAsync(client);
@@ -157,44 +157,13 @@ public sealed class ProductsEndpointTests
         using var adjust = await client.PatchAsJsonAsync(
             $"{TestConstants.CatalogBasePath}/products/{productId}/stock",
             new { productId, delta = 7 });
-        adjust.StatusCode.ShouldBe(HttpStatusCode.OK);
+        adjust.StatusCode.ShouldBe(HttpStatusCode.Gone);
+
+        var body = await adjust.Content.ReadAsStringAsync();
+        body.ShouldContain("Inventory");
 
         var fetched = await GetAsync(client, productId);
-        fetched.Stock.ShouldBe(12);
-    }
-
-    [Fact]
-    public async Task AdjustProductStock_Should_Apply_Negative_Delta_When_In_Range()
-    {
-        using var client = await _auth.CreateRootAdminClientAsync();
-        var (brandId, categoryId) = await PickBrandAndCategoryAsync(client);
-        var productId = await CreateAsync(client, brandId, categoryId, stock: 10);
-
-        using var adjust = await client.PatchAsJsonAsync(
-            $"{TestConstants.CatalogBasePath}/products/{productId}/stock",
-            new { productId, delta = -4 });
-        adjust.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var fetched = await GetAsync(client, productId);
-        fetched.Stock.ShouldBe(6);
-    }
-
-    [Fact]
-    public async Task AdjustProductStock_Should_Reject_Negative_Delta_That_Goes_Below_Zero()
-    {
-        using var client = await _auth.CreateRootAdminClientAsync();
-        var (brandId, categoryId) = await PickBrandAndCategoryAsync(client);
-        var productId = await CreateAsync(client, brandId, categoryId, stock: 3);
-
-        using var adjust = await client.PatchAsJsonAsync(
-            $"{TestConstants.CatalogBasePath}/products/{productId}/stock",
-            new { productId, delta = -10 });
-
-        // Domain guards against negative stock — handler converts to a 4xx via CustomException.
-        adjust.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Conflict);
-
-        var fetched = await GetAsync(client, productId);
-        fetched.Stock.ShouldBe(3, "stock must be unchanged after a rejected adjustment");
+        fetched.Stock.ShouldBe(5, "catalog Product.Stock must not change; ATP lives in Inventory");
     }
 
     // ─── soft delete + restore ───────────────────────────────────────

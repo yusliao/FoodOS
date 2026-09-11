@@ -9,6 +9,7 @@ using FSH.Modules.Billing.Data;
 using FSH.Modules.Billing.Domain;
 using FSH.Modules.Catalog.Contracts.Authorization;
 using FSH.Modules.Catalog.Data;
+using FSH.Modules.Procurement.Contracts.Authorization;
 using FSH.Modules.Catalog.Domain;
 using FSH.Modules.Chat.Data;
 using FSH.Modules.Chat.Domain;
@@ -722,6 +723,8 @@ internal sealed class DemoSeeder
     [
         new("acme.manager",  "manager@acme.com",  "Maya",   "Lin",      ["Manager"]),
         new("acme.support",  "support@acme.com",  "Sam",    "Rivera",   ["Support"]),
+        new("acme.purchaser","purchaser@acme.com","Pat",    "Chen",     ["Purchaser"]),
+        new("acme.qc",       "qc@acme.com",       "Quinn",  "Diaz",     ["QcInspector"]),
         new("acme.alice",    "alice@acme.com",    "Alice",  "Nguyen",   [RoleConstants.Basic]),
         new("acme.bob",      "bob@acme.com",      "Bob",    "Patel",    [RoleConstants.Basic]),
         new("acme.carol",    "carol@acme.com",    "Carol",  "Smith",    [RoleConstants.Basic]),
@@ -783,6 +786,28 @@ internal sealed class DemoSeeder
                 TicketsPermissions.Tickets.View,
                 TicketsPermissions.Tickets.Create,
                 TicketsPermissions.Tickets.Update,
+            ]),
+
+        new(
+            "Purchaser",
+            "Creates purchase orders and inbound appointments. Cannot pass or fail quality checks.",
+            [
+                ProcurementPermissions.Suppliers.View,
+                ProcurementPermissions.Suppliers.Create,
+                ProcurementPermissions.Suppliers.Update,
+                ProcurementPermissions.Purchase.View,
+                ProcurementPermissions.Purchase.Create,
+            ]),
+
+        new(
+            "QcInspector",
+            "Records inbound quality checks. Cannot create purchase orders.",
+            [
+                ProcurementPermissions.Suppliers.View,
+                ProcurementPermissions.Purchase.View,
+                ProcurementPermissions.Quality.View,
+                ProcurementPermissions.Quality.Pass,
+                ProcurementPermissions.Quality.Fail,
             ]),
     ];
 

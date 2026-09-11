@@ -42,6 +42,18 @@ public sealed class LotBalance : BaseEntity<Guid>
         Version++;
     }
 
+    /// <summary>
+    /// Inbound that is immediately quarantined. OnHand increases with Isolated so ATP
+    /// (<see cref="Available"/>) stays unchanged. Used by Procurement QC fail.
+    /// </summary>
+    public void ReceiveIsolated(decimal qty)
+    {
+        EnsurePositive(qty);
+        OnHand += qty;
+        Isolated += qty;
+        Version++;
+    }
+
     public void Isolate(decimal qty)
     {
         EnsurePositive(qty);
