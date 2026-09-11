@@ -25,6 +25,7 @@ public sealed class InventoryDbContext : BaseDbContext
     public DbSet<LotBalance> LotBalances => Set<LotBalance>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
+    public DbSet<DailyPlan> DailyPlans => Set<DailyPlan>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

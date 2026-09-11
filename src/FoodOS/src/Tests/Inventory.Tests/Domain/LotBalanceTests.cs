@@ -65,4 +65,28 @@ public sealed class LotBalanceTests
         balance.Reserved.ShouldBe(1m);
         balance.Available.ShouldBe(7m);
     }
+
+    [Fact]
+    public void AllocateFromAvailable_Should_IncreaseAllocated_WithoutLotReserved()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        balance.Receive(10);
+
+        balance.AllocateFromAvailable(4);
+
+        balance.Reserved.ShouldBe(0m);
+        balance.Allocated.ShouldBe(4m);
+        balance.Available.ShouldBe(6m);
+    }
+
+    [Fact]
+    public void AllocateFromAvailable_Should_Throw_When_ExceedsAvailable()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        balance.Receive(5);
+        balance.Isolate(3);
+
+        Should.Throw<InvalidOperationException>(() => balance.AllocateFromAvailable(3));
+        balance.Allocated.ShouldBe(0m);
+    }
 }

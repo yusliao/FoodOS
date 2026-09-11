@@ -18,5 +18,6 @@ public static class TestConstants
     public const string InventoryBasePath = "/api/v1/inventory";
     public const string OrderingBasePath = "/api/v1/ordering";
     public const string ProcurementBasePath = "/api/v1/procurement";
+    public const string WarehouseBasePath = "/api/v1/warehouse";
     public const string TicketsBasePath = "/api/v1";
 }

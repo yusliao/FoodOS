@@ -75,6 +75,39 @@ public sealed class SalesOrderTests
         SalesOrderTransitions.CanTransition(SalesOrderStatus.Draft, SalesOrderStatus.Picking).ShouldBeFalse();
     }
 
+    [Fact]
+    public void LockForCutoff_Should_MoveReservedToPlanned()
+    {
+        var order = CreateReserved(DateTimeOffset.UtcNow.AddHours(2));
+
+        order.LockForCutoff();
+
+        order.Status.ShouldBe(SalesOrderStatus.Planned);
+        order.LockForCutoff();
+        order.Status.ShouldBe(SalesOrderStatus.Planned);
+    }
+
+    [Fact]
+    public void Amend_Should_Reject_When_Planned()
+    {
+        var order = CreateReserved(DateTimeOffset.UtcNow.AddHours(2));
+        order.LockForCutoff();
+
+        var ex = Should.Throw<CustomException>(() => order.BeginAmend(DateTimeOffset.UtcNow));
+        ex.StatusCode.ShouldBe(System.Net.HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public void PickingThenPacked_Should_FollowStatusMachine()
+    {
+        var order = CreateReserved(DateTimeOffset.UtcNow.AddHours(2));
+        order.LockForCutoff();
+        order.StartPicking();
+        order.Status.ShouldBe(SalesOrderStatus.Picking);
+        order.MarkPacked();
+        order.Status.ShouldBe(SalesOrderStatus.Packed);
+    }
+
     private static SalesOrder CreateDraft()
         => SalesOrder.CreateDraft(
             "SO202609110001",

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<RootNamespace>FSH.Modules.Warehouse</RootNamespace>
+		<AssemblyName>FSH.Modules.Warehouse</AssemblyName>
+		<NoWarn>$(NoWarn);CA1031;CA1812;CA1859;S3267</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\Persistence\Persistence.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks\Web\Web.csproj" />
+		<ProjectReference Include="..\Modules.Warehouse.Contracts\Modules.Warehouse.Contracts.csproj" />
+		<ProjectReference Include="..\..\Inventory\Modules.Inventory.Contracts\Modules.Inventory.Contracts.csproj" />
+		<ProjectReference Include="..\..\Ordering\Modules.Ordering.Contracts\Modules.Ordering.Contracts.csproj" />
+	</ItemGroup>
+
+</Project>

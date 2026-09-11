@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Inventory.Contracts;
+using FSH.Modules.Inventory.Contracts.v1.Plans;
 using FSH.Modules.Inventory.Contracts.v1.Warehouses;
 using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Data;
@@ -57,6 +58,21 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
             "HH:mm",
             CultureInfo.InvariantCulture);
         var (businessDate, cutoffAt) = OperatingCutoff.Resolve(warehouse.Clock.TimeZoneId, cutoffLocal, utcNow);
+        for (int i = 0; i < 7; i++)
+        {
+            var existingPlan = await mediator
+                .Send(new GetDailyPlanQuery(warehouse.Id, businessDate), cancellationToken)
+                .ConfigureAwait(false);
+            if (existingPlan is null)
+            {
+                break;
+            }
+
+            (businessDate, cutoffAt) = OperatingCutoff.NextAfter(
+                warehouse.Clock.TimeZoneId,
+                cutoffLocal,
+                businessDate);
+        }
 
         var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
         var zones = new Dictionary<Guid, TemperatureZoneKind>();

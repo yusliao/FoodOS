@@ -4,6 +4,7 @@ using FSH.Modules.Billing.Contracts.Authorization;
 using FSH.Modules.Catalog.Contracts.Authorization;
 using FSH.Modules.Identity.Contracts.Authorization;
 using FSH.Modules.Procurement.Contracts.Authorization;
+using FSH.Modules.Warehouse.Contracts.Authorization;
 using FSH.Modules.Multitenancy.Contracts.Authorization;
 using FSH.Modules.Tickets.Contracts.Authorization;
 using Integration.Tests.Infrastructure;
@@ -42,6 +43,7 @@ public sealed class PermissionRegistrationTests
         AssertAllRegistered(registered, TicketsPermissions.All.Select(p => p.Name), nameof(TicketsPermissions));
         AssertAllRegistered(registered, SystemPermissions.All.Select(p => p.Name), nameof(SystemPermissions));
         AssertAllRegistered(registered, ProcurementPermissions.All.Select(p => p.Name), nameof(ProcurementPermissions));
+        AssertAllRegistered(registered, WarehousePermissions.All.Select(p => p.Name), nameof(WarehousePermissions));
     }
 
     [Fact]
@@ -105,6 +107,7 @@ public sealed class PermissionRegistrationTests
         permSet.ShouldContain(SystemPermissions.Dashboard.View);
         permSet.ShouldContain(ProcurementPermissions.Purchase.Create);
         permSet.ShouldContain(ProcurementPermissions.Quality.Pass);
+        permSet.ShouldContain(WarehousePermissions.Waves.Cutoff);
 
         // Tenants permissions are root-only — admin@root.com on the root tenant gets them.
         permSet.ShouldContain(MultitenancyPermissions.Tenants.View);

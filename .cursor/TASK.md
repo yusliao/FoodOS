@@ -1,19 +1,19 @@
 # FoodOS 任务进度
 
-> 写于 2026-09-11。上一已 push HEAD = `a90ed32`（`update`）。  
-> 本落盘：废弃 Catalog `AdjustProductStock` + Procurement 质检入库（剧本 B 步 1–3）。提交后用 `git log -1` 确认 HEAD。恢复会话时先读完本文件，再改代码。
+> 写于 2026-09-11。上一已 push HEAD = `21a7a30`（`图标替换`）。  
+> 本落盘：Warehouse 截单 / 波次 FEFO Allocate / PDA 拣货（剧本 A 步 3–6、剧本 B 步 4、剧本 C 截单后次日计划）。提交后用 `git log -1` 确认 HEAD。恢复会话时先读完本文件，再改代码。
 
 ---
 
 ## 目标
 
-P0 单城闭环：下午下单预占 → 夜拣 FEFO → 凌晨签收扫码见批次。当前已做到 **Shop + 价盘 + 废弃目录库存改 ATP + 采购质检入库（采购/质检分权，不合格不增可售）**；尚未做 Warehouse / Logistics / 看板。
+P0 单城闭环：下午下单预占 → 夜拣 FEFO → 凌晨签收扫码见批次。当前已做到 **Shop + 价盘 + ATP + 采购质检入库 + 截单波次 FEFO 拣货**；尚未做 Logistics / 看板 / seed-demo 落库。
 
 ---
 
 ## 已完成
 
-### 已提交并已 push（`main`，至 `a90ed32`）
+### 已提交并已 push（`main`，至 `21a7a30`）
 
 | 提交 | 内容 |
 |---|---|
@@ -24,115 +24,116 @@ P0 单城闭环：下午下单预占 → 夜拣 FEFO → 凌晨签收扫码见�
 | `18ae42e` | `deploy/docker` 小改 |
 | `7608e67` | Catalog 价盘（剧本 E） |
 | `a90ed32` | dashboard Shop UI（Quote 展示价） |
+| `428d13e` | 废弃 Catalog `AdjustProductStock` + Procurement 质检入库（剧本 B 步 1–3） |
+| `21a7a30` | 图标替换（与本任务无关） |
 
-### 本切片 1 — 废弃 `AdjustProductStock`
+### 本切片 — Warehouse 截单 / 波次 / FEFO / PDA 拣货
 
-- `PATCH /catalog/products/{id}/stock` 返回 **410 Gone**（detail：`Catalog product stock is deprecated. Available quantity is managed by Inventory.`）。无权限仍 **403**；权限名 `CatalogPermissions.Products.AdjustStock` **保留**。
-- Handler 抛 `CustomException(..., HttpStatusCode.Gone)`，**不再改** `Product.Stock`。列和 `CreateProduct.Stock` 未删；前端创建商品固定 `stock: 0`。
-- 运营 Catalog 页去掉 Adjust stock 弹窗 / 创建表单 Stock 字段 / `adjustProductStock` API。
-- ATP：`useDefaultWarehouse` + `useInventoryAtp(s)`，P0 取租户第一仓 + 商品温区；chip/详情 `data-testid="catalog-atp"`；失败显示 `—`，**不回退** `Product.Stock`。
-- 测试：Catalog 单元、`AdjustProductStock_Should_Return410_And_NotMutateCatalogStock`、dashboard catalog Playwright 13 条（ATP=7、目录库存 42 不出现、无 Adjust stock）。
-
-### 本切片 2 — Procurement 质检入库（剧本 B 步 1–3）
-
-- 新模块 `procurement` schema；只引用 Inventory `.Contracts`。
-- API：`/api/v1/procurement/suppliers`、`purchase-orders`、send、appointments、`lines/{lineId}/qc/pass|fail`（Idempotency + 分权）。
-- 合格：Mediator `ReceiveInventoryCommand`，ATP 增加；追溯 `receiving` / `active`。
-- 不合格：Mediator `ReceiveIsolatedStockCommand`（无 HTTP）。`OnHand += qty` 且 `Isolated += qty`，**Available 不变**；满隔离则 `lot.Isolate()`。追溯 `receiving` / `quarantine`。
-- 采购员仅有 `Purchase.Create` 调 QC pass → **403**。Demo 角色 `Purchaser` ∩ `QcInspector` 在 Pass/Create 上为空。
+- 新模块 `warehouse` schema；只引用 Inventory / Ordering `.Contracts`。
+- **截单** `POST /api/v1/warehouse/warehouses/{id}/cutoff`：Inventory 建 `DailyPlan`（幂等），Ordering 把该仓该履约日 `Reserved` → `Planned`。再改单 409。
+- **下单过截单**：`PlaceOrder` 发现当日 `DailyPlan` 已存在则滚到次日 `BusinessDate`，不进当日波次（剧本 C 步 3）。
+- **波次** `POST /waves`：按温区从 Planned 订单生成 Draft；自动确保 `{ZONE}-PICK` 库位。`POST /waves/{id}/release`：FEFO 分配 Lot、订单 → `Picking`。
+- **FEFO**：同仓同温区、`Lot.Active`、剩余效期 ≥ `MinRemainingDaysOnShip`；`ExpiryDate ASC, CreatedAtUtc ASC`。隔离批（`LotStatus.Isolated`）跳过（剧本 B 步 4）。
+- **SKU 预占接到批次**：`AllocateReservationCommand`（无 HTTP）对 Lot 调 `AllocateFromAvailable`（不走要求批次已有 Reserved 的旧 `Allocate`），并 **整笔释放** SKU `Reservation`（短配差额回 ATP）。
+- **PDA** `POST /pick-tasks/{id}/confirm`：扫错 Lot → **400**，订单仍 `Picking`；扫对 → Inventory `Pick` + Warehouse `TraceEvent` `picking`/`active`；行齐则订单 `Packed`。
+- 查询：`GET /waves`、`GET /waves/{id}`、`GET /pick-tasks/mine`（未指派任务池）。`POST /locations`。
+- 分权：`WarehouseLead`（Cutoff/Generate/Release，无 Confirm）；`WarehousePicker`（Confirm，无 Generate/Release）。Demo 种子已加 `whlead@acme.com` / `picker@acme.com`。
 - 四处注册：Api / DbMigrator 的 Mediator assemblies + `moduleAssemblies`；slnx / csproj / Architecture.Tests / Migrations。
-- 迁移：`Host/FoodOS.Migrations.PostgreSQL/Procurement/InitialProcurement`。
-- 测试：`Procurement.Tests` 7；`LotBalance.ReceiveIsolated`；Architecture 51；集成 `ProcurementInboundTests`（预约 Receiving、采购 403、fail ATP 不变 + Lot Isolated、pass ATP +7）；权限注册含 `ProcurementPermissions.All`。
+- 迁移：`Inventory/DailyPlanCutoff`、`Warehouse/InitialWarehouse`。
+- 测试：Inventory 域 26（含 FefoAllocator / AllocateFromAvailable）；Ordering 域 13（LockForCutoff / Planned 改单 409）；Warehouse 域 2；Architecture 51；集成 `WarehouseWaveTests`（FEFO 最早效期、隔离批不在任务、扫错 400、扫对 Packed、截单后新单次日）；权限含 `WarehousePermissions.All`。
 
 ### 能力摘要
 
-- **Catalog**：履约、翻译、价盘/Quote；`Product.Price` 仍是目录价；**禁止**用 `Product.Stock` 当可售。
-- **Inventory**：仓 + 三温区 + Lot ATP；SKU 预占；隔离；**ReceiveIsolated**（仅 Mediator）。
-- **Ordering**：Shop 下单/改单/取消走 Quote + Reserve。
-- **Procurement**：供应商 / PO Draft→Sent→Receiving / 预约 / 质检 pass·fail / 收货节点 TraceEvent。
-- **dashboard**：Shop（Quote）+ 运营 Catalog（ATP chip）。未做采购/质检 UI。
+- **Catalog**：履约、翻译、价盘/Quote；禁止用 `Product.Stock` 当可售。
+- **Inventory**：仓 + 三温区 + Lot ATP；SKU 预占；隔离；ReceiveIsolated；**DailyPlan**；**AllocateReservation / PickAllocatedStock**（仅 Mediator）。
+- **Ordering**：Shop 下单/改单/取消；截单锁 `Planned`；拣货/装托状态；过截单滚次日。
+- **Procurement**：供应商 / PO / 预约 / 质检 pass·fail / 收货 TraceEvent。
+- **Warehouse**：截单编排、库位、波次、FEFO、PDA 确认、拣货 TraceEvent。
+- **dashboard**：Shop（Quote）+ 运营 Catalog（ATP chip）。无采购/质检/仓储 UI。
 
 ---
 
 ## 未完成 / 下一步（按执行顺序）
 
-1. **Warehouse（下一刀）**：截单、波次、FEFO `Allocate`（此时才把 Reservation 落到 Lot）、PDA 拣货；隔离批不得进波次（剧本 B 步 4）。
-2. **Logistics**：固定线路、发运、签收、随车退货（剧本 A 步 7–9、剧本 D）。
-3. `seed-demo` 补仓/SKU/线路；对开发库 / docker 执行 `DbMigrator -- apply`（含 `InitialProcurement`）。
-4. 看板四指标；P0 剧本 A–E 打通（A 的夜拣/签收、C 截单后次日计划、D 短配仍缺）。
+1. **Logistics（下一刀）**：固定线路、发运、签收、随车退货（剧本 A 步 7–9、剧本 D）。
+2. `seed-demo` 补仓/SKU/线路；对开发库 / docker 执行 `DbMigrator -- apply`（含 `InitialProcurement`、`DailyPlanCutoff`、`InitialWarehouse`）。
+3. 看板四指标；P0 剧本 A–E 打通（A 的装车/签收/对账、D 短配/随车退仍缺）。上架、装托、损耗未做。
 
-P1 不做：预测自动写单、MQTT 温控、召回工作台、供应商门户、独立 Settlement（归属未拍板）。
+P1 不做：预测自动写单、MQTT 温控、召回工作台、供应商门户、独立 Settlement（归属未拍板）。Hangfire 定时截单未做（HTTP cutoff 与将来 Job 走同一 Command）。
 
-**不要重做** AdjustProductStock / Shop UI / Procurement API。不要开始本列表以外的模块。
+**不要重做** AdjustProductStock / Shop UI / Procurement API / Warehouse 截单波次拣货。不要开始本列表以外的模块。
 
 ---
 
 ## 已改过的关键文件
 
-### 废弃 AdjustProductStock
+### Inventory（DailyPlan + FEFO 入账）
 
-- `Modules.Catalog/.../AdjustProductStock/{AdjustProductStockEndpoint,AdjustProductStockCommandHandler}.cs`
-- `Modules.Catalog.Contracts/v1/Products/AdjustProductStockCommand.cs`
-- `Tests/Catalog.Tests/Features/AdjustProductStockCommandHandlerTests.cs`
-- `Tests/Integration.Tests/Tests/Catalog/ProductsEndpointTests.cs`
-- `clients/dashboard/src/api/{catalog,inventory}.ts`
-- `clients/dashboard/src/pages/catalog/{products,product-detail,use-inventory-atp}.tsx|.ts`
-- `clients/dashboard/tests/catalog/catalog.spec.ts`
+- `Modules.Inventory/Domain/{LotBalance,FefoAllocator,DailyPlan,OperatingClock}.cs`
+- `Modules.Inventory.Contracts/v1/Plans/{CreateDailyPlanCommand,GetDailyPlanQuery}.cs`
+- `Modules.Inventory.Contracts/v1/Stock/{AllocateReservationCommand,PickAllocatedStockCommand}.cs`
+- `Modules.Inventory/Features/v1/Plans/*`、`Stock/AllocateReservation/*`、`Stock/PickAllocatedStock/*`
+- `Data/InventoryDbContext.cs`、`Data/Configurations/DailyPlanConfiguration.cs`
+- `Tests/Inventory.Tests/Domain/{LotBalanceTests,FefoAllocatorTests}.cs`
+- `Host/FoodOS.Migrations.PostgreSQL/Inventory/20260911101923_DailyPlanCutoff*` + snapshot
 
-### Inventory ReceiveIsolated
+### Ordering（锁单 / 拣货态 / 次日计划）
 
-- `Modules.Inventory/Domain/LotBalance.cs`（`ReceiveIsolated`）
-- `Modules.Inventory.Contracts/v1/Stock/ReceiveIsolatedStockCommand.cs`
-- `Modules.Inventory/Features/v1/Stock/ReceiveIsolatedStock/*`
-- `Tests/Inventory.Tests/Domain/LotBalanceTests.cs`
+- `Domain/{SalesOrder,OperatingCutoff}.cs`
+- `Contracts/v1/Orders/{LockOrdersForCutoff,StartOrderPicking,ConfirmOrderPacked,ListOrdersForWave}*`
+- `Features/v1/Orders/{LockOrdersForCutoff,StartOrderPicking,ConfirmOrderPacked,ListOrdersForWave}/*`
+- `PlaceOrderCommandHandler.cs`（有 DailyPlan 则 `NextAfter`）
+- `Tests/Ordering.Tests/Domain/SalesOrderTests.cs`
 
-### Procurement 模块
+### Warehouse 模块
 
-- `Modules/Procurement/Modules.Procurement{,.Contracts}/**`
-- `ProcurementModule.cs`（`FshModule` 670，`api/v{version}/procurement`）
+- `Modules/Warehouse/Modules.Warehouse{,.Contracts}/**`
+- `WarehouseModule.cs`（`FshModule` 680，`api/v{version}/warehouse`）
 - `Host/FoodOS.Api/Program.cs` + `FoodOS.Api.csproj`
-- `Host/FoodOS.DbMigrator/Program.cs` + csproj + `DemoSeed/DemoSeeder.cs`（Purchaser / QcInspector）
-- `Host/FoodOS.Migrations.PostgreSQL/Procurement/*` + csproj
-- `FoodOS.slnx`、`Architecture.Tests.csproj`、`DomainEntityTests.cs`
-- `Tests/Procurement.Tests/**`
-- `Tests/Integration.Tests/Tests/Procurement/ProcurementInboundTests.cs`
-- `TestConstants.cs`（`ProcurementBasePath`）、`PermissionRegistrationTests.cs`
+- `Host/FoodOS.DbMigrator/Program.cs` + csproj + `DemoSeed/DemoSeeder.cs`（WarehouseLead / WarehousePicker）
+- `Host/FoodOS.Migrations.PostgreSQL/Warehouse/*` + csproj
+- `FoodOS.slnx`、`Architecture.Tests.csproj`
+- `Tests/Warehouse.Tests/**`
+- `Tests/Integration.Tests/Tests/Warehouse/WarehouseWaveTests.cs`
+- `TestConstants.cs`（`WarehouseBasePath`）、`PermissionRegistrationTests.cs`
 
-未纳入本落盘：`clients/admin/public/logo-fullstackhero*.png`（与本任务无关）。
+未纳入本落盘：`clients/admin/public/logo-fullstackhero*.png`（已在 `21a7a30`，与本切片无关）。
 
 ---
 
 ## 关键决策和约束
 
 - **一个仓库、一个库、分 schema**；模块只引用对方 `.Contracts`，禁止互改 DbContext。
-- **采购 ≠ 质检**：`Procurement.Purchase.Create` 与 `Procurement.Quality.Pass` 默认不能同人；采购调合格入库 403。
-- **不合格按 ATP/可售不变验收**，不要断言 `OnHand == 0`。Inventory 里 Isolated 是 OnHand 的一部分，fail 路径用 `ReceiveIsolated`。设计原文「不增加 OnHand」按可售解释。
-- 预占锁数量不锁批；波次才 FEFO Allocate。上架/波次属 Warehouse，本切片不做。
-- 价盘只在 Catalog 算；Shop / 运营 Catalog 禁止用 `Product.Price` / `Product.Stock` 当客户价/可售。
-- 追溯事件由 **Procurement 持有写入**（P0 收货节点）；pass `receiving`/`active`，fail `receiving`/`quarantine`。
+- **截单编排在 Warehouse**：Inventory 不引用 Ordering.Contracts。Cutoff handler 调 `CreateDailyPlanCommand` + `LockOrdersForCutoffCommand`。
+- **预占仍不锁批**；波次才 FEFO。Shop 路径继续用 SKU `Reservation`，**不要**改成往 `LotBalance.Reserved` 写。
+- 波次入账用 **`AllocateFromAvailable`**，不要用旧 `LotBalance.Allocate`（仍要求批次上已有 Reserved，Shop 从未写入）。
+- 分配时 **整笔 Release SKU Reservation**（含短配未分到的数量），否则 ATP 会把 skuReserved 和 lot.Allocated 算两次。
+- **隔离批不得进波次**：`FefoAllocator` 只取 `LotStatus.Active`；满隔离 Lot 已 `Isolate()`。不要用 Isolated 数量去补任务。
+- 作业时钟禁止魔法常量；截单演示走 **同一套 Cutoff Command**（不必真等 16:00）。`DailyPlan` 存在即该履约日已锁。
+- Endpoint 动词：`ConfirmCutoffEndpoint`、`StartWaveEndpoint`（release 路径）、`ConfirmPickTaskEndpoint`。不要 `Pass*` / `ReleaseWave*`。
 - 新增模块必须改 **四处**：Api `Program.cs` Mediator assemblies + `moduleAssemblies`，DbMigrator 同样两处。
+- 预置 Guid PK 的新子实体必须 **`DbSet.Add`**（波次任务、库位、TraceEvent 同 Procurement 坑）。
+- Allocate / Pick **无 HTTP**（Warehouse 走 Mediator）。
+- 拣货 TraceEvent 写在 **warehouse schema**（收货仍在 procurement）。跨模块按 Lot 时间序查询未做。
+- P0 波次按 **温区** 分组，`RouteId` 可空；线路要等 Logistics。
 - 不改 `src/BuildingBlocks`。不建 `Settlement`。默认货币 USD。
-- 权限 `AdjustStock` 保留（无权限 403，有权限 410）。`Product.Stock` 列未删。
-- ReceiveIsolated **无 HTTP endpoint**（与 Ordering 调 Reserve 一样走 Mediator）。
-- 质检/预约在已持久化聚合上挂新子实体时，必须 **`DbSet.Add`**：预置 Guid PK 会被 EF 当成 Modified，SaveChanges 变 500 并发异常。
-- Endpoint 类名须以架构测试允许的动词开头（QC 用 `ConfirmPassQualityCheckEndpoint` / `ConfirmFailQualityCheckEndpoint`，不要 `Pass*` / `Fail*`）。
-- `TraceEvent` 在 Domain 且名以 Event 结尾；`DomainEntityTests` 已排除 `BaseEntity<>`，勿再强行改成 `IDomainEvent`。
 
 ---
 
 ## 已知坑 / 未验证项
 
-- **剧本 B 步 3 vs 实现**：设计写「不增加 OnHand」；实现是 OnHand 与 Isolated 同增、Available 不变。集成测试按 ATP + `LotStatus.Isolated` 验收。
-- **剧本 B 步 4**（隔离批不得进波次）未做，等 Warehouse。
-- `InitialProcurement` **未确认**已对开发库 / `deploy/docker` 执行 `dotnet run --project src/Host/FoodOS.DbMigrator -- apply`。Demo `Purchaser`/`QcInspector` 只在 `seed-demo` 写入。
-- Integration **全量**套件未跑（本切片只跑过 ProcurementInbound + PermissionRegistration + 此前 Catalog/Inventory/Ordering 相关）。
-- Catalog / Shop Playwright 是 **route-mock**，未对真实 API 做浏览器联调。
-- Docker Hub 代理曾残留；Testcontainers 可能要本机 postgres tag。本切片集成已通过，说明当时 Docker 可用。
-- ReceiveIsolated 写 Receive + Isolate 两条流水；幂等只查主 key（第二键 `{key}:isolate`）。
-- `GET /catalog/quotes` 的 `customerOrgId` 仍是查询参数，**尚未从 token 绑定**。`OrgMember` 未建。
-- `LotBalance.Allocate` 仍要求批次上已有 Reserved；与 SKU 预占尚未接上（等 WMS）。
-- 无采购/质检前端；无 storefront 聚合接口。
-- 待业务确认：结算归属、短配是否需客户确认、截单后加急是否收费、试点仓/SKU/客户名单。一人兼采购+质检：种子已分权，Admin 仍拥有全部权限。
+- **Place 后再往同一购物车 PUT** 会 `DbUpdateConcurrencyException`（CartLine Modified 0 行）。`WarehouseWaveTests` 用 **新门店** 测截单后下单，不要复用已 Place 的 cart。这是 Ordering 既有问题，本切片未修。
+- Hangfire `CutoffJob` 未做；只有 HTTP cutoff。
+- 上架 / PackTote / 损耗 / 最短路径拣货 **未做**。
+- `GET /pick-tasks/mine` 是未完成任务池，**不按拣货员指派**过滤。
+- `DailyPlanCutoff` / `InitialWarehouse` **未确认**已对开发库 / `deploy/docker` 执行 `dotnet run --project src/Host/FoodOS.DbMigrator -- apply`。Demo `WarehouseLead`/`WarehousePicker` 只在 `seed-demo` 写入。
+- Integration **全量**套件未跑（本切片只跑 WarehouseWave + PermissionRegistration + 此前相关）。
+- Catalog / Shop Playwright 仍是 **route-mock**。
+- `LotBalance.Allocate`（批次 Reserved→Allocated）仍无 Shop 调用方；波次走 `AllocateFromAvailable`。
+- 波次唯一键 `(DailyPlanId, ZoneId)`：一温区一天一波，没有按线路拆波。
+- 短配：分配不足则任务 `Shorted`、订单仍可对其余行拣完后 Packed；Shop 短配原因展示、客户确认未做（剧本 D）。
+- 无仓储前端；无 storefront 聚合接口。
+- 待业务确认：结算归属、短配是否需客户确认、截单后加急是否收费、试点仓/SKU/客户名单。Admin 仍拥有全部 Warehouse 权限。
 
 ---
 
@@ -140,12 +141,13 @@ P1 不做：预测自动写单、MQTT 温控、召回工作台、供应商门户
 
 1. **本文件** `.cursor/TASK.md`
 2. `doc/FoodOS-Cursor规范.md`
-3. `doc/FoodOS-详细设计.md` §3.4 / §3.8 / §6.3、§14
-4. `doc/FoodOS-P0验收剧本.md` 剧本 B
+3. `doc/FoodOS-详细设计.md` §3.5 / §4 / §6.2、剧本 A 步 7–9
+4. `doc/FoodOS-P0验收剧本.md` 剧本 A / D
 5. `src/FoodOS/AGENTS.md`（模块注册四处）
-6. 模板：`OrderingModule.cs`、`ProcurementModule.cs`、Api/DbMigrator `Program.cs`
-7. QC 入库：`QualityCheckRecording.cs`、`InventoryStockOps.cs`、`ReceiveIsolatedStockCommandHandler.cs`、`LotBalance.ReceiveIsolated`
-8. 分权测试：`Tests/Integration.Tests/Tests/Procurement/ProcurementInboundTests.cs`
-9. 运营 ATP：`clients/dashboard/src/pages/catalog/use-inventory-atp.ts`
+6. 模板：`WarehouseModule.cs`、`ProcurementModule.cs`、Api/DbMigrator `Program.cs`
+7. 截单编排：`ConfirmCutoffCommandHandler.cs`、`CreateDailyPlanCommandHandler.cs`、`LockOrdersForCutoffCommandHandler.cs`、`PlaceOrderCommandHandler.cs`
+8. FEFO：`FefoAllocator.cs`、`AllocateReservationCommandHandler.cs`、`LotBalance.AllocateFromAvailable`、`StartWaveCommandHandler.cs`
+9. PDA：`ConfirmPickTaskCommandHandler.cs`、`PickAllocatedStockCommandHandler.cs`
+10. 集成：`Tests/Integration.Tests/Tests/Warehouse/WarehouseWaveTests.cs`
 
-下一刀：**Warehouse（截单 / 波次 / FEFO Allocate / PDA 拣货）**。不要重做 Catalog 库存废弃或 Procurement API。
+下一刀：**Logistics（固定线路 / 发运 / 签收 / 随车退货）**。不要重做 Warehouse 截单波次拣货、Catalog 库存废弃或 Procurement API。

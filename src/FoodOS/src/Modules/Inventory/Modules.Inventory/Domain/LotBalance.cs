@@ -117,6 +117,22 @@ public sealed class LotBalance : BaseEntity<Guid>
         Version++;
     }
 
+    /// <summary>
+    /// Wave FEFO: consume open ATP into Allocated. Shop holds live on the SKU
+    /// <see cref="Reservation"/> row, not on <see cref="Reserved"/>.
+    /// </summary>
+    public void AllocateFromAvailable(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Available < qty)
+        {
+            throw new InvalidOperationException("Insufficient available quantity to allocate.");
+        }
+
+        Allocated += qty;
+        Version++;
+    }
+
     public void Pick(decimal qty)
     {
         EnsurePositive(qty);

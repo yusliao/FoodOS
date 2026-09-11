@@ -36,4 +36,18 @@ public static class OperatingCutoff
 
     public static bool IsPastCutoff(DateTimeOffset cutoffAt, DateTimeOffset utcNow)
         => utcNow >= cutoffAt;
+
+    public static (DateOnly BusinessDate, DateTimeOffset CutoffAt) NextAfter(
+        string timeZoneId,
+        TimeOnly cutoffLocal,
+        DateOnly businessDate)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(timeZoneId);
+
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId.Trim());
+        DateOnly next = businessDate.AddDays(1);
+        var local = next.ToDateTime(cutoffLocal, DateTimeKind.Unspecified);
+        TimeSpan offset = tz.GetUtcOffset(local);
+        return (next, new DateTimeOffset(local, offset).ToUniversalTime());
+    }
 }

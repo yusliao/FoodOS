@@ -10,6 +10,7 @@ using FSH.Modules.Billing.Domain;
 using FSH.Modules.Catalog.Contracts.Authorization;
 using FSH.Modules.Catalog.Data;
 using FSH.Modules.Procurement.Contracts.Authorization;
+using FSH.Modules.Warehouse.Contracts.Authorization;
 using FSH.Modules.Catalog.Domain;
 using FSH.Modules.Chat.Data;
 using FSH.Modules.Chat.Domain;
@@ -725,6 +726,8 @@ internal sealed class DemoSeeder
         new("acme.support",  "support@acme.com",  "Sam",    "Rivera",   ["Support"]),
         new("acme.purchaser","purchaser@acme.com","Pat",    "Chen",     ["Purchaser"]),
         new("acme.qc",       "qc@acme.com",       "Quinn",  "Diaz",     ["QcInspector"]),
+        new("acme.whlead",   "whlead@acme.com",   "Wendy",  "Lee",      ["WarehouseLead"]),
+        new("acme.picker",   "picker@acme.com",   "Pete",   "Park",     ["WarehousePicker"]),
         new("acme.alice",    "alice@acme.com",    "Alice",  "Nguyen",   [RoleConstants.Basic]),
         new("acme.bob",      "bob@acme.com",      "Bob",    "Patel",    [RoleConstants.Basic]),
         new("acme.carol",    "carol@acme.com",    "Carol",  "Smith",    [RoleConstants.Basic]),
@@ -808,6 +811,28 @@ internal sealed class DemoSeeder
                 ProcurementPermissions.Quality.View,
                 ProcurementPermissions.Quality.Pass,
                 ProcurementPermissions.Quality.Fail,
+            ]),
+
+        new(
+            "WarehouseLead",
+            "Triggers cutoff, generates and releases waves. Does not confirm PDA picks.",
+            [
+                WarehousePermissions.Locations.View,
+                WarehousePermissions.Locations.Create,
+                WarehousePermissions.Waves.View,
+                WarehousePermissions.Waves.Cutoff,
+                WarehousePermissions.Waves.Generate,
+                WarehousePermissions.Waves.Release,
+                WarehousePermissions.Picks.View,
+            ]),
+
+        new(
+            "WarehousePicker",
+            "Confirms PDA pick tasks. Cannot generate or release waves.",
+            [
+                WarehousePermissions.Waves.View,
+                WarehousePermissions.Picks.View,
+                WarehousePermissions.Picks.Confirm,
             ]),
     ];
 

@@ -41,4 +41,27 @@ public sealed record OperatingClock
             new TimeOnly(8, 0),
             new TimeOnly(10, 0),
             timeZoneId);
+
+    public (DateOnly BusinessDate, DateTimeOffset CutoffAt) Resolve(DateTimeOffset utcNow)
+    {
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneId);
+        var localNow = TimeZoneInfo.ConvertTime(utcNow, tz);
+        DateOnly today = DateOnly.FromDateTime(localNow.DateTime);
+
+        DateTimeOffset CutoffOn(DateOnly date)
+        {
+            var local = date.ToDateTime(CutoffLocal, DateTimeKind.Unspecified);
+            TimeSpan offset = tz.GetUtcOffset(local);
+            return new DateTimeOffset(local, offset).ToUniversalTime();
+        }
+
+        DateTimeOffset todayCutoff = CutoffOn(today);
+        if (localNow < todayCutoff)
+        {
+            return (today, todayCutoff);
+        }
+
+        DateOnly tomorrow = today.AddDays(1);
+        return (tomorrow, CutoffOn(tomorrow));
+    }
 }

@@ -167,6 +167,39 @@ public sealed class SalesOrder : AggregateRoot<Guid>
             new SalesOrderCancelledDomainEvent(Id, id, ts)));
     }
 
+    public void LockForCutoff()
+    {
+        if (Status == SalesOrderStatus.Planned)
+        {
+            return;
+        }
+
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Planned);
+        Status = SalesOrderStatus.Planned;
+    }
+
+    public void StartPicking()
+    {
+        if (Status == SalesOrderStatus.Picking)
+        {
+            return;
+        }
+
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Picking);
+        Status = SalesOrderStatus.Picking;
+    }
+
+    public void MarkPacked()
+    {
+        if (Status == SalesOrderStatus.Packed)
+        {
+            return;
+        }
+
+        SalesOrderTransitions.Ensure(Status, SalesOrderStatus.Packed);
+        Status = SalesOrderStatus.Packed;
+    }
+
     public void FailPlace()
     {
         if (Status != SalesOrderStatus.Draft)
