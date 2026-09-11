@@ -609,5 +609,15 @@ public sealed class ProductTests
         product.ResolveLocalizedCopy("fr-CA").Name.ShouldBe("Produit d'essai");
     }
 
+    [Fact]
+    public void UpsertTranslation_Should_MatchZhLanguageToZhCn()
+    {
+        Product product = CreateValidProduct();
+        product.UpsertTranslation("zh-CN", "测试商品", "冷冻");
+
+        product.ResolveLocalizedCopy("zh").Name.ShouldBe("测试商品");
+        product.ResolveLocalizedCopy("zh-CN").Description.ShouldBe("冷冻");
+    }
+
     #endregion
 }

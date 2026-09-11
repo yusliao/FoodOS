@@ -22,6 +22,7 @@ public sealed class CatalogDbContext : BaseDbContext
     public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductTranslation> ProductTranslations => Set<ProductTranslation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
