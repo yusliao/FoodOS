@@ -46,6 +46,8 @@
     <ProjectReference Include="..\..\Modules\Warehouse\Modules.Warehouse.Contracts\Modules.Warehouse.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Logistics\Modules.Logistics\Modules.Logistics.csproj" />
     <ProjectReference Include="..\..\Modules\Logistics\Modules.Logistics.Contracts\Modules.Logistics.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Ops\Modules.Ops\Modules.Ops.csproj" />
+    <ProjectReference Include="..\..\Modules\Ops\Modules.Ops.Contracts\Modules.Ops.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Chat\Modules.Chat\Modules.Chat.csproj" />
     <ProjectReference Include="..\..\Modules\Chat\Modules.Chat.Contracts\Modules.Chat.Contracts.csproj" />
     <ProjectReference Include="..\..\Host\FoodOS.Api\FoodOS.Api.csproj" />

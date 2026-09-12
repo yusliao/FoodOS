@@ -4,6 +4,7 @@ using FSH.Modules.Procurement.Contracts.v1.QualityChecks;
 using FSH.Modules.Procurement.Data;
 using FSH.Modules.Procurement.Domain;
 using FSH.Modules.Procurement.Features.v1;
+using FSH.Modules.Warehouse.Contracts.v1.Putaway;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -100,6 +101,22 @@ internal static class QualityCheckRecording
             destLocation: po.WarehouseId.ToString("N")));
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result == QualityCheckResult.Pass)
+        {
+            await mediator.Send(
+                    new CreatePutawayTaskCommand(
+                        po.WarehouseId,
+                        line.Zone,
+                        line.ProductId,
+                        lotId,
+                        quantity,
+                        Source: "QcPass",
+                        RefId: check.Id),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         return check.Id;
     }
 }

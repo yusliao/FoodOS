@@ -77,6 +77,15 @@ export const WebhooksPermissions = Object.freeze({
   },
 } as const);
 
+export const OpsPermissions = Object.freeze({
+  Kpis: {
+    View: "Permissions.Ops.Kpis.View",
+  },
+  Trace: {
+    View: "Permissions.Ops.Trace.View",
+  },
+} as const);
+
 // ─── Catalog (drives the Role editor) ───────────────────────────────────
 
 export type PermissionEntry = {
@@ -181,6 +190,14 @@ export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
       { name: WebhooksPermissions.Subscriptions.Create, description: "Create webhook subscriptions" },
       { name: WebhooksPermissions.Subscriptions.Delete, description: "Delete webhook subscriptions" },
       { name: WebhooksPermissions.Subscriptions.Test, description: "Send test webhook deliveries" },
+    ],
+  },
+  {
+    category: "Operations",
+    blurb: "Daily fulfillment, stockout, shrinkage, temperature board, and lot trace.",
+    entries: [
+      { name: OpsPermissions.Kpis.View, description: "View operations KPIs", basic: true },
+      { name: OpsPermissions.Trace.View, description: "View lot trace timeline", basic: true },
     ],
   },
 ];

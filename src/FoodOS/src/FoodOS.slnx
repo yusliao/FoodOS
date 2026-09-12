@@ -57,6 +57,10 @@
     <Project Path="Modules/Logistics/Modules.Logistics.Contracts/Modules.Logistics.Contracts.csproj" />
     <Project Path="Modules/Logistics/Modules.Logistics/Modules.Logistics.csproj" />
   </Folder>
+  <Folder Name="/Modules/Ops/">
+    <Project Path="Modules/Ops/Modules.Ops.Contracts/Modules.Ops.Contracts.csproj" />
+    <Project Path="Modules/Ops/Modules.Ops/Modules.Ops.csproj" />
+  </Folder>
   <Folder Name="/Modules/Multitenancy/">
     <Project Path="Modules/Multitenancy/Modules.Multitenancy.Contracts/Modules.Multitenancy.Contracts.csproj" Id="61165a24-94b0-402c-9d9f-345898ce79c4" />
     <Project Path="Modules/Multitenancy/Modules.Multitenancy/Modules.Multitenancy.csproj" Id="69bca64d-0cf5-4236-8da6-1d775aa2a1cc" />
@@ -100,6 +104,7 @@
     <Project Path="Tests/Procurement.Tests/Procurement.Tests.csproj" />
     <Project Path="Tests/Warehouse.Tests/Warehouse.Tests.csproj" />
     <Project Path="Tests/Logistics.Tests/Logistics.Tests.csproj" />
+    <Project Path="Tests/Ops.Tests/Ops.Tests.csproj" />
     <Project Path="Tests/Integration.Tests/Integration.Tests.csproj" />
     <Project Path="Tests/Integration.Middleware.Tests/Integration.Middleware.Tests.csproj" />
     <Project Path="Tests/Multitenancy.Tests/Multitenancy.Tests.csproj" Id="985345a2-edb4-4ef9-9a1b-59b704f523b6" />

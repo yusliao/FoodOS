@@ -6,6 +6,7 @@ using FSH.Modules.Identity.Contracts.Authorization;
 using FSH.Modules.Procurement.Contracts.Authorization;
 using FSH.Modules.Warehouse.Contracts.Authorization;
 using FSH.Modules.Logistics.Contracts.Authorization;
+using FSH.Modules.Ops.Contracts.Authorization;
 using FSH.Modules.Ordering.Contracts.Authorization;
 using FSH.Modules.Multitenancy.Contracts.Authorization;
 using FSH.Modules.Tickets.Contracts.Authorization;
@@ -47,6 +48,7 @@ public sealed class PermissionRegistrationTests
         AssertAllRegistered(registered, ProcurementPermissions.All.Select(p => p.Name), nameof(ProcurementPermissions));
         AssertAllRegistered(registered, WarehousePermissions.All.Select(p => p.Name), nameof(WarehousePermissions));
         AssertAllRegistered(registered, LogisticsPermissions.All.Select(p => p.Name), nameof(LogisticsPermissions));
+        AssertAllRegistered(registered, OpsPermissions.All.Select(p => p.Name), nameof(OpsPermissions));
         AssertAllRegistered(registered, OrderingPermissions.All.Select(p => p.Name), nameof(OrderingPermissions));
     }
 
@@ -112,7 +114,10 @@ public sealed class PermissionRegistrationTests
         permSet.ShouldContain(ProcurementPermissions.Purchase.Create);
         permSet.ShouldContain(ProcurementPermissions.Quality.Pass);
         permSet.ShouldContain(WarehousePermissions.Waves.Cutoff);
+        permSet.ShouldContain(WarehousePermissions.Putaway.Confirm);
         permSet.ShouldContain(LogisticsPermissions.Shipments.Depart);
+        permSet.ShouldContain(OpsPermissions.Kpis.View);
+        permSet.ShouldContain(OpsPermissions.Trace.View);
         permSet.ShouldContain(OrderingPermissions.Orders.Reconcile);
 
         // Tenants permissions are root-only — admin@root.com on the root tenant gets them.

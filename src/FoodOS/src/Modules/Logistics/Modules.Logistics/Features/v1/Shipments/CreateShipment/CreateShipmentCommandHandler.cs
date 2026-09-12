@@ -6,6 +6,7 @@ using FSH.Modules.Logistics.Data;
 using FSH.Modules.Logistics.Domain;
 using FSH.Modules.Logistics.Features.v1;
 using FSH.Modules.Ordering.Contracts.v1.Orders;
+using FSH.Modules.Warehouse.Contracts.v1.Pack;
 using FSH.Modules.Warehouse.Contracts.v1.Picks;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -69,6 +70,11 @@ public sealed class CreateShipmentCommandHandler(LogisticsDbContext dbContext, I
                 new ListPickedLotsForOrdersQuery(packed.Select(o => o.Id).ToList()),
                 cancellationToken)
             .ConfigureAwait(false);
+        var totes = await mediator.Send(
+                new ListTotesForOrdersQuery(packed.Select(o => o.Id).ToList()),
+                cancellationToken)
+            .ConfigureAwait(false);
+        var toteByOrder = totes.ToDictionary(t => t.OrderId, t => t.ToteId);
 
         string number = await ShipmentNumbers
             .NextAsync(dbContext, route.Code, businessDate, cancellationToken)
@@ -91,7 +97,10 @@ public sealed class CreateShipmentCommandHandler(LogisticsDbContext dbContext, I
 
             foreach (var order in ordersByStore[storeId])
             {
-                var line = shipment.AddLine(order.Id, storeId);
+                var line = shipment.AddLine(
+                    order.Id,
+                    storeId,
+                    toteByOrder.GetValueOrDefault(order.Id));
                 dbContext.ShipmentLines.Add(line);
                 foreach (var lot in picked.Where(p => p.OrderId == order.Id))
                 {

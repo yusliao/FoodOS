@@ -22,7 +22,7 @@ public sealed class CreateDailyPlanCommandHandler(InventoryDbContext dbContext, 
             ?? throw new NotFoundException($"Warehouse {command.WarehouseId} not found.");
 
         DateTimeOffset utcNow = clock.GetUtcNow();
-        var (businessDate, _) = warehouse.Clock.Resolve(utcNow);
+        DateOnly businessDate = command.BusinessDate ?? warehouse.Clock.Resolve(utcNow).BusinessDate;
 
         var existing = await dbContext.DailyPlans
             .FirstOrDefaultAsync(

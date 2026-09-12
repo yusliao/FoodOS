@@ -21,7 +21,7 @@ public static class ConfirmLoadShipmentEndpoint
                         body with { ShipmentId = shipmentId }, ct).ConfigureAwait(false));
                 })
             .WithName("LoadShipment")
-            .WithSummary("Scan packed orders onto the truck")
+            .WithSummary("Scan packed orders or totes onto the truck")
             .RequirePermission(LogisticsPermissions.Shipments.Load)
             .WithIdempotency();
     }

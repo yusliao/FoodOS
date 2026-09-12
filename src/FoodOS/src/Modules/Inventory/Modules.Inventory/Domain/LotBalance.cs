@@ -191,6 +191,29 @@ public sealed class LotBalance : BaseEntity<Guid>
         Version++;
     }
 
+    /// <summary>
+    /// Write-off against Isolated first, then Available. Both paths decrease OnHand.
+    /// </summary>
+    public void Shrink(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Isolated >= qty)
+        {
+            Isolated -= qty;
+            OnHand -= qty;
+            Version++;
+            return;
+        }
+
+        if (Available < qty)
+        {
+            throw new InvalidOperationException("Insufficient available quantity to shrink.");
+        }
+
+        OnHand -= qty;
+        Version++;
+    }
+
     private static void EnsurePositive(decimal qty)
     {
         if (qty <= 0)

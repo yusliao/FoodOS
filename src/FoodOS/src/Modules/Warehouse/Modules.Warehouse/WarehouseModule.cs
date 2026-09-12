@@ -6,12 +6,19 @@ using FSH.Modules.Warehouse.Contracts.Authorization;
 using FSH.Modules.Warehouse.Data;
 using FSH.Modules.Warehouse.Features.v1.Cutoff.ConfirmCutoff;
 using FSH.Modules.Warehouse.Features.v1.Locations.CreateLocation;
+using FSH.Modules.Warehouse.Features.v1.Pack.CreatePackTote;
 using FSH.Modules.Warehouse.Features.v1.Picks.ConfirmPickTask;
 using FSH.Modules.Warehouse.Features.v1.Picks.GetMyPickTasks;
+using FSH.Modules.Warehouse.Features.v1.Putaway.ConfirmPutaway;
+using FSH.Modules.Warehouse.Features.v1.Putaway.CreatePutawayTask;
+using FSH.Modules.Warehouse.Features.v1.Shrinkage.CreateShrinkage;
 using FSH.Modules.Warehouse.Features.v1.Waves.GenerateWave;
 using FSH.Modules.Warehouse.Features.v1.Waves.GetWaveById;
 using FSH.Modules.Warehouse.Features.v1.Waves.SearchWaves;
 using FSH.Modules.Warehouse.Features.v1.Waves.StartWave;
+using FSH.Modules.Warehouse.Jobs;
+using Hangfire;
+using Hangfire.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -33,6 +40,7 @@ public sealed class WarehouseModule : IModule
 
         builder.Services.AddHeroDbContext<WarehouseDbContext>();
         builder.Services.AddScoped<IDbInitializer, WarehouseDbInitializer>();
+        builder.Services.AddTransient<CutoffJob>();
 
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<WarehouseDbContext>(
@@ -68,5 +76,19 @@ public sealed class WarehouseModule : IModule
         group.MapStartWaveEndpoint();
         group.MapGetMyPickTasksEndpoint();
         group.MapConfirmPickTaskEndpoint();
+        group.MapCreatePutawayTaskEndpoint();
+        group.MapConfirmPutawayEndpoint();
+        group.MapCreatePackToteEndpoint();
+        group.MapCreateShrinkageEndpoint();
+
+        var jobManager = endpoints.ServiceProvider.GetService<IRecurringJobManager>();
+        if (jobManager is not null)
+        {
+            jobManager.AddOrUpdate(
+                "warehouse-cutoff",
+                Job.FromExpression<CutoffJob>(j => j.RunAsync(CancellationToken.None)),
+                "* * * * *",
+                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+        }
     }
 }

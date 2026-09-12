@@ -8,7 +8,8 @@ public sealed class LoadShipmentCommandValidator : AbstractValidator<LoadShipmen
     public LoadShipmentCommandValidator()
     {
         RuleFor(x => x.ShipmentId).NotEmpty();
-        RuleFor(x => x.OrderIds).NotEmpty();
-        RuleForEach(x => x.OrderIds).NotEmpty();
+        RuleFor(x => x)
+            .Must(x => (x.OrderIds?.Count ?? 0) > 0 || (x.ToteIds?.Count ?? 0) > 0)
+            .WithMessage("Scan at least one order or tote.");
     }
 }

@@ -14,7 +14,7 @@ public sealed class ConfirmCutoffCommandHandler(IMediator mediator)
         ArgumentNullException.ThrowIfNull(command);
 
         var plan = await mediator
-            .Send(new CreateDailyPlanCommand(command.WarehouseId), cancellationToken)
+            .Send(new CreateDailyPlanCommand(command.WarehouseId, command.BusinessDate), cancellationToken)
             .ConfigureAwait(false);
 
         int locked = await mediator

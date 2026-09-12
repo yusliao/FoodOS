@@ -11,6 +11,7 @@
 		<ProjectReference Include="..\..\..\BuildingBlocks\Web\Web.csproj" />
 		<ProjectReference Include="..\Modules.Procurement.Contracts\Modules.Procurement.Contracts.csproj" />
 		<ProjectReference Include="..\..\Inventory\Modules.Inventory.Contracts\Modules.Inventory.Contracts.csproj" />
+		<ProjectReference Include="..\..\Warehouse\Modules.Warehouse.Contracts\Modules.Warehouse.Contracts.csproj" />
 	</ItemGroup>
 
 </Project>

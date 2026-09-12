@@ -8,5 +8,9 @@ public sealed class ConfirmCutoffCommandValidator : AbstractValidator<ConfirmCut
     public ConfirmCutoffCommandValidator()
     {
         RuleFor(x => x.WarehouseId).NotEmpty();
+        When(x => x.BusinessDate.HasValue, () =>
+        {
+            RuleFor(x => x.BusinessDate!.Value.Year).InclusiveBetween(2000, 2100);
+        });
     }
 }

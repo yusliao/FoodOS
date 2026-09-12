@@ -38,3 +38,39 @@ public sealed record WaveDto(
     string Status,
     DateTimeOffset CreatedAt,
     IReadOnlyList<PickTaskDto> Tasks);
+
+public sealed record PutawayTaskDto(
+    Guid Id,
+    Guid WarehouseId,
+    Guid ZoneId,
+    string Zone,
+    Guid ProductId,
+    Guid LotId,
+    decimal Quantity,
+    Guid? SuggestedLocationId,
+    Guid? LocationId,
+    string Source,
+    string Status,
+    DateTimeOffset CreatedAt);
+
+public sealed record PackToteDto(
+    Guid Id,
+    Guid WaveId,
+    string Sscc,
+    Guid? DockLocationId,
+    string Status,
+    IReadOnlyList<Guid> OrderIds,
+    DateTimeOffset PackedAt);
+
+public sealed record ShrinkageDto(
+    Guid Id,
+    Guid WarehouseId,
+    string Zone,
+    Guid ProductId,
+    Guid LotId,
+    decimal Quantity,
+    string Reason,
+    IReadOnlyList<Guid> PhotoFileIds,
+    DateTimeOffset CreatedAt);
+
+public sealed record PackedToteOrderDto(Guid OrderId, Guid ToteId);

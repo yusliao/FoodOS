@@ -10,9 +10,11 @@ import {
 } from "lucide-react";
 import { listTenants } from "@/api/tenants";
 import { listInvoices, getPlans } from "@/api/billing";
+import { getOpsKpis } from "@/api/ops";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EntityPageHeader, Stat, StatStrip, ToneIconTile, type ToneIconTileTone } from "@/components/list";
 import { useAuth } from "@/auth/use-auth";
+import { OpsPermissions } from "@/lib/permissions";
 import { cn } from "@/lib/cn";
 
 /**
@@ -34,6 +36,12 @@ export function DashboardPage() {
   const invoicesQuery = useQuery({
     queryKey: ["billing", "invoices", { pageNumber: 1, pageSize: 50 }],
     queryFn: () => listInvoices({ pageNumber: 1, pageSize: 50 }),
+  });
+  const canViewOps = user?.permissions.includes(OpsPermissions.Kpis.View) ?? false;
+  const kpisQuery = useQuery({
+    queryKey: ["ops", "kpis"],
+    queryFn: () => getOpsKpis(),
+    enabled: canViewOps,
   });
 
   const tenantsTotal = tenantsQuery.data?.totalCount;
@@ -62,6 +70,67 @@ export function DashboardPage() {
           description="Operate every tenant on this instance — identity, multitenancy, billing, and the rest of the system surface."
         />
       </div>
+
+      {canViewOps ? (
+        <section className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+            Operations
+          </p>
+          <StatStrip cols={4} className="fsh-enter fsh-enter-2">
+            <Stat
+              label="Fulfillment"
+              value={
+                kpisQuery.isLoading ? (
+                  <Skeleton className="h-7 w-16" />
+                ) : (
+                  formatRate(kpisQuery.data?.fulfillmentRate)
+                )
+              }
+              hint={
+                kpisQuery.data
+                  ? `${kpisQuery.data.fulfilledOrderCount}/${kpisQuery.data.committedOrderCount} received`
+                  : "received / committed orders"
+              }
+              tone="success"
+            />
+            <Stat
+              label="Stockout"
+              value={
+                kpisQuery.isLoading ? (
+                  <Skeleton className="h-7 w-16" />
+                ) : (
+                  formatRate(kpisQuery.data?.stockoutRate)
+                )
+              }
+              hint="unreserved share of ordered qty"
+              tone={(kpisQuery.data?.stockoutRate ?? 0) > 0 ? "warning" : "default"}
+            />
+            <Stat
+              label="Shrinkage"
+              value={
+                kpisQuery.isLoading ? (
+                  <Skeleton className="h-7 w-16" />
+                ) : (
+                  formatRate(kpisQuery.data?.shrinkageRate)
+                )
+              }
+              hint="isolate + shrink vs inbound"
+              tone={(kpisQuery.data?.shrinkageRate ?? 0) > 0 ? "warning" : "default"}
+            />
+            <Stat
+              label="Temperature"
+              value={
+                kpisQuery.isLoading ? (
+                  <Skeleton className="h-7 w-16" />
+                ) : (
+                  formatRate(kpisQuery.data?.temperatureComplianceRate)
+                )
+              }
+              hint="N/A until MQTT ingest (P1)"
+            />
+          </StatStrip>
+        </section>
+      ) : null}
 
       {/* ── KPI stat strip ───────────────────────────────────────────── */}
       <StatStrip cols={4} className="fsh-enter fsh-enter-2">
@@ -197,4 +266,11 @@ function PivotCard({
       </div>
     </Link>
   );
+}
+
+function formatRate(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return "N/A";
+  }
+  return `${(value * 100).toFixed(1)}%`;
 }

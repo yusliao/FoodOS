@@ -3,4 +3,4 @@ using Mediator;
 
 namespace FSH.Modules.Warehouse.Contracts.v1.Cutoff;
 
-public sealed record ConfirmCutoffCommand(Guid WarehouseId) : ICommand<CutoffResultDto>;
+public sealed record ConfirmCutoffCommand(Guid WarehouseId, DateOnly? BusinessDate = null) : ICommand<CutoffResultDto>;

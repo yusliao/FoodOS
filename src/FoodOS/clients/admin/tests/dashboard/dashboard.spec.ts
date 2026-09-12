@@ -94,6 +94,18 @@ test.beforeEach(async ({ page }) => {
   await mockJsonResponse(page, "**/api/v1/tenants**", TENANTS_PAGE);
   await mockJsonResponse(page, "**/api/v1/billing/plans**", PLANS);
   await mockJsonResponse(page, "**/api/v1/billing/invoices**", INVOICES_PAGE);
+  await mockJsonResponse(page, "**/api/v1/ops/kpis**", {
+    date: "2026-09-12",
+    fulfillmentRate: 0.75,
+    stockoutRate: 0.1,
+    shrinkageRate: 0.05,
+    temperatureComplianceRate: null,
+    committedOrderCount: 4,
+    fulfilledOrderCount: 3,
+    orderedQty: 20,
+    inboundQty: 40,
+    lossQty: 2,
+  });
 });
 
 test.describe("admin dashboard", () => {
@@ -129,6 +141,19 @@ test.describe("admin dashboard", () => {
     await expect(main.getByText("12", { exact: true })).toBeVisible();
     await expect(main.getByText("2 active")).toBeVisible();
     await expect(main.getByText("134 total ledger")).toBeVisible();
+  });
+
+  test("renders the operations KPI tiles including N/A temperature", async ({ page }) => {
+    await page.goto("/");
+
+    const main = page.getByRole("main");
+    const kpiLabel = (text: string) => main.locator("div.meta", { hasText: text });
+    await expect(kpiLabel("Fulfillment")).toBeVisible({ timeout: 10_000 });
+    await expect(kpiLabel("Stockout")).toBeVisible();
+    await expect(kpiLabel("Shrinkage")).toBeVisible();
+    await expect(kpiLabel("Temperature")).toBeVisible();
+    await expect(main.getByText("75.0%").first()).toBeVisible();
+    await expect(main.getByText("N/A", { exact: true })).toBeVisible();
   });
 
   test("renders the entry-point pivot cards", async ({ page }) => {

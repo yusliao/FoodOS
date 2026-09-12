@@ -23,6 +23,11 @@ public sealed class WarehouseDbContext : BaseDbContext
     public DbSet<Wave> Waves => Set<Wave>();
     public DbSet<PickTask> PickTasks => Set<PickTask>();
     public DbSet<TraceEvent> TraceEvents => Set<TraceEvent>();
+    public DbSet<PutawayTask> PutawayTasks => Set<PutawayTask>();
+    public DbSet<StockPlacement> StockPlacements => Set<StockPlacement>();
+    public DbSet<PackTote> PackTotes => Set<PackTote>();
+    public DbSet<PackToteOrder> PackToteOrders => Set<PackToteOrder>();
+    public DbSet<Shrinkage> Shrinkages => Set<Shrinkage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
