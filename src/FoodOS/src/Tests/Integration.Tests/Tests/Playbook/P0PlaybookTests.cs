@@ -13,8 +13,7 @@ namespace Integration.Tests.Tests.Playbook;
 
 /// <summary>
 /// P0 剧本 A–E 用与 seed-demo 同形态的主数据走 HTTP 闭环。
-/// A 步 7 装车扫 OrderId（PackTote 未做）。A 步 10 无 storing（上架未做）。
-/// D 步 3 返仓上架/报损未做。B / C.2–C.3 / D.2 的切片测试仍有效。
+/// A 步 10 含 storing。D 步 1 短配见 WarehouseWaveTests；D 步 2–3 见 LogisticsShipmentTests。
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
 public sealed class P0PlaybookTests
@@ -67,6 +66,30 @@ public sealed class P0PlaybookTests
 
         var availableAfterQc = await GetAvailableAsync(client, warehouse.Id, productId);
         availableAfterQc.ShouldBe(20m);
+
+        var chilled = warehouse.Zones.First(z => z.Kind == "Chilled");
+        using var createLocation = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/locations",
+            new { warehouseId = warehouse.Id, zoneId = chilled.Id, code = "C-ST-A", type = "Storage" });
+        createLocation.StatusCode.ShouldBe(HttpStatusCode.OK, await createLocation.Content.ReadAsStringAsync());
+        var locationId = await createLocation.DeserializeAsync<Guid>();
+        using var createTask = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks",
+            new
+            {
+                warehouseId = warehouse.Id,
+                zone = "Chilled",
+                productId,
+                lotId,
+                quantity = 20m,
+                source = "QcPass"
+            });
+        createTask.StatusCode.ShouldBe(HttpStatusCode.OK, await createTask.Content.ReadAsStringAsync());
+        var putaway = await createTask.DeserializeAsync<PutawayTaskDto>();
+        using var confirmPutaway = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks/{putaway.Id}/confirm",
+            new { locationId });
+        confirmPutaway.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmPutaway.Content.ReadAsStringAsync());
 
         var storeId = await CreateStoreAsync(client, orgA, warehouse.Id);
         await PutCartAsync(client, storeId, productId, 6m);
@@ -197,13 +220,13 @@ public sealed class P0PlaybookTests
         traceResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await traceResponse.Content.ReadAsStringAsync());
         var trace = await traceResponse.DeserializeAsync<LotTraceDto>();
         trace.LotId.ShouldBe(lotId);
-        trace.Events.Select(e => e.BizStep).ToArray().ShouldBe(["receiving", "picking", "shipping", "arriving"]);
-        trace.Events.ShouldNotContain(e => e.BizStep == "storing");
+        trace.Events.Select(e => e.BizStep).ToArray().ShouldBe(["receiving", "storing", "picking", "shipping", "arriving"]);
         trace.Events.Select(e => e.OccurredAt).ShouldBe(trace.Events.Select(e => e.OccurredAt).OrderBy(t => t));
         trace.Events[0].Module.ShouldBe("Procurement");
         trace.Events[1].Module.ShouldBe("Warehouse");
-        trace.Events[2].Module.ShouldBe("Logistics");
+        trace.Events[2].Module.ShouldBe("Warehouse");
         trace.Events[3].Module.ShouldBe("Logistics");
+        trace.Events[4].Module.ShouldBe("Logistics");
     }
 
     [Fact]

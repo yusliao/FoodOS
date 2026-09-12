@@ -16,6 +16,8 @@ public sealed class SalesOrderLineConfiguration : IEntityTypeConfiguration<Sales
         builder.Property(x => x.ReservedQty).HasPrecision(18, 4);
         builder.Property(x => x.DeliveredQty).HasPrecision(18, 4);
         builder.Property(x => x.ReturnedQty).HasPrecision(18, 4);
+        builder.Property(x => x.ShortageQty).HasPrecision(18, 4);
+        builder.Property(x => x.ShortageReason).HasMaxLength(128);
         builder.Property(x => x.VarianceReason).HasMaxLength(256);
         builder.Property(x => x.UnitPrice).HasPrecision(18, 4);
         builder.Property(x => x.Currency).IsRequired().HasMaxLength(3);

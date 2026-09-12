@@ -251,6 +251,16 @@ public sealed class SalesOrder : AggregateRoot<Guid>
         Status = SalesOrderStatus.Received;
     }
 
+    public void RecordLineShortage(Guid orderLineId, decimal shortageQty, string reason)
+    {
+        var line = _lines.Find(l => l.Id == orderLineId)
+            ?? throw new CustomException(
+                $"Order line {orderLineId} was not found on this order.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.BadRequest);
+        line.RecordShortage(shortageQty, reason);
+    }
+
     public void Reconcile()
     {
         if (Status == SalesOrderStatus.Reconciled)

@@ -63,6 +63,14 @@ public sealed class PutawayTask : AggregateRoot<Guid>
             return;
         }
 
+        if (Status == PutawayTaskStatus.Cancelled)
+        {
+            throw new CustomException(
+                "Cancelled putaway tasks cannot be confirmed.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
         if (locationId == Guid.Empty)
         {
             throw new CustomException(
@@ -73,5 +81,18 @@ public sealed class PutawayTask : AggregateRoot<Guid>
 
         LocationId = locationId;
         Status = PutawayTaskStatus.Completed;
+    }
+
+    public void Cancel()
+    {
+        if (Status == PutawayTaskStatus.Completed)
+        {
+            throw new CustomException(
+                "Completed putaway tasks cannot be cancelled.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
+        Status = PutawayTaskStatus.Cancelled;
     }
 }

@@ -76,6 +76,25 @@ public sealed class StartWaveCommandHandler(WarehouseDbContext dbContext, IMedia
             dbContext.PickTasks.Add(extra);
         }
 
+        foreach (var group in wave.Tasks.GroupBy(t => t.OrderLineId))
+        {
+            decimal shortage = group.Sum(t => t.ShortageQty);
+            if (shortage <= 0)
+            {
+                continue;
+            }
+
+            var sample = group.First();
+            await mediator.Send(
+                    new RecordOrderLineShortageCommand(
+                        sample.OrderId,
+                        sample.OrderLineId,
+                        shortage,
+                        "insufficient-stock"),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         wave.Release();
         wave.MarkPicking();
 
@@ -83,6 +102,10 @@ public sealed class StartWaveCommandHandler(WarehouseDbContext dbContext, IMedia
         foreach (var orderId in orderIds)
         {
             await mediator.Send(new StartOrderPickingCommand(orderId), cancellationToken).ConfigureAwait(false);
+            if (wave.Tasks.Where(t => t.OrderId == orderId).All(t => t.IsComplete))
+            {
+                await mediator.Send(new ConfirmOrderPackedCommand(orderId), cancellationToken).ConfigureAwait(false);
+            }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

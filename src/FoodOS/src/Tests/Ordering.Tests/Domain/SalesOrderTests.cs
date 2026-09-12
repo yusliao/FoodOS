@@ -134,6 +134,18 @@ public sealed class SalesOrderTests
         order.Lines[0].Lots[0].ReturnedQty.ShouldBe(1m);
     }
 
+    [Fact]
+    public void RecordLineShortage_Should_SetQtyAndReason()
+    {
+        var order = CreateReserved(DateTimeOffset.UtcNow.AddHours(2));
+        order.LockForCutoff();
+
+        order.RecordLineShortage(order.Lines[0].Id, 3m, "insufficient-stock");
+
+        order.Lines[0].ShortageQty.ShouldBe(3m);
+        order.Lines[0].ShortageReason.ShouldBe("insufficient-stock");
+    }
+
     private static SalesOrder CreateDraft()
         => SalesOrder.CreateDraft(
             "SO202609110001",

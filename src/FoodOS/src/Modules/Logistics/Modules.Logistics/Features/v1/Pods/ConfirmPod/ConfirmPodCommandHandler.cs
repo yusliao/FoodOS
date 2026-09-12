@@ -9,6 +9,7 @@ using FSH.Modules.Logistics.Data;
 using FSH.Modules.Logistics.Domain;
 using FSH.Modules.Logistics.Features.v1;
 using FSH.Modules.Ordering.Contracts.v1.Orders;
+using FSH.Modules.Warehouse.Contracts.v1.Putaway;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -136,6 +137,18 @@ public sealed class ConfirmPodCommandHandler(
                         "ReturnOnTruck",
                         ret.Id,
                         lot.LotId));
+
+                    await mediator.Send(
+                            new CreatePutawayTaskCommand(
+                                shipment.WarehouseId,
+                                lot.Zone,
+                                lot.ProductId,
+                                lot.LotId,
+                                returnedQty,
+                                Source: "ReturnOnTruck",
+                                RefId: ret.Id),
+                            cancellationToken)
+                        .ConfigureAwait(false);
                 }
 
                 receipts.Add(new OrderLineReceipt(

@@ -47,6 +47,8 @@ internal static class OrderingMappings
                 l.ReservedQty,
                 l.DeliveredQty,
                 l.ReturnedQty,
+                l.ShortageQty,
+                l.ShortageReason,
                 l.VarianceReason,
                 l.UnitPrice,
                 l.Currency,

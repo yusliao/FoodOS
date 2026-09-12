@@ -13,6 +13,8 @@ public sealed class SalesOrderLine : BaseEntity<Guid>
     public decimal ReservedQty { get; private set; }
     public decimal DeliveredQty { get; private set; }
     public decimal ReturnedQty { get; private set; }
+    public decimal ShortageQty { get; private set; }
+    public string? ShortageReason { get; private set; }
     public string? VarianceReason { get; private set; }
     public decimal UnitPrice { get; private set; }
     public string Currency { get; private set; } = "USD";
@@ -106,5 +108,17 @@ public sealed class SalesOrderLine : BaseEntity<Guid>
         DeliveredQty = _lots.Sum(l => l.DeliveredQty);
         ReturnedQty = _lots.Sum(l => l.ReturnedQty);
         VarianceReason = string.IsNullOrWhiteSpace(varianceReason) ? VarianceReason : varianceReason.Trim();
+    }
+
+    internal void RecordShortage(decimal shortageQty, string reason)
+    {
+        if (shortageQty <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(shortageQty), "Shortage quantity must be positive.");
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        ShortageQty = shortageQty;
+        ShortageReason = reason.Trim();
     }
 }

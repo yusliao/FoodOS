@@ -124,6 +124,89 @@ public sealed class WarehouseWaveTests
         nextOrder.BusinessDate.ShouldNotBe(cutoffResult.BusinessDate);
     }
 
+    [Fact]
+    public async Task WaveShortPick_Should_WriteShortageReason_OnOrderLine_And_FulfillOtherLine()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var shortProductId = await CreateProductAsync(client);
+        var fullProductId = await CreateProductAsync(client);
+        DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
+        Guid shortLotId = await ReceiveAsync(client, warehouse.Id, shortProductId, "LOT-SH", 10m, today.AddDays(8));
+        await ReceiveAsync(client, warehouse.Id, fullProductId, "LOT-OK", 10m, today.AddDays(8));
+
+        var orgId = await CreateCustomerOrgAsync(client);
+        var storeId = await CreateStoreAsync(client, orgId, warehouse.Id);
+        using var putCart = await client.PutAsJsonAsync(
+            $"{TestConstants.OrderingBasePath}/carts/{storeId}",
+            new
+            {
+                storeId,
+                lines = new[]
+                {
+                    new { productId = shortProductId, quantity = 8m },
+                    new { productId = fullProductId, quantity = 8m }
+                }
+            });
+        putCart.StatusCode.ShouldBe(HttpStatusCode.OK, await putCart.Content.ReadAsStringAsync());
+
+        using var place = await client.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/orders", new { storeId });
+        place.StatusCode.ShouldBe(HttpStatusCode.OK, await place.Content.ReadAsStringAsync());
+        var orderId = await place.DeserializeAsync<Guid>();
+
+        using var shrink = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/shrinkage",
+            new
+            {
+                warehouseId = warehouse.Id,
+                zone = "Ambient",
+                productId = shortProductId,
+                lotId = shortLotId,
+                quantity = 6m,
+                reason = "damage",
+                photoFileIds = Array.Empty<Guid>()
+            });
+        shrink.StatusCode.ShouldBe(HttpStatusCode.OK, await shrink.Content.ReadAsStringAsync());
+
+        using var cutoff = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/warehouses/{warehouse.Id}/cutoff", new { });
+        var cutoffResult = await cutoff.DeserializeAsync<CutoffResultDto>();
+        using var generate = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves",
+            new { warehouseId = warehouse.Id, businessDate = cutoffResult.BusinessDate });
+        var wave = (await generate.DeserializeAsync<List<WaveDto>>()).ShouldHaveSingleItem();
+        using var release = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release", new { });
+        var released = await release.DeserializeAsync<WaveDto>();
+
+        var shortTask = released.Tasks.First(t => t.ProductId == shortProductId);
+        shortTask.ShortageQty.ShouldBe(4m);
+        shortTask.LotId.ShouldNotBeNull();
+        var fullTask = released.Tasks.First(t => t.ProductId == fullProductId);
+        fullTask.ShortageQty.ShouldBe(0m);
+        fullTask.LotId.ShouldNotBeNull();
+
+        using var confirmShort = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/pick-tasks/{shortTask.Id}/confirm",
+            new { scannedLotId = shortTask.LotId });
+        confirmShort.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmShort.Content.ReadAsStringAsync());
+        using var confirmFull = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/pick-tasks/{fullTask.Id}/confirm",
+            new { scannedLotId = fullTask.LotId });
+        confirmFull.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmFull.Content.ReadAsStringAsync());
+
+        using var getOrder = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
+        var order = await getOrder.DeserializeAsync<SalesOrderDto>();
+        order.Status.ShouldBe("Packed");
+        order.Lines.ShouldContain(l => l.ProductId == shortProductId);
+        var shortLine = order.Lines.First(l => l.ProductId == shortProductId);
+        shortLine.ShortageQty.ShouldBe(4m);
+        shortLine.ShortageReason.ShouldBe("insufficient-stock");
+        var fullLine = order.Lines.First(l => l.ProductId == fullProductId);
+        fullLine.ShortageQty.ShouldBe(0m);
+        fullLine.ShortageReason.ShouldBeNull();
+    }
+
     private static async Task PutCartAsync(HttpClient client, Guid storeId, Guid productId, decimal qty)
     {
         using var putCart = await client.PutAsJsonAsync(

@@ -7,8 +7,10 @@ using FSH.Modules.Warehouse.Contracts.Dtos;
 using FSH.Modules.Warehouse.Contracts.v1.Shrinkage;
 using FSH.Modules.Warehouse.Data;
 using FSH.Modules.Warehouse.Features.v1;
+using FSH.Modules.Warehouse.Domain;
 using ShrinkageRecord = FSH.Modules.Warehouse.Domain.Shrinkage;
 using Mediator;
+using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Warehouse.Features.v1.Shrinkage.CreateShrinkage;
 
@@ -49,6 +51,15 @@ public sealed class CreateShrinkageCommandHandler(
             actorId,
             command.PhotoFileIds);
         dbContext.Shrinkages.Add(row);
+
+        var pendingPutaway = await dbContext.PutawayTasks
+            .Where(t => t.LotId == command.LotId && t.Status == PutawayTaskStatus.Pending)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var task in pendingPutaway)
+        {
+            task.Cancel();
+        }
 
         await mediator.Send(
                 new AdjustShrinkStockCommand(

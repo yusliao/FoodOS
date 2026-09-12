@@ -1,5 +1,6 @@
 using FSH.Modules.Inventory.Contracts.Dtos;
 using FSH.Modules.Logistics.Contracts.Dtos;
+using FSH.Modules.Ops.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Warehouse.Contracts.Dtos;
 using Integration.Tests.Infrastructure;
@@ -8,7 +9,7 @@ using Integration.Tests.Infrastructure.Extensions;
 namespace Integration.Tests.Tests.Logistics;
 
 /// <summary>
-/// 剧本 A 步 7–9 + 剧本 D 步 2：装车发运、电子签收、对账、随车退货写回同一订单行。
+/// 剧本 A 步 7–9 + 剧本 D 步 2–3：装车发运、电子签收、对账、随车退、返仓待上架、报损入看板。
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
 public sealed class LogisticsShipmentTests
@@ -155,6 +156,44 @@ public sealed class LogisticsShipmentTests
 
         decimal availableAfter = await GetAvailableAsync(client, packed.WarehouseId, packed.ProductId);
         availableAfter.ShouldBe(availableBefore + 2m);
+
+        using var createPutaway = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks",
+            new
+            {
+                warehouseId = packed.WarehouseId,
+                zone = "Ambient",
+                productId = packed.ProductId,
+                lotId = packed.LotId,
+                quantity = 2m,
+                source = "ReturnOnTruck"
+            });
+        createPutaway.StatusCode.ShouldBe(HttpStatusCode.OK, await createPutaway.Content.ReadAsStringAsync());
+        var putaway = await createPutaway.DeserializeAsync<PutawayTaskDto>();
+        putaway.Status.ShouldBe("Pending");
+        putaway.Source.ShouldBe("ReturnOnTruck");
+
+        using var shrink = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/shrinkage",
+            new
+            {
+                warehouseId = packed.WarehouseId,
+                zone = "Ambient",
+                productId = packed.ProductId,
+                lotId = packed.LotId,
+                quantity = 2m,
+                reason = "return-damage",
+                photoFileIds = Array.Empty<Guid>()
+            });
+        shrink.StatusCode.ShouldBe(HttpStatusCode.OK, await shrink.Content.ReadAsStringAsync());
+        (await GetAvailableAsync(client, packed.WarehouseId, packed.ProductId)).ShouldBe(availableBefore);
+
+        using var kpis = await client.GetAsync(
+            $"{TestConstants.OpsBasePath}/kpis?date={DateOnly.FromDateTime(DateTime.UtcNow):yyyy-MM-dd}");
+        kpis.StatusCode.ShouldBe(HttpStatusCode.OK, await kpis.Content.ReadAsStringAsync());
+        var board = await kpis.DeserializeAsync<OpsKpisDto>();
+        board.LossQty.ShouldBeGreaterThanOrEqualTo(2m);
+        board.ShrinkageRate.ShouldBeGreaterThan(0m);
     }
 
     private sealed record PackedOrder(

@@ -15,6 +15,8 @@ public sealed record SalesOrderLineDto(
     decimal ReservedQty,
     decimal DeliveredQty,
     decimal ReturnedQty,
+    decimal ShortageQty,
+    string? ShortageReason,
     string? VarianceReason,
     decimal UnitPrice,
     string Currency,
