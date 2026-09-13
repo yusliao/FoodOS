@@ -6,11 +6,13 @@ using FSH.Modules.Warehouse.Contracts.Authorization;
 using FSH.Modules.Warehouse.Data;
 using FSH.Modules.Warehouse.Features.v1.Cutoff.ConfirmCutoff;
 using FSH.Modules.Warehouse.Features.v1.Locations.CreateLocation;
+using FSH.Modules.Warehouse.Features.v1.Locations.SearchLocations;
 using FSH.Modules.Warehouse.Features.v1.Pack.CreatePackTote;
 using FSH.Modules.Warehouse.Features.v1.Picks.ConfirmPickTask;
 using FSH.Modules.Warehouse.Features.v1.Picks.GetMyPickTasks;
 using FSH.Modules.Warehouse.Features.v1.Putaway.ConfirmPutaway;
 using FSH.Modules.Warehouse.Features.v1.Putaway.CreatePutawayTask;
+using FSH.Modules.Warehouse.Features.v1.Putaway.SearchPutawayTasks;
 using FSH.Modules.Warehouse.Features.v1.Shrinkage.CreateShrinkage;
 using FSH.Modules.Warehouse.Features.v1.Waves.GenerateWave;
 using FSH.Modules.Warehouse.Features.v1.Waves.GetWaveById;
@@ -70,6 +72,7 @@ public sealed class WarehouseModule : IModule
 
         group.MapConfirmCutoffEndpoint();
         group.MapCreateLocationEndpoint();
+        group.MapSearchLocationsEndpoint();
         group.MapSearchWavesEndpoint();
         group.MapGenerateWaveEndpoint();
         group.MapGetWaveByIdEndpoint();
@@ -77,6 +80,7 @@ public sealed class WarehouseModule : IModule
         group.MapGetMyPickTasksEndpoint();
         group.MapConfirmPickTaskEndpoint();
         group.MapCreatePutawayTaskEndpoint();
+        group.MapSearchPutawayTasksEndpoint();
         group.MapConfirmPutawayEndpoint();
         group.MapCreatePackToteEndpoint();
         group.MapCreateShrinkageEndpoint();

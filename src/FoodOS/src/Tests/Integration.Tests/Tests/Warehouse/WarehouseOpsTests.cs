@@ -60,6 +60,12 @@ public sealed class WarehouseOpsTests
         createLocation.StatusCode.ShouldBe(HttpStatusCode.OK, await createLocation.Content.ReadAsStringAsync());
         var locationId = await createLocation.DeserializeAsync<Guid>();
 
+        using var listLocations = await client.GetAsync(
+            $"{TestConstants.WarehouseBasePath}/locations?warehouseId={warehouse.Id}&zoneId={chilled.Id}");
+        listLocations.StatusCode.ShouldBe(HttpStatusCode.OK, await listLocations.Content.ReadAsStringAsync());
+        (await listLocations.DeserializeAsync<List<LocationDto>>())
+            .ShouldContain(l => l.Id == locationId && l.Code == "C-ST-01");
+
         using var createTask = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/putaway-tasks",
             new
@@ -74,6 +80,12 @@ public sealed class WarehouseOpsTests
         createTask.StatusCode.ShouldBe(HttpStatusCode.OK, await createTask.Content.ReadAsStringAsync());
         var task = await createTask.DeserializeAsync<PutawayTaskDto>();
         task.Status.ShouldBe("Pending");
+
+        using var listPutaway = await client.GetAsync(
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks?warehouseId={warehouse.Id}&status=Pending");
+        listPutaway.StatusCode.ShouldBe(HttpStatusCode.OK, await listPutaway.Content.ReadAsStringAsync());
+        (await listPutaway.DeserializeAsync<List<PutawayTaskDto>>())
+            .ShouldContain(t => t.Id == task.Id);
 
         using var confirm = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/putaway-tasks/{task.Id}/confirm",

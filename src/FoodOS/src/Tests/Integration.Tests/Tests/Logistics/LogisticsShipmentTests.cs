@@ -44,6 +44,13 @@ public sealed class LogisticsShipmentTests
         create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
         var shipment = await create.DeserializeAsync<ShipmentDto>();
         shipment.Status.ShouldBe("Created");
+
+        using var listShipments = await client.GetAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments?warehouseId={packed.WarehouseId}");
+        listShipments.StatusCode.ShouldBe(HttpStatusCode.OK, await listShipments.Content.ReadAsStringAsync());
+        (await listShipments.DeserializeAsync<List<ShipmentDto>>())
+            .ShouldContain(s => s.Id == shipment.Id);
+
         var line = shipment.Lines.ShouldHaveSingleItem();
         line.OrderId.ShouldBe(packed.OrderId);
         var lot = line.Lots.ShouldHaveSingleItem();

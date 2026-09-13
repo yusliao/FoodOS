@@ -1,14 +1,18 @@
 import {
   Activity,
+  ClipboardCheck,
   ClipboardList,
   CreditCard,
   FolderOpen,
   FolderTree,
+  Forklift,
   HeartPulse,
   LayoutDashboard,
+  Layers,
   MessageCircle,
   Package,
   Receipt,
+  ScanLine,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -17,11 +21,15 @@ import {
   Tags,
   Ticket,
   Trash2,
+  Truck,
   Users,
   UsersRound,
   Wifi,
 } from "lucide-react";
 import { SHOP_PERMISSIONS } from "@/api/ordering";
+import { PROCUREMENT_PERMISSIONS } from "@/api/procurement";
+import { WAREHOUSE_PERMISSIONS } from "@/api/warehouse";
+import { LOGISTICS_PERMISSIONS } from "@/api/logistics";
 import { ALL_TRASH_PERMISSIONS } from "@/lib/trash-permissions";
 
 export type NavSpec = {
@@ -78,6 +86,18 @@ export const sections: NavSection[] = [
       { to: "/shop/catalog", label: "Order", icon: Store, perm: SHOP_PERMISSIONS.view },
       { to: "/shop/cart", label: "Cart", icon: ShoppingCart, perm: SHOP_PERMISSIONS.order },
       { to: "/shop/orders", label: "Orders", icon: ClipboardList, perm: SHOP_PERMISSIONS.view },
+    ],
+  },
+  {
+    id: "fulfillment",
+    caption: "Fulfillment",
+    icon: Truck,
+    items: [
+      { to: "/ops/qc", label: "Quality desk", icon: ClipboardCheck, perm: PROCUREMENT_PERMISSIONS.purchaseView },
+      { to: "/ops/putaway", label: "Putaway", icon: Forklift, perm: WAREHOUSE_PERMISSIONS.putawayView },
+      { to: "/ops/waves", label: "Waves", icon: Layers, perm: WAREHOUSE_PERMISSIONS.wavesView },
+      { to: "/ops/picks", label: "Picks", icon: ScanLine, perm: WAREHOUSE_PERMISSIONS.picksView },
+      { to: "/ops/shipments", label: "Load & POD", icon: Truck, perm: LOGISTICS_PERMISSIONS.shipmentsView },
     ],
   },
   {

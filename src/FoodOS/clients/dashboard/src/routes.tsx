@@ -118,6 +118,11 @@ const ShopOrderDetailPage = lazyNamed(
   () => import("@/pages/shop/order-detail"),
   "ShopOrderDetailPage",
 );
+const QualityDeskPage = lazyNamed(() => import("@/pages/ops/qc"), "QualityDeskPage");
+const PutawayPage = lazyNamed(() => import("@/pages/ops/putaway"), "PutawayPage");
+const WavesPage = lazyNamed(() => import("@/pages/ops/waves"), "WavesPage");
+const PicksPage = lazyNamed(() => import("@/pages/ops/picks"), "PicksPage");
+const ShipmentsPage = lazyNamed(() => import("@/pages/ops/shipments"), "ShipmentsPage");
 
 /**
  * RouteFallback — what shows while a lazy chunk is downloading. Mirrors
@@ -235,6 +240,11 @@ export const router = createBrowserRouter([
               { path: "orders/:orderId", element: withSuspense(<ShopOrderDetailPage />) },
             ],
           },
+          { path: "ops/qc", element: withSuspense(<QualityDeskPage />) },
+          { path: "ops/putaway", element: withSuspense(<PutawayPage />) },
+          { path: "ops/waves", element: withSuspense(<WavesPage />) },
+          { path: "ops/picks", element: withSuspense(<PicksPage />) },
+          { path: "ops/shipments", element: withSuspense(<ShipmentsPage />) },
           { path: "catalog", element: <Navigate to="/catalog/brands" replace /> },
           { path: "catalog/brands", element: withSuspense(<BrandsPage />) },
           { path: "catalog/categories", element: withSuspense(<CategoriesPage />) },

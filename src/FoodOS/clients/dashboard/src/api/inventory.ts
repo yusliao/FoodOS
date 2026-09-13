@@ -22,12 +22,29 @@ export function getAvailableQty(params: GetAvailableQtyParams): Promise<Availabl
   return apiFetch<AvailableQtyDto>(`/api/v1/inventory/stock/available?${query.toString()}`);
 }
 
+export type TemperatureZoneDto = {
+  id: string;
+  code: string;
+  kind: string;
+};
+
+export type OperatingClockDto = {
+  cutoffLocal: string;
+  loadLocal: string;
+  deliverFromLocal: string;
+  deliverToLocal: string;
+  reconcileLocal: string;
+  timeZoneId: string;
+};
+
 export type WarehouseDto = {
   id: string;
   code: string;
   name: string;
   city: string;
   timeZoneId: string;
+  clock?: OperatingClockDto;
+  zones?: TemperatureZoneDto[];
   createdAtUtc: string;
 };
 

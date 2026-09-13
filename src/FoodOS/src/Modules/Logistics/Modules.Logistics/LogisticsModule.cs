@@ -12,6 +12,7 @@ using FSH.Modules.Logistics.Features.v1.Shipments.CreateShipment;
 using FSH.Modules.Logistics.Features.v1.Shipments.DepartShipment;
 using FSH.Modules.Logistics.Features.v1.Shipments.GetMyShipments;
 using FSH.Modules.Logistics.Features.v1.Shipments.GetShipmentById;
+using FSH.Modules.Logistics.Features.v1.Shipments.SearchShipments;
 using FSH.Modules.Logistics.Features.v1.Shipments.LoadShipment;
 using FSH.Modules.Logistics.Features.v1.Vehicles.CreateVehicle;
 using Microsoft.AspNetCore.Builder;
@@ -67,6 +68,7 @@ public sealed class LogisticsModule : IModule
         group.MapCreateRouteEndpoint();
         group.MapGetRouteByIdEndpoint();
         group.MapCreateShipmentEndpoint();
+        group.MapSearchShipmentsEndpoint();
         group.MapGetMyShipmentsEndpoint();
         group.MapGetShipmentByIdEndpoint();
         group.MapConfirmLoadShipmentEndpoint();
