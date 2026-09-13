@@ -200,6 +200,13 @@ export function ShopOrderDetailPage() {
                       <code className="font-mono text-[11px] text-[var(--color-muted-foreground)]">
                         {product?.sku ?? ""}
                       </code>
+                      {line.shortageQty > 0 || line.shortageReason ? (
+                        <p data-testid="shortage-reason" className="mt-1 text-[12px] text-[var(--color-muted-foreground)]">
+                          {t("shop.shortageLine", "Shortage {qty}: {reason}")
+                            .replace("{qty}", String(line.shortageQty))
+                            .replace("{reason}", line.shortageReason ?? "—")}
+                        </p>
+                      ) : null}
                     </div>
                     {canEdit ? (
                       <Input

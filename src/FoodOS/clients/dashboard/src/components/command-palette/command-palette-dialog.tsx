@@ -199,6 +199,15 @@ export function CommandPaletteDialog({
             perm: "Permissions.Ordering.Shop.View",
           },
           {
+            id: "nav-shop-after-sales",
+            label: "After-sales",
+            hint: "File shortage, damage, or return",
+            Icon: LifeBuoy,
+            keywords: ["after-sales", "claim", "shortage", "damage", "return"],
+            perform: go("/shop/after-sales"),
+            perm: "Permissions.Ordering.Shop.Order",
+          },
+          {
             id: "nav-ops-qc",
             label: "Quality desk",
             hint: "Pass or fail inbound PO lines",

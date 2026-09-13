@@ -261,6 +261,36 @@ public sealed class SalesOrder : AggregateRoot<Guid>
         line.RecordShortage(shortageQty, reason);
     }
 
+    public void ApplyAfterSales(
+        Guid orderLineId,
+        AfterSalesTicketType type,
+        decimal quantity,
+        string reason)
+    {
+        if (Status is not SalesOrderStatus.Received and not SalesOrderStatus.Reconciled)
+        {
+            throw new CustomException(
+                "After-sales can only be filed on received or reconciled orders.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+
+        var line = _lines.Find(l => l.Id == orderLineId)
+            ?? throw new CustomException(
+                $"Order line {orderLineId} was not found on this order.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.BadRequest);
+
+        try
+        {
+            line.ApplyAfterSales(type, quantity, reason);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new CustomException(ex.Message, (IEnumerable<string>?)null, HttpStatusCode.BadRequest);
+        }
+    }
+
     public void Reconcile()
     {
         if (Status == SalesOrderStatus.Reconciled)

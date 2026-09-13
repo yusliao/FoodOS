@@ -8,6 +8,8 @@ using FSH.Modules.Ordering.Features.v1.Carts.GetCart;
 using FSH.Modules.Ordering.Features.v1.Carts.UpdateCart;
 using FSH.Modules.Ordering.Features.v1.CustomerOrgs.CreateCustomerOrg;
 using FSH.Modules.Ordering.Features.v1.CustomerOrgs.SearchCustomerOrgs;
+using FSH.Modules.Ordering.Features.v1.AfterSales.CreateAfterSalesTicket;
+using FSH.Modules.Ordering.Features.v1.AfterSales.SearchAfterSalesTickets;
 using FSH.Modules.Ordering.Features.v1.Orders.AmendOrder;
 using FSH.Modules.Ordering.Features.v1.Orders.CancelOrder;
 using FSH.Modules.Ordering.Features.v1.Orders.GetOrderById;
@@ -78,5 +80,7 @@ public sealed class OrderingModule : IModule
         group.MapCancelOrderEndpoint();
         group.MapGetOrderByIdEndpoint();
         group.MapConfirmReconcileOrderEndpoint();
+        group.MapSearchAfterSalesTicketsEndpoint();
+        group.MapCreateAfterSalesTicketEndpoint();
     }
 }

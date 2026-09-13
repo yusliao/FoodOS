@@ -146,6 +146,60 @@ public sealed class SalesOrderTests
         order.Lines[0].ShortageReason.ShouldBe("insufficient-stock");
     }
 
+    [Fact]
+    public void FileAfterSales_Should_WriteShortageOntoSameLine()
+    {
+        var order = CreateReceived(deliveredQty: 3m);
+        var userId = Guid.CreateVersion7();
+
+        var ticket = AfterSalesTicket.Create(
+            order.Id,
+            order.StoreId,
+            order.Lines[0].Id,
+            AfterSalesTicketType.Shortage,
+            1m,
+            "short on tote",
+            userId);
+        order.ApplyAfterSales(order.Lines[0].Id, AfterSalesTicketType.Shortage, 1m, "short on tote");
+
+        ticket.Type.ShouldBe(AfterSalesTicketType.Shortage);
+        ticket.Status.ShouldBe(AfterSalesTicketStatus.Applied);
+        ticket.Quantity.ShouldBe(1m);
+        order.Lines[0].ShortageQty.ShouldBe(1m);
+        order.Lines[0].ShortageReason.ShouldBe("short on tote");
+    }
+
+    [Fact]
+    public void FileAfterSales_Should_WriteReturnOntoSameLine()
+    {
+        var order = CreateReceived(deliveredQty: 4m);
+
+        order.ApplyAfterSales(order.Lines[0].Id, AfterSalesTicketType.Return, 1m, "bruised");
+
+        order.Lines[0].ReturnedQty.ShouldBe(1m);
+        order.Lines[0].VarianceReason.ShouldBe("bruised");
+    }
+
+    [Fact]
+    public void FileAfterSales_Should_Reject_When_NotReceived()
+    {
+        var order = CreateReserved(DateTimeOffset.UtcNow.AddHours(2));
+
+        var ex = Should.Throw<CustomException>(() =>
+            order.ApplyAfterSales(order.Lines[0].Id, AfterSalesTicketType.Damage, 1m, "crushed"));
+        ex.StatusCode.ShouldBe(System.Net.HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public void FileAfterSales_Should_Reject_When_ReturnExceedsDelivered()
+    {
+        var order = CreateReceived(deliveredQty: 4m);
+
+        var ex = Should.Throw<CustomException>(() =>
+            order.ApplyAfterSales(order.Lines[0].Id, AfterSalesTicketType.Return, 5m, "too many"));
+        ex.StatusCode.ShouldBe(System.Net.HttpStatusCode.BadRequest);
+    }
+
     private static SalesOrder CreateDraft()
         => SalesOrder.CreateDraft(
             "SO202609110001",
@@ -172,6 +226,19 @@ public sealed class SalesOrderTests
         }
 
         order.Place(DateTimeOffset.UtcNow.AddHours(-1));
+        order.ClearDomainEvents();
+        return order;
+    }
+
+    private static SalesOrder CreateReceived(decimal deliveredQty)
+    {
+        var order = CreateReserved(DateTimeOffset.UtcNow.AddHours(2));
+        order.LockForCutoff();
+        order.StartPicking();
+        order.MarkPacked();
+        var lotId = Guid.CreateVersion7();
+        order.MarkInTransit([(order.Lines[0].Id, lotId, "LOT-AS", 4m)]);
+        order.MarkReceived([(order.Lines[0].Id, lotId, deliveredQty, 4m - deliveredQty, null)]);
         order.ClearDomainEvents();
         return order;
     }

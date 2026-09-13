@@ -86,6 +86,7 @@ export const sections: NavSection[] = [
       { to: "/shop/catalog", label: "Order", icon: Store, perm: SHOP_PERMISSIONS.view },
       { to: "/shop/cart", label: "Cart", icon: ShoppingCart, perm: SHOP_PERMISSIONS.order },
       { to: "/shop/orders", label: "Orders", icon: ClipboardList, perm: SHOP_PERMISSIONS.view },
+      { to: "/shop/after-sales", label: "After-sales", icon: Ticket, perm: SHOP_PERMISSIONS.order },
     ],
   },
   {

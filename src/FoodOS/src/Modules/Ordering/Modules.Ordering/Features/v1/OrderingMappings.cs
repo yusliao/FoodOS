@@ -60,6 +60,19 @@ internal static class OrderingMappings
                     lot.DeliveredQty,
                     lot.ReturnedQty)).ToList())).ToList());
 
+    public static AfterSalesTicketDto ToDto(this AfterSalesTicket ticket)
+        => new(
+            ticket.Id,
+            ticket.OrderId,
+            ticket.StoreId,
+            ticket.OrderLineId,
+            ticket.Type.ToString(),
+            ticket.Quantity,
+            ticket.Reason,
+            ticket.Status.ToString(),
+            ticket.CreatedByUserId,
+            ticket.CreatedAt);
+
     public static CartDto EmptyCart(Guid storeId)
         => new(Guid.Empty, storeId, [], DateTimeOffset.MinValue);
 }

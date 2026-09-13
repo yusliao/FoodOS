@@ -121,4 +121,46 @@ public sealed class SalesOrderLine : BaseEntity<Guid>
         ShortageQty = shortageQty;
         ShortageReason = reason.Trim();
     }
+
+    internal void ApplyAfterSales(AfterSalesTicketType type, decimal quantity, string reason)
+    {
+        if (quantity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be positive.");
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        var note = reason.Trim();
+
+        switch (type)
+        {
+            case AfterSalesTicketType.Shortage:
+                var remainingMissing = OrderedQty - DeliveredQty - ShortageQty;
+                if (quantity > remainingMissing)
+                {
+                    throw new InvalidOperationException(
+                        $"Shortage quantity {quantity} exceeds remaining missing quantity {remainingMissing}.");
+                }
+
+                ShortageQty += quantity;
+                ShortageReason = note;
+                break;
+
+            case AfterSalesTicketType.Damage:
+            case AfterSalesTicketType.Return:
+                var remainingReturnable = DeliveredQty - ReturnedQty;
+                if (quantity > remainingReturnable)
+                {
+                    throw new InvalidOperationException(
+                        $"Return quantity {quantity} exceeds remaining delivered quantity {remainingReturnable}.");
+                }
+
+                ReturnedQty += quantity;
+                VarianceReason = note;
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown after-sales type.");
+        }
+    }
 }

@@ -74,9 +74,15 @@ function reservedOrder(over: Record<string, unknown> = {}) {
         zone: "Chilled",
         orderedQty: 2,
         reservedQty: 2,
+        deliveredQty: 0,
+        returnedQty: 0,
+        shortageQty: 0,
+        shortageReason: null,
+        varianceReason: null,
         unitPrice: 8,
         currency: "USD",
         reservationId: "99999999-9999-9999-9999-999999999999",
+        lots: [],
       },
     ],
     ...over,
@@ -273,5 +279,80 @@ test.describe("shop/orders", () => {
     await expect(page.getByText("This order is locked. Changes are no longer allowed.")).toBeVisible();
     await expect(page.getByRole("button", { name: /save changes/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /cancel order/i })).toHaveCount(0);
+  });
+});
+
+test.describe("shop/after-sales", () => {
+  test("files a return claim against a received order", async ({ page }) => {
+    await mockShopApis(page);
+    const order = reservedOrder({
+      status: "Received",
+      lines: [
+        {
+          id: "88888888-8888-8888-8888-888888888888",
+          productId: PRODUCT.id,
+          zone: "Chilled",
+          orderedQty: 6,
+          reservedQty: 6,
+          deliveredQty: 6,
+          returnedQty: 0,
+          shortageQty: 0,
+          shortageReason: null,
+          varianceReason: null,
+          unitPrice: 8,
+          currency: "USD",
+          reservationId: "99999999-9999-9999-9999-999999999999",
+          lots: [],
+        },
+      ],
+    });
+    await mockJsonResponse(page, "**/api/v1/ordering/orders**", paged([order]));
+    await mockJsonResponse(page, "**/api/v1/ordering/after-sales**", [], { method: "GET" });
+
+    let filed: unknown;
+    await page.route("**/api/v1/ordering/after-sales", async (route) => {
+      if (route.request().method() === "POST") {
+        filed = JSON.parse(route.request().postData() ?? "{}");
+        await route.fulfill({
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            orderId: ORDER_ID,
+            storeId: STORE.id,
+            orderLineId: "88888888-8888-8888-8888-888888888888",
+            type: "Return",
+            quantity: 1,
+            reason: "bruised",
+            status: "Applied",
+            createdByUserId: TEST_USER.sub,
+            createdAt: new Date().toISOString(),
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/shop/after-sales");
+    await expect(page.getByRole("heading", { name: "After-sales" })).toBeVisible();
+
+    await page.getByRole("button", { name: /choose a received order/i }).click();
+    await page.getByRole("menuitemradio", { name: order.number }).click();
+    await page.getByRole("button", { name: /choose a line/i }).click();
+    await page.getByRole("menuitemradio", { name: PRODUCT.name }).click();
+    await page.getByRole("button", { name: /^Shortage$/ }).click();
+    await page.getByRole("menuitemradio", { name: /^Return$/ }).click();
+    await page.getByLabel("Qty").fill("1");
+    await page.getByLabel("Reason").fill("bruised");
+    await page.getByRole("button", { name: /file a claim/i }).click();
+
+    await expect.poll(() => filed).toMatchObject({
+      orderId: ORDER_ID,
+      orderLineId: "88888888-8888-8888-8888-888888888888",
+      type: "Return",
+      quantity: 1,
+      reason: "bruised",
+    });
   });
 });

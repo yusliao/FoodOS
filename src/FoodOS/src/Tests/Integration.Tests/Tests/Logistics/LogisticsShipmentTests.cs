@@ -101,6 +101,31 @@ public sealed class LogisticsShipmentTests
         reconcile.StatusCode.ShouldBe(HttpStatusCode.OK, await reconcile.Content.ReadAsStringAsync());
         using var closed = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{packed.OrderId}");
         (await closed.DeserializeAsync<SalesOrderDto>()).Status.ShouldBe("Reconciled");
+
+        using var claim = await client.PostAsJsonAsync(
+            $"{TestConstants.OrderingBasePath}/after-sales",
+            new
+            {
+                orderId = packed.OrderId,
+                orderLineId = receivedOrder.Lines[0].Id,
+                type = "Return",
+                quantity = 1m,
+                reason = "bruised",
+            });
+        claim.StatusCode.ShouldBe(HttpStatusCode.OK, await claim.Content.ReadAsStringAsync());
+        var ticket = await claim.DeserializeAsync<AfterSalesTicketDto>();
+        ticket.Type.ShouldBe("Return");
+        ticket.Status.ShouldBe("Applied");
+        ticket.Quantity.ShouldBe(1m);
+
+        using var listed = await client.GetAsync(
+            $"{TestConstants.OrderingBasePath}/after-sales?storeId={packed.StoreId}");
+        listed.StatusCode.ShouldBe(HttpStatusCode.OK, await listed.Content.ReadAsStringAsync());
+        (await listed.DeserializeAsync<List<AfterSalesTicketDto>>())
+            .ShouldContain(t => t.Id == ticket.Id);
+
+        using var afterClaim = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{packed.OrderId}");
+        (await afterClaim.DeserializeAsync<SalesOrderDto>()).Lines[0].ReturnedQty.ShouldBe(1m);
     }
 
     [Fact]

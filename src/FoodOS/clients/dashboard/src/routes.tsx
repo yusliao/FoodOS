@@ -118,6 +118,7 @@ const ShopOrderDetailPage = lazyNamed(
   () => import("@/pages/shop/order-detail"),
   "ShopOrderDetailPage",
 );
+const ShopAfterSalesPage = lazyNamed(() => import("@/pages/shop/after-sales"), "ShopAfterSalesPage");
 const QualityDeskPage = lazyNamed(() => import("@/pages/ops/qc"), "QualityDeskPage");
 const PutawayPage = lazyNamed(() => import("@/pages/ops/putaway"), "PutawayPage");
 const WavesPage = lazyNamed(() => import("@/pages/ops/waves"), "WavesPage");
@@ -238,6 +239,7 @@ export const router = createBrowserRouter([
               { path: "cart", element: withSuspense(<ShopCartPage />) },
               { path: "orders", element: withSuspense(<ShopOrdersPage />) },
               { path: "orders/:orderId", element: withSuspense(<ShopOrderDetailPage />) },
+              { path: "after-sales", element: withSuspense(<ShopAfterSalesPage />) },
             ],
           },
           { path: "ops/qc", element: withSuspense(<QualityDeskPage />) },

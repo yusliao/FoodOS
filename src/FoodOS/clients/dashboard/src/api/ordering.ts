@@ -32,15 +32,29 @@ export type CartLineInput = {
   quantity: number;
 };
 
+export type SalesOrderLineLotDto = {
+  lotId: string;
+  lotNo: string;
+  shippedQty: number;
+  deliveredQty: number;
+  returnedQty: number;
+};
+
 export type SalesOrderLineDto = {
   id: string;
   productId: string;
   zone: string;
   orderedQty: number;
   reservedQty: number;
+  deliveredQty: number;
+  returnedQty: number;
+  shortageQty: number;
+  shortageReason?: string | null;
+  varianceReason?: string | null;
   unitPrice: number;
   currency: string;
   reservationId?: string | null;
+  lots: SalesOrderLineLotDto[];
 };
 
 export type SalesOrderStatus =
@@ -139,6 +153,47 @@ export function cancelOrder(orderId: string, idempotencyKey: string): Promise<st
   return apiFetch<string>(`/api/v1/ordering/orders/${encodeURIComponent(orderId)}/cancel`, {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
+  });
+}
+
+export type AfterSalesTicketType = "Shortage" | "Damage" | "Return";
+
+export type AfterSalesTicketDto = {
+  id: string;
+  orderId: string;
+  storeId: string;
+  orderLineId: string;
+  type: AfterSalesTicketType | string;
+  quantity: number;
+  reason: string;
+  status: string;
+  createdByUserId: string;
+  createdAt: string;
+};
+
+export type CreateAfterSalesTicketInput = {
+  orderId: string;
+  orderLineId: string;
+  type: AfterSalesTicketType;
+  quantity: number;
+  reason: string;
+};
+
+export function searchAfterSalesTickets(storeId: string, orderId?: string | null): Promise<AfterSalesTicketDto[]> {
+  const query = new URLSearchParams();
+  query.set("storeId", storeId);
+  if (orderId) query.set("orderId", orderId);
+  return apiFetch<AfterSalesTicketDto[]>(`/api/v1/ordering/after-sales?${query.toString()}`);
+}
+
+export function createAfterSalesTicket(
+  input: CreateAfterSalesTicketInput,
+  idempotencyKey: string,
+): Promise<AfterSalesTicketDto> {
+  return apiFetch<AfterSalesTicketDto>("/api/v1/ordering/after-sales", {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(input),
   });
 }
 
