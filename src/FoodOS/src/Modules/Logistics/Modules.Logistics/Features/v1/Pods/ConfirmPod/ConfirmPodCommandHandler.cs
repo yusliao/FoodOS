@@ -1,9 +1,14 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Eventing.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Inventory.Contracts.v1.Stock;
 using FSH.Modules.Logistics.Contracts.Dtos;
+using FSH.Modules.Logistics.Contracts.Events;
 using FSH.Modules.Logistics.Contracts.v1.ProofOfDelivery;
 using FSH.Modules.Logistics.Data;
 using FSH.Modules.Logistics.Domain;
@@ -18,7 +23,9 @@ namespace FSH.Modules.Logistics.Features.v1.Pods.ConfirmPod;
 public sealed class ConfirmPodCommandHandler(
     LogisticsDbContext dbContext,
     IMediator mediator,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IEventBus eventBus,
+    IMultiTenantContextAccessor<AppTenantInfo> tenantAccessor)
     : ICommandHandler<ConfirmPodCommand, ShipmentDto>
 {
     public async ValueTask<ShipmentDto> Handle(ConfirmPodCommand command, CancellationToken cancellationToken)
@@ -165,6 +172,21 @@ public sealed class ConfirmPodCommandHandler(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await eventBus.PublishAsync(
+                new ShipmentStopDeliveredIntegrationEvent(
+                    Id: Guid.CreateVersion7(),
+                    OccurredOnUtc: DateTime.UtcNow,
+                    TenantId: tenantAccessor.MultiTenantContext.TenantInfo?.Id,
+                    CorrelationId: Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString(),
+                    Source: "Logistics",
+                    ShipmentId: shipment.Id,
+                    StopId: stop.Id,
+                    StoreId: stop.StoreId,
+                    OrderIds: receiptsByOrder.Keys.ToList()),
+                cancellationToken)
+            .ConfigureAwait(false);
+
         return shipment.ToDto();
     }
 }

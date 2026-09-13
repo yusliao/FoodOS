@@ -17,6 +17,11 @@
 		<ProjectReference Include="..\..\..\BuildingBlocks\Mailing\Mailing.csproj" />
 		<ProjectReference Include="..\Modules.Notifications.Contracts\Modules.Notifications.Contracts.csproj" />
 		<ProjectReference Include="..\..\Chat\Modules.Chat.Contracts\Modules.Chat.Contracts.csproj" />
+		<ProjectReference Include="..\..\Identity\Modules.Identity.Contracts\Modules.Identity.Contracts.csproj" />
+		<ProjectReference Include="..\..\Inventory\Modules.Inventory.Contracts\Modules.Inventory.Contracts.csproj" />
+		<ProjectReference Include="..\..\Logistics\Modules.Logistics.Contracts\Modules.Logistics.Contracts.csproj" />
+		<ProjectReference Include="..\..\Ordering\Modules.Ordering.Contracts\Modules.Ordering.Contracts.csproj" />
+		<ProjectReference Include="..\..\Warehouse\Modules.Warehouse.Contracts\Modules.Warehouse.Contracts.csproj" />
 		<ProjectReference Include="..\..\Multitenancy\Modules.Multitenancy.Contracts\Modules.Multitenancy.Contracts.csproj" />
 		<ProjectReference Include="..\..\Billing\Modules.Billing.Contracts\Modules.Billing.Contracts.csproj" />
 	</ItemGroup>

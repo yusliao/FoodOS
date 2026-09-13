@@ -19,6 +19,9 @@ using FSH.Modules.Ordering.Features.v1.Orders.SearchOrders;
 using FSH.Modules.Ordering.Features.v1.Stores.CreateStore;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStoreById;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStores;
+using FSH.Modules.Ordering.Jobs;
+using Hangfire;
+using Hangfire.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -40,6 +43,7 @@ public sealed class OrderingModule : IModule
 
         builder.Services.AddHeroDbContext<OrderingDbContext>();
         builder.Services.AddScoped<IDbInitializer, OrderingDbInitializer>();
+        builder.Services.AddTransient<ReconcileReminderJob>();
 
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<OrderingDbContext>(
@@ -82,5 +86,15 @@ public sealed class OrderingModule : IModule
         group.MapConfirmReconcileOrderEndpoint();
         group.MapSearchAfterSalesTicketsEndpoint();
         group.MapCreateAfterSalesTicketEndpoint();
+
+        var jobManager = endpoints.ServiceProvider.GetService<IRecurringJobManager>();
+        if (jobManager is not null)
+        {
+            jobManager.AddOrUpdate(
+                "ordering-reconcile-reminder",
+                Job.FromExpression<ReconcileReminderJob>(j => j.RunAsync(CancellationToken.None)),
+                "* * * * *",
+                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+        }
     }
 }

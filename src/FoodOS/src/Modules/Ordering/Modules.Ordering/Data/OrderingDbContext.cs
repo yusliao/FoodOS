@@ -27,6 +27,7 @@ public sealed class OrderingDbContext : BaseDbContext
     public DbSet<SalesOrderLine> SalesOrderLines => Set<SalesOrderLine>();
     public DbSet<SalesOrderLineLot> SalesOrderLineLots => Set<SalesOrderLineLot>();
     public DbSet<AfterSalesTicket> AfterSalesTickets => Set<AfterSalesTicket>();
+    public DbSet<ReconcileReminderLog> ReconcileReminderLogs => Set<ReconcileReminderLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -12,6 +12,9 @@ using FSH.Modules.Inventory.Features.v1.Stock.UnreserveStock;
 using FSH.Modules.Inventory.Features.v1.Warehouses.CreateWarehouse;
 using FSH.Modules.Inventory.Features.v1.Warehouses.GetWarehouseById;
 using FSH.Modules.Inventory.Features.v1.Warehouses.SearchWarehouses;
+using FSH.Modules.Inventory.Jobs;
+using Hangfire;
+using Hangfire.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -33,6 +36,7 @@ public sealed class InventoryModule : IModule
 
         builder.Services.AddHeroDbContext<InventoryDbContext>();
         builder.Services.AddScoped<IDbInitializer, InventoryDbInitializer>();
+        builder.Services.AddTransient<NearExpiryJob>();
 
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<InventoryDbContext>(
@@ -68,5 +72,15 @@ public sealed class InventoryModule : IModule
         group.MapReserveStockEndpoint();
         group.MapUnreserveStockEndpoint();
         group.MapIsolateStockEndpoint();
+
+        var jobManager = endpoints.ServiceProvider.GetService<IRecurringJobManager>();
+        if (jobManager is not null)
+        {
+            jobManager.AddOrUpdate(
+                "inventory-near-expiry",
+                Job.FromExpression<NearExpiryJob>(j => j.RunAsync(CancellationToken.None)),
+                "15 7 * * *",
+                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+        }
     }
 }

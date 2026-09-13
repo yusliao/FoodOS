@@ -1,7 +1,12 @@
+using System.Diagnostics;
+using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Eventing.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Inventory.Contracts.v1.Stock;
 using FSH.Modules.Logistics.Contracts.Dtos;
+using FSH.Modules.Logistics.Contracts.Events;
 using FSH.Modules.Logistics.Contracts.v1.Shipments;
 using FSH.Modules.Logistics.Data;
 using FSH.Modules.Logistics.Domain;
@@ -15,7 +20,9 @@ namespace FSH.Modules.Logistics.Features.v1.Shipments.DepartShipment;
 public sealed class DepartShipmentCommandHandler(
     LogisticsDbContext dbContext,
     IMediator mediator,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IEventBus eventBus,
+    IMultiTenantContextAccessor<AppTenantInfo> tenantAccessor)
     : ICommandHandler<DepartShipmentCommand, ShipmentDto>
 {
     public async ValueTask<ShipmentDto> Handle(DepartShipmentCommand command, CancellationToken cancellationToken)
@@ -72,6 +79,22 @@ public sealed class DepartShipmentCommandHandler(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await eventBus.PublishAsync(
+                new ShipmentDepartedIntegrationEvent(
+                    Id: Guid.CreateVersion7(),
+                    OccurredOnUtc: DateTime.UtcNow,
+                    TenantId: tenantAccessor.MultiTenantContext.TenantInfo?.Id,
+                    CorrelationId: Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString(),
+                    Source: "Logistics",
+                    ShipmentId: shipment.Id,
+                    ShipmentNumber: shipment.Number,
+                    WarehouseId: shipment.WarehouseId,
+                    OrderIds: shipment.Lines.Select(l => l.OrderId).Distinct().ToList(),
+                    StoreIds: shipment.Stops.Select(s => s.StoreId).Distinct().ToList()),
+                cancellationToken)
+            .ConfigureAwait(false);
+
         return shipment.ToDto();
     }
 }
