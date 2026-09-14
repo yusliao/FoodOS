@@ -14,17 +14,11 @@ import {
   subscribeCulture,
   type SupportedCulture,
 } from "@/i18n/locale-store";
-import deDE from "@/i18n/locales/de-DE.json";
 import enUS from "@/i18n/locales/en-US.json";
-import esES from "@/i18n/locales/es-ES.json";
-import frFR from "@/i18n/locales/fr-FR.json";
 import zhCN from "@/i18n/locales/zh-CN.json";
 
 const catalogs: Record<SupportedCulture, typeof enUS> = {
   "en-US": enUS,
-  "es-ES": esES,
-  "fr-FR": frFR,
-  "de-DE": deDE,
   "zh-CN": zhCN,
 };
 

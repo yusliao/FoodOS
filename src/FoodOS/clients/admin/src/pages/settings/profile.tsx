@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ErrorBand, LoadingRow, SettingsSection, SettingsField } from "@/components/list";
 import { ImageInput } from "@/components/file/image-input";
+import { useT } from "@/i18n/locale-provider";
 import { ApiRequestError } from "@/lib/api-client";
 
 /**
@@ -19,32 +20,33 @@ import { ApiRequestError } from "@/lib/api-client";
  * instead of the old base64 data: URL approach that hit the 2048-char limit.
  */
 export function ProfileSettings() {
+  const t = useT();
   const queryClient = useQueryClient();
   const profile = useQuery({ queryKey: ["identity", "profile"], queryFn: getMyProfile });
 
   const imageMutation = useMutation({
     mutationFn: (url: string | null) => setProfileImage(url),
     onSuccess: () => {
-      toast.success("Profile image updated");
+      toast.success(t("settings.imageUpdated"));
       void queryClient.invalidateQueries({ queryKey: ["identity", "profile"] });
     },
     onError: (err: unknown) => {
       const message =
         err instanceof ApiRequestError
           ? (err.problem?.detail ?? err.problem?.title ?? err.message)
-          : "Failed to update profile image";
+          : t("settings.imageUpdateFailed");
       toast.error(message);
     },
   });
 
-  if (profile.isLoading) return <LoadingRow label="Loading profile" />;
+  if (profile.isLoading) return <LoadingRow label={t("settings.loadProfile")} />;
   if (profile.isError) {
     return (
       <ErrorBand
         message={
           profile.error instanceof ApiRequestError
             ? (profile.error.problem?.detail ?? profile.error.message)
-            : "Failed to load profile."
+            : t("settings.loadProfileFailed")
         }
       />
     );
@@ -55,15 +57,15 @@ export function ProfileSettings() {
     [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
     user.userName ||
     user.email ||
-    "Account";
+    t("settings.accountFallback");
 
   return (
     <div className="space-y-5 fsh-enter">
       {/* Avatar — presigned upload via ImageInput, no base64 data: URLs */}
       <SettingsSection
-        title="Avatar"
+        title={t("settings.avatar")}
         icon={UserRound}
-        description="Shown in the topbar and on your activity. Square crops work best — JPG, PNG, or WebP."
+        description={t("settings.avatarDesc")}
       >
         <ImageInput
           value={user.imageUrl ?? ""}
@@ -76,12 +78,12 @@ export function ProfileSettings() {
 
       {/* Identity — read-only; admin must update these server-side */}
       <SettingsSection
-        title="Identity"
+        title={t("settings.identity")}
         icon={Fingerprint}
-        description="Your account details. These are managed by an administrator — contact one if changes are needed."
+        description={t("settings.identityDesc")}
       >
         <div className="grid gap-5 sm:grid-cols-2">
-          <SettingsField id="profile-username" label="Username">
+          <SettingsField id="profile-username" label={t("settings.username")}>
             <Input
               id="profile-username"
               value={user.userName ?? ""}
@@ -89,7 +91,7 @@ export function ProfileSettings() {
               className="font-mono bg-[var(--color-muted)] cursor-not-allowed"
             />
           </SettingsField>
-          <SettingsField id="profile-display" label="Display name">
+          <SettingsField id="profile-display" label={t("settings.displayName")}>
             <Input
               id="profile-display"
               value={displayName}
@@ -97,7 +99,7 @@ export function ProfileSettings() {
               className="bg-[var(--color-muted)] cursor-not-allowed"
             />
           </SettingsField>
-          <SettingsField id="profile-email" label="Email">
+          <SettingsField id="profile-email" label={t("auth.email")}>
             <Input
               id="profile-email"
               type="email"
@@ -107,11 +109,11 @@ export function ProfileSettings() {
             />
             {user.emailConfirmed !== undefined && (
               <p className="mt-1 text-[11px] text-[var(--color-muted-foreground)]">
-                {user.emailConfirmed ? "Address verified" : "Not yet verified"}
+                {user.emailConfirmed ? t("settings.emailVerified") : t("settings.emailUnverified")}
               </p>
             )}
           </SettingsField>
-          <SettingsField id="profile-phone" label="Phone">
+          <SettingsField id="profile-phone" label={t("settings.phone")}>
             <Input
               id="profile-phone"
               value={user.phoneNumber ?? "—"}
@@ -124,28 +126,28 @@ export function ProfileSettings() {
 
       {/* Status badges */}
       <SettingsSection
-        title="Account status"
+        title={t("settings.accountStatus")}
         icon={ShieldCheck}
-        description="Runtime flags on this account. Contact an operator to change them."
+        description={t("settings.accountStatusDesc")}
       >
         <div className="flex flex-wrap items-center gap-2">
           <Badge
             variant={user.isActive ? "success" : "muted"}
             className="font-mono uppercase tracking-[0.14em]"
           >
-            {user.isActive ? "Active" : "Disabled"}
+            {user.isActive ? t("chrome.active") : t("settings.disabled")}
           </Badge>
           <Badge
             variant={user.emailConfirmed ? "info" : "warning"}
             className="font-mono uppercase tracking-[0.14em]"
           >
-            {user.emailConfirmed ? "Email confirmed" : "Email pending"}
+            {user.emailConfirmed ? t("settings.emailConfirmed") : t("settings.emailPending")}
           </Badge>
           <Badge
             variant={user.twoFactorEnabled ? "success" : "outline"}
             className="font-mono uppercase tracking-[0.14em]"
           >
-            {user.twoFactorEnabled ? "2FA enabled" : "2FA off"}
+            {user.twoFactorEnabled ? t("settings.twoFaOn") : t("settings.twoFaOff")}
           </Badge>
         </div>
       </SettingsSection>

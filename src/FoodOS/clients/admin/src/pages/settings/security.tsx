@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,6 +41,7 @@ import {
   SettingsSection,
 } from "@/components/list";
 import { ApiRequestError } from "@/lib/api-client";
+import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
 
 /**
@@ -50,16 +51,17 @@ import { cn } from "@/lib/cn";
  * Password change is driven through a Dialog (mirrors dashboard pattern).
  */
 export function SecuritySettings() {
+  const t = useT();
   const profile = useQuery({ queryKey: ["identity", "profile"], queryFn: getMyProfile });
 
-  if (profile.isLoading) return <LoadingRow label="Loading security state" />;
+  if (profile.isLoading) return <LoadingRow label={t("settings.loadSecurity")} />;
   if (profile.isError) {
     return (
       <ErrorBand
         message={
           profile.error instanceof ApiRequestError
             ? (profile.error.problem?.detail ?? profile.error.message)
-            : "Failed to load security state."
+            : t("settings.loadSecurityFailed")
         }
       />
     );
@@ -77,22 +79,24 @@ export function SecuritySettings() {
 
 // ─── Password section ────────────────────────────────────────────────────
 
-const passwordSchema = z
-  .object({
-    current: z.string().min(1, "Required."),
-    next: z.string().min(8, "At least 8 characters."),
-    confirm: z.string().min(8),
-  })
-  .refine((v) => v.next === v.confirm, {
-    path: ["confirm"],
-    message: "Passwords don't match.",
-  })
-  .refine((v) => v.next !== v.current, {
-    path: ["next"],
-    message: "New password must differ from the current one.",
-  });
+function makePasswordSchema(t: (key: string, fallback?: string) => string) {
+  return z
+    .object({
+      current: z.string().min(1, t("settings.required")),
+      next: z.string().min(8, t("auth.useAtLeast8")),
+      confirm: z.string().min(8),
+    })
+    .refine((v) => v.next === v.confirm, {
+      path: ["confirm"],
+      message: t("auth.passwordsDontMatch"),
+    })
+    .refine((v) => v.next !== v.current, {
+      path: ["next"],
+      message: t("settings.mustDiffer"),
+    });
+}
 
-type PasswordValues = z.infer<typeof passwordSchema>;
+type PasswordValues = z.infer<ReturnType<typeof makePasswordSchema>>;
 
 /**
  * RevealInput — password Input with a first-class show/hide eye toggle
@@ -101,6 +105,7 @@ type PasswordValues = z.infer<typeof passwordSchema>;
  */
 const RevealInput = forwardRef<HTMLInputElement, InputProps>(
   ({ className, ...props }, ref) => {
+    const t = useT();
     const [show, setShow] = useState(false);
     return (
       <div className="relative">
@@ -114,7 +119,7 @@ const RevealInput = forwardRef<HTMLInputElement, InputProps>(
           type="button"
           tabIndex={-1}
           onClick={() => setShow((s) => !s)}
-          aria-label={show ? "Hide password" : "Show password"}
+          aria-label={show ? t("auth.hidePassword") : t("auth.showPassword")}
           className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-[var(--color-muted-foreground)] outline-none transition-colors hover:text-[var(--color-foreground)] focus-visible:ring-2 focus-visible:ring-[oklch(from_var(--color-ring)_l_c_h_/_0.5)]"
         >
           {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -126,22 +131,22 @@ const RevealInput = forwardRef<HTMLInputElement, InputProps>(
 RevealInput.displayName = "RevealInput";
 
 function PasswordSection() {
+  const t = useT();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
     <>
       <SettingsSection
-        title="Password"
+        title={t("settings.passwordTitle")}
         icon={KeyRound}
-        description="Used to sign in to this console. Choose a strong, unique passphrase of 16+ characters."
+        description={t("settings.passwordDesc")}
       >
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm text-[var(--color-muted-foreground)]">
-            Changing your password does not revoke other sessions automatically — visit the Sessions
-            tab to sign out other devices.
+            {t("settings.passwordHintSessions")}
           </p>
           <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
-            Change password
+            {t("settings.changePassword")}
           </Button>
         </div>
       </SettingsSection>
@@ -158,6 +163,8 @@ function ChangePasswordDialog({
   open: boolean;
   onOpenChange: (next: boolean) => void;
 }) {
+  const t = useT();
+  const passwordSchema = useMemo(() => makePasswordSchema(t), [t]);
   const {
     register,
     handleSubmit,
@@ -181,8 +188,8 @@ function ChangePasswordDialog({
         confirmNewPassword: v.confirm,
       }),
     onSuccess: () => {
-      toast.success("Password changed", {
-        description: "Other active sessions remain valid until you revoke them.",
+      toast.success(t("settings.passwordChanged"), {
+        description: t("settings.passwordChangedBody"),
       });
       onOpenChange(false);
     },
@@ -191,7 +198,7 @@ function ChangePasswordDialog({
         err instanceof ApiRequestError
           ? (err.problem?.detail ?? err.problem?.title ?? err.message)
           : (err as Error).message;
-      toast.error("Change failed", { description: detail });
+      toast.error(t("settings.changeFailed"), { description: detail });
     },
   });
 
@@ -206,17 +213,16 @@ function ChangePasswordDialog({
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[oklch(from_var(--color-primary)_l_c_h_/_0.10)] ring-1 ring-inset ring-[oklch(from_var(--color-primary)_l_c_h_/_0.20)]">
               <KeyRound className="size-4 text-[var(--color-primary)]" />
             </span>
-            <DialogTitle>Change password</DialogTitle>
+            <DialogTitle>{t("settings.changePassword")}</DialogTitle>
           </div>
           <DialogDescription>
-            Sign-out events for other devices aren't fired automatically — visit the Sessions tab
-            below to end them after rotating your password.
+            {t("settings.changePasswordDesc")}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="contents" noValidate>
           <DialogBody className="space-y-4">
-            <Field id="pw-current" label="Current password" required error={errors.current?.message}>
+            <Field id="pw-current" label={t("settings.currentPassword")} required error={errors.current?.message}>
               <RevealInput
                 id="pw-current"
                 autoComplete="current-password"
@@ -228,9 +234,9 @@ function ChangePasswordDialog({
             </Field>
             <Field
               id="pw-next"
-              label="New password"
+              label={t("auth.newPassword")}
               required
-              hint="At least 8 characters."
+              hint={t("auth.useAtLeast8")}
               error={errors.next?.message}
             >
               <RevealInput
@@ -243,7 +249,7 @@ function ChangePasswordDialog({
             </Field>
             <Field
               id="pw-confirm"
-              label="Confirm new password"
+              label={t("settings.confirmNewPassword")}
               required
               error={errors.confirm?.message}
             >
@@ -264,11 +270,11 @@ function ChangePasswordDialog({
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >
-              Cancel
+              {t("chrome.cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
               <KeyRound className="mr-1 h-3.5 w-3.5" />
-              {submitting ? "Updating…" : "Update password"}
+              {submitting ? t("settings.updating") : t("settings.updatePassword")}
             </Button>
           </DialogFooter>
         </form>
@@ -285,6 +291,7 @@ function TwoFactorSection({ enabled }: { enabled: boolean }) {
 }
 
 function TwoFactorEnroll() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [enrollment, setEnrollment] = useState<TwoFactorEnrollmentResponse | null>(null);
   const [code, setCode] = useState("");
@@ -299,7 +306,7 @@ function TwoFactorEnroll() {
         err instanceof ApiRequestError
           ? (err.problem?.detail ?? err.problem?.title ?? err.message)
           : (err as Error).message;
-      toast.error("Enrollment failed", { description: detail });
+      toast.error(t("settings.enrollmentFailed"), { description: detail });
     },
   });
 
@@ -307,15 +314,15 @@ function TwoFactorEnroll() {
     mutationFn: (otp: string) => verifyEnrollTwoFactor(otp),
     onSuccess: (data) => {
       if (data.success) {
-        toast.success("Two-factor enabled", {
-          description: "Future logins require a 6-digit code from your authenticator.",
+        toast.success(t("settings.twoFaEnabledToast"), {
+          description: t("settings.twoFaEnabledBody"),
         });
         setEnrollment(null);
         setCode("");
         setQrSvg(null);
         void queryClient.invalidateQueries({ queryKey: ["identity", "profile"] });
       } else {
-        toast.error("Verification failed", { description: "That code didn't match. Try again." });
+        toast.error(t("settings.verifyFailed"), { description: t("settings.codeMismatch") });
       }
     },
     onError: (err: unknown) => {
@@ -323,7 +330,7 @@ function TwoFactorEnroll() {
         err instanceof ApiRequestError
           ? (err.problem?.detail ?? err.problem?.title ?? err.message)
           : (err as Error).message;
-      toast.error("Verification failed", { description: detail });
+      toast.error(t("settings.verifyFailed"), { description: detail });
     },
   });
 
@@ -374,14 +381,13 @@ function TwoFactorEnroll() {
 
   return (
     <SettingsSection
-      title="Two-factor authentication"
+      title={t("settings.twoFa")}
       icon={ShieldCheck}
       description={
         <span className="flex flex-wrap items-center gap-2">
-          Adds an authenticator app code on top of your password. Recommended for every operator
-          account.
+          {t("settings.twoFaEnrollDesc")}
           <Badge variant="outline" className="font-mono uppercase tracking-[0.14em]">
-            off
+            {t("settings.off")}
           </Badge>
         </span>
       }
@@ -393,10 +399,10 @@ function TwoFactorEnroll() {
             disabled={beginMutation.isPending}
           >
             <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-            {beginMutation.isPending ? "Generating…" : "Enable two-factor"}
+            {beginMutation.isPending ? t("settings.generating") : t("settings.enableTwoFa")}
           </Button>
           <span className="text-xs text-[var(--color-muted-foreground)]">
-            You'll scan a QR code in your authenticator app (1Password, Google Authenticator, Authy…).
+            {t("settings.enrollHint")}
           </span>
         </div>
       ) : (
@@ -405,7 +411,7 @@ function TwoFactorEnroll() {
             <div className="grid h-52 w-52 place-items-center rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-2 text-[var(--color-foreground)]">
               {qrSvg ? (
                 <div
-                  aria-label="Two-factor QR code"
+                  aria-label={t("settings.qrLabel")}
                   role="img"
                   className="h-full w-full [&_svg]:h-full [&_svg]:w-full"
                   // qrSvg is locally generated by the qrcode lib from the
@@ -414,14 +420,14 @@ function TwoFactorEnroll() {
                 />
               ) : (
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                  Rendering…
+                  {t("settings.rendering")}
                 </span>
               )}
             </div>
             <div className="space-y-3">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                  Can't scan? Enter manually
+                  {t("settings.cantScan")}
                 </div>
                 <div className="mt-1 flex items-center gap-2">
                   <code className="break-all rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-2 py-1 font-mono text-[11px]">
@@ -434,11 +440,11 @@ function TwoFactorEnroll() {
                   >
                     {copiedKey ? (
                       <>
-                        <ClipboardCheck className="h-3 w-3" /> copied
+                        <ClipboardCheck className="h-3 w-3" /> {t("settings.copied")}
                       </>
                     ) : (
                       <>
-                        <Copy className="h-3 w-3" /> copy
+                        <Copy className="h-3 w-3" /> {t("settings.copy")}
                       </>
                     )}
                   </button>
@@ -446,7 +452,7 @@ function TwoFactorEnroll() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="totp-code">6-digit code from your app</Label>
+                <Label htmlFor="totp-code">{t("settings.totpLabel")}</Label>
                 <Input
                   id="totp-code"
                   inputMode="numeric"
@@ -468,7 +474,7 @@ function TwoFactorEnroll() {
                   disabled={code.length < 6 || verifyMutation.isPending}
                   variant="signal"
                 >
-                  {verifyMutation.isPending ? "Verifying…" : "Confirm & enable"}
+                  {verifyMutation.isPending ? t("settings.verifying") : t("settings.confirmEnable")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -478,7 +484,7 @@ function TwoFactorEnroll() {
                   }}
                   disabled={verifyMutation.isPending}
                 >
-                  Cancel
+                  {t("chrome.cancel")}
                 </Button>
               </div>
             </div>
@@ -490,6 +496,7 @@ function TwoFactorEnroll() {
 }
 
 function TwoFactorDisable() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
 
@@ -497,11 +504,11 @@ function TwoFactorDisable() {
     mutationFn: (pw: string) => disableTwoFactor(pw),
     onSuccess: (data) => {
       if (data.success) {
-        toast.success("Two-factor disabled");
+        toast.success(t("settings.twoFaDisabled"));
         setPassword("");
         void queryClient.invalidateQueries({ queryKey: ["identity", "profile"] });
       } else {
-        toast.error("Disable failed", { description: "Password verification failed." });
+        toast.error(t("settings.disableFailed"), { description: t("settings.passwordVerifyFailed") });
       }
     },
     onError: (err: unknown) => {
@@ -509,20 +516,19 @@ function TwoFactorDisable() {
         err instanceof ApiRequestError
           ? (err.problem?.detail ?? err.problem?.title ?? err.message)
           : (err as Error).message;
-      toast.error("Disable failed", { description: detail });
+      toast.error(t("settings.disableFailed"), { description: detail });
     },
   });
 
   return (
     <SettingsSection
-      title="Two-factor authentication"
+      title={t("settings.twoFa")}
       icon={ShieldOff}
       description={
         <span className="flex flex-wrap items-center gap-2">
-          Two-factor is currently enabled on your account. Confirm your password to disable — this
-          rotates the authenticator secret, so a fresh enroll will generate a new QR.
+          {t("settings.twoFaDisableDesc")}
           <Badge variant="success" className="font-mono uppercase tracking-[0.14em]">
-            enabled
+            {t("settings.enabled")}
           </Badge>
         </span>
       }
@@ -535,14 +541,14 @@ function TwoFactorDisable() {
             disabled={password.length === 0 || mutation.isPending}
           >
             <ShieldOff className="mr-1 h-3.5 w-3.5" />
-            {mutation.isPending ? "Disabling…" : "Disable two-factor"}
+            {mutation.isPending ? t("settings.disabling") : t("settings.disableTwoFa")}
           </Button>
         </div>
       }
     >
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
         <div className="space-y-1.5">
-          <Label htmlFor="disable-pw">Current password</Label>
+          <Label htmlFor="disable-pw">{t("settings.currentPassword")}</Label>
           <Input
             id="disable-pw"
             type="password"
@@ -563,7 +569,7 @@ function TwoFactorDisable() {
             disabled={password.length === 0 || mutation.isPending}
           >
             <ShieldOff className="mr-1 h-3.5 w-3.5" />
-            {mutation.isPending ? "Disabling…" : "Disable"}
+            {mutation.isPending ? t("settings.disabling") : t("settings.disable")}
           </Button>
         </div>
       </div>

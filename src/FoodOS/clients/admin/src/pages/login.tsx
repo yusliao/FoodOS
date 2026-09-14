@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DemoAccountsDialog } from "@/components/auth/demo-accounts-dialog";
 import { LanguageSwitcher } from "@/i18n/language-switcher";
+import { useT } from "@/i18n/locale-provider";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { env } from "@/env";
@@ -35,6 +36,7 @@ import type { DemoAccount } from "@/pages/login.demo-accounts";
 type LocationState = { from?: { pathname: string } };
 
 export function LoginPage() {
+  const t = useT();
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,9 +54,9 @@ export function LoginPage() {
   // Surface why the previous session ended (read-and-clear, one-shot).
   useEffect(() => {
     if (consumeSignedOutReason() === "inactivity") {
-      setNotice("You were signed out due to inactivity.");
+      setNotice(t("auth.inactivity"));
     }
-  }, []);
+  }, [t]);
 
   if (isAuthenticated) {
     return <Navigate to={from} replace />;
@@ -72,7 +74,7 @@ export function LoginPage() {
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : err instanceof Error
             ? err.message
-            : "Login failed";
+            : t("auth.loginFailed");
       setError(message);
     } finally {
       setSubmitting(false);
@@ -128,7 +130,7 @@ export function LoginPage() {
             </div>
             <div className="mt-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.7)]">
               <span aria-hidden className="h-px w-6 bg-[var(--color-border)]" />
-              <span>Platform Admin</span>
+              <span>{t("auth.platformAdmin")}</span>
               <span aria-hidden className="h-px w-6 bg-[var(--color-border)]" />
             </div>
           </div>
@@ -138,10 +140,10 @@ export function LoginPage() {
             <div className="px-6 py-7 sm:px-8 sm:py-9">
               <div className="mb-6 sm:mb-8">
                 <h1 className="mb-1.5 font-display text-[22px] font-semibold tracking-tight text-[var(--color-foreground)]">
-                  Welcome back
+                  {t("auth.welcomeBack")}
                 </h1>
                 <p className="text-[13px] text-[var(--color-muted-foreground)]">
-                  Sign in to your operator account
+                  {t("auth.signInSubtitle")}
                 </p>
               </div>
 
@@ -167,7 +169,7 @@ export function LoginPage() {
                     htmlFor="tenant"
                     className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
                   >
-                    Tenant
+                    {t("auth.tenant")}
                   </Label>
                   <Input
                     id="tenant"
@@ -187,7 +189,7 @@ export function LoginPage() {
                     htmlFor="email"
                     className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
                   >
-                    Email
+                    {t("auth.email")}
                   </Label>
                   <Input
                     id="email"
@@ -209,13 +211,13 @@ export function LoginPage() {
                       htmlFor="password"
                       className="text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
                     >
-                      Password
+                      {t("auth.password")}
                     </Label>
                     <Link
                       to="/forgot-password"
                       className="text-[11px] font-medium text-[var(--color-muted-foreground)] underline-offset-4 transition-colors hover:text-[var(--color-primary)] hover:underline"
                     >
-                      Forgot?
+                      {t("auth.forgot")}
                     </Link>
                   </div>
                   <div className="relative">
@@ -225,7 +227,7 @@ export function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       autoComplete="current-password"
-                      placeholder="Enter your password"
+                      placeholder={t("auth.passwordPlaceholder")}
                       required
                       aria-invalid={error ? true : undefined}
                       className="h-11 pr-11 text-[14px]"
@@ -233,7 +235,7 @@ export function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                       className="absolute right-3.5 top-1/2 grid h-6 w-6 -translate-y-1/2 cursor-pointer place-items-center rounded text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                     >
                       {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -266,11 +268,11 @@ export function LoginPage() {
                     {submitting ? (
                       <>
                         <Loader2 className="size-4 animate-spin" />
-                        <span>Signing in…</span>
+                        <span>{t("auth.signingIn")}</span>
                       </>
                     ) : (
                       <>
-                        <span>Sign in</span>
+                        <span>{t("auth.signIn")}</span>
                         <ArrowRight className="size-[14px] opacity-60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100" />
                       </>
                     )}
@@ -287,7 +289,7 @@ export function LoginPage() {
                     className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-primary)]/25 bg-transparent text-[12.5px] font-medium text-[var(--color-primary)]/70 transition-all duration-150 hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-primary)]/[0.04] hover:text-[var(--color-primary)]"
                   >
                     <Sparkles className="size-[13px]" />
-                    <span>Sign in with a demo account</span>
+                    <span>{t("auth.demoSignIn")}</span>
                   </button>
                 </div>
               )}
@@ -300,10 +302,10 @@ export function LoginPage() {
 
           <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-[var(--color-muted-foreground)]">
             <ShieldCheck className="size-3" />
-            <span>Encrypted in transit · JWT-secured session</span>
+            <span>{t("auth.encrypted")}</span>
           </div>
           <p className="mt-4 text-center text-[10px] font-medium uppercase tracking-wider text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.5)]">
-            fullstackhero Administration
+            {t("auth.administration")}
           </p>
         </div>
       </div>

@@ -32,6 +32,7 @@ export default defineConfig({
 
   use: {
     baseURL: "http://localhost:5174",
+    locale: "en-US",
     trace: "on-first-retry",
     // Disable animations + reduce flake from CSS keyframes / transitions
     // (we have a lot — parallax orbs, fsh-enter staggers, btn-shimmer).

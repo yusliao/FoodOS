@@ -3,7 +3,7 @@ using System.Globalization;
 namespace FSH.Framework.Web.Localization;
 
 /// <summary>
-/// Built-in ProblemDetails copy for P0 cultures. Keys are stable; values follow CurrentUICulture.
+/// Built-in ProblemDetails copy. Keys are stable; values follow CurrentUICulture (en / zh).
 /// </summary>
 public static class SharedErrorText
 {
@@ -43,36 +43,6 @@ public static class SharedErrorText
             [BadRequest] = "Bad Request",
             [UnexpectedTitle] = "An unexpected error occurred",
             [UnexpectedDetail] = "An unexpected error occurred. Please try again later.",
-        },
-        ["ES"] = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [ValidationTitle] = "Error de validación",
-            [ValidationDetail] = "Se han producido uno o más errores de validación.",
-            [Unauthorized] = "No autorizado",
-            [NotFound] = "No encontrado",
-            [BadRequest] = "Solicitud incorrecta",
-            [UnexpectedTitle] = "Se ha producido un error inesperado",
-            [UnexpectedDetail] = "Se ha producido un error inesperado. Inténtelo de nuevo más tarde.",
-        },
-        ["FR"] = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [ValidationTitle] = "Erreur de validation",
-            [ValidationDetail] = "Une ou plusieurs erreurs de validation se sont produites.",
-            [Unauthorized] = "Non autorisé",
-            [NotFound] = "Introuvable",
-            [BadRequest] = "Requête incorrecte",
-            [UnexpectedTitle] = "Une erreur inattendue s'est produite",
-            [UnexpectedDetail] = "Une erreur inattendue s'est produite. Veuillez réessayer plus tard.",
-        },
-        ["DE"] = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [ValidationTitle] = "Validierungsfehler",
-            [ValidationDetail] = "Mindestens ein Validierungsfehler ist aufgetreten.",
-            [Unauthorized] = "Nicht autorisiert",
-            [NotFound] = "Nicht gefunden",
-            [BadRequest] = "Ungültige Anforderung",
-            [UnexpectedTitle] = "Ein unerwarteter Fehler ist aufgetreten",
-            [UnexpectedDetail] = "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.",
         },
         ["ZH"] = new Dictionary<string, string>(StringComparer.Ordinal)
         {

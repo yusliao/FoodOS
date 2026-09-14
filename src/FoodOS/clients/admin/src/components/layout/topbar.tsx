@@ -262,13 +262,13 @@ export function Topbar() {
           <div className="px-1 pb-1">
             <ThemeMenuItem
               icon={Sun}
-              label="Light"
+              label={t("chrome.light")}
               active={theme === "light"}
               onSelect={() => setTheme("light")}
             />
             <ThemeMenuItem
               icon={Moon}
-              label="Dark"
+              label={t("chrome.dark")}
               active={theme === "dark"}
               onSelect={() => setTheme("dark")}
             />
@@ -313,10 +313,9 @@ export function Topbar() {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Sign out of fullstackhero?</DialogTitle>
+            <DialogTitle>{t("chrome.signOutTitle")}</DialogTitle>
             <DialogDescription>
-              You'll need to sign in again to access this admin. Any unsaved
-              work in this session will be lost.
+              {t("chrome.signOutBody")}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
@@ -345,7 +344,7 @@ export function Topbar() {
               size="sm"
               onClick={() => setConfirmOpen(false)}
             >
-              Cancel
+              {t("chrome.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -354,7 +353,7 @@ export function Topbar() {
               autoFocus
             >
               <LogOut className="mr-1.5 h-3.5 w-3.5" />
-              Sign out
+              {t("chrome.signOut")}
             </Button>
           </DialogFooter>
         </DialogContent>

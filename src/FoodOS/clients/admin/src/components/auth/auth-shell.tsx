@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { BrandMarkXL } from "@/components/brand-mark";
 import { LanguageSwitcher } from "@/i18n/language-switcher";
+import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
 
 // ────────────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ export function AuthShell({
   /** Form area below the blurb. */
   children: ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="grid min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)] lg:grid-cols-[1.1fr_1fr]">
       {/* ─── Left pane — brand stage ───────────────────────────────── */}
@@ -61,22 +63,22 @@ export function AuthShell({
         <CornerTicks />
         <div className="relative flex flex-1 flex-col justify-between p-12 xl:p-16">
           <div className="meta text-[var(--color-muted-foreground)] fsh-enter">
-            // FSH / CONSOLE / RECOVER
+            {t("auth.shellMeta")}
           </div>
           <BrandMarkXL className="fsh-enter fsh-enter-2 max-w-lg" />
           <div className="fsh-enter fsh-enter-4 flex items-end justify-between gap-6">
             <div className="space-y-1">
-              <div className="meta text-[var(--color-muted-foreground)]">authorized personnel</div>
+              <div className="meta text-[var(--color-muted-foreground)]">{t("auth.authorizedPersonnel")}</div>
               <div className="font-mono text-[12px] text-[var(--color-muted-foreground)] leading-relaxed">
-                Account recovery is rate-limited and audited.
+                {t("auth.recoveryAudited")}
                 <br />
-                Reset links expire 30 minutes after issue.
+                {t("auth.resetExpiry")}
               </div>
             </div>
             <div className="meta text-right text-[var(--color-muted-foreground)]">
               v0.1
               <br />
-              build · live
+              {t("auth.buildLive")}
             </div>
           </div>
         </div>

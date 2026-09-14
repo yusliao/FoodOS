@@ -6,10 +6,10 @@ namespace Inventory.Tests.Localization;
 public sealed class SharedErrorTextTests
 {
     [Fact]
-    public void Get_Should_ReturnSpanishCopy_When_UiCultureIsEs()
+    public void Get_Should_ReturnEnglishCopy_When_UiCultureIsEn()
     {
-        CultureInfo culture = CultureInfo.GetCultureInfo("es-ES");
-        SharedErrorText.Get(SharedErrorText.ValidationTitle, culture).ShouldBe("Error de validación");
+        CultureInfo culture = CultureInfo.GetCultureInfo("en-US");
+        SharedErrorText.Get(SharedErrorText.ValidationTitle, culture).ShouldBe("Validation error");
     }
 
     [Fact]

@@ -333,9 +333,9 @@ export function Topbar() {
             {t("chrome.theme")}
           </DropdownMenuLabel>
           <div className="px-1 pb-1">
-            <ThemeMenuItem icon={Sun} label="Light" active={mode === "light"} onSelect={() => setMode("light")} />
-            <ThemeMenuItem icon={Moon} label="Dark" active={mode === "dark"} onSelect={() => setMode("dark")} />
-            <ThemeMenuItem icon={Monitor} label="System" active={mode === "system"} onSelect={() => setMode("system")} />
+            <ThemeMenuItem icon={Sun} label={t("chrome.light")} active={mode === "light"} onSelect={() => setMode("light")} />
+            <ThemeMenuItem icon={Moon} label={t("chrome.dark")} active={mode === "dark"} onSelect={() => setMode("dark")} />
+            <ThemeMenuItem icon={Monitor} label={t("chrome.system")} active={mode === "system"} onSelect={() => setMode("system")} />
           </div>
 
           <DropdownMenuSeparator className="!my-0" />
@@ -370,10 +370,9 @@ export function Topbar() {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Sign out of fullstackhero?</DialogTitle>
+            <DialogTitle>{t("chrome.signOutTitle")}</DialogTitle>
             <DialogDescription>
-              You'll need to sign in again to access this tenant. Any unsaved
-              work in this session will be lost.
+              {t("chrome.signOutBody")}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
@@ -400,7 +399,7 @@ export function Topbar() {
               size="sm"
               onClick={() => setConfirmOpen(false)}
             >
-              Cancel
+              {t("chrome.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -409,7 +408,7 @@ export function Topbar() {
               autoFocus
             >
               <LogOut className="mr-1.5 h-3.5 w-3.5" />
-              Sign out
+              {t("chrome.signOut")}
             </Button>
           </DialogFooter>
         </DialogContent>

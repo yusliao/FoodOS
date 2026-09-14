@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useTheme, type ThemeMode } from "@/components/theme/theme-provider";
-import { useLocale } from "@/i18n/locale-provider";
+import { useLocale, useT } from "@/i18n/locale-provider";
 import { SUPPORTED_CULTURES } from "@/i18n/locale-store";
 import {
   accents,
@@ -35,13 +35,11 @@ import { cn } from "@/lib/cn";
 
 const themeOptions: Array<{
   value: ThemeMode;
-  label: string;
-  description: string;
   Icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { value: "light", label: "Light", description: "Bright canvas, day-shift comfort.", Icon: Sun },
-  { value: "system", label: "System", description: "Follow the OS preference.", Icon: Monitor },
-  { value: "dark", label: "Dark", description: "Reduced glare for long sessions.", Icon: Moon },
+  { value: "light", Icon: Sun },
+  { value: "system", Icon: Monitor },
+  { value: "dark", Icon: Moon },
 ];
 
 export function AppearanceSettings() {
@@ -68,21 +66,23 @@ export function AppearanceSettings() {
       {/* Theme */}
       <Card>
         <CardHeader>
-          <CardTitle>Theme</CardTitle>
+          <CardTitle>{t("settings.themeTitle")}</CardTitle>
           <CardDescription>
-            Pick a colour mode for the dashboard. System follows your OS.
+            {t("settings.themeDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 px-6 pb-5 pt-1 sm:grid-cols-3">
-          {themeOptions.map(({ value, label, description, Icon }) => {
+          {themeOptions.map(({ value, Icon }) => {
             const active = mode === value;
+            const label = t(`chrome.${value}`);
+            const description = t(`settings.${value}Blurb`);
             return (
               <SwatchButton
                 key={value}
                 active={active}
                 onClick={() => setMode(value)}
                 aria-pressed={active}
-                aria-label={`${label} theme`}
+                aria-label={label}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <Icon
@@ -108,7 +108,7 @@ export function AppearanceSettings() {
           <CardTitle>{t("settings.languageTitle")}</CardTitle>
           <CardDescription>{t("settings.languageDescription")}</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 px-6 pb-5 pt-1 sm:grid-cols-2 lg:grid-cols-5">
+        <CardContent className="grid gap-3 px-6 pb-5 pt-1 sm:grid-cols-2">
           {SUPPORTED_CULTURES.map((code) => {
             const active = culture === code;
             return (
@@ -261,9 +261,10 @@ function SwatchButton({ active, className, children, ...props }: SwatchProps) {
 }
 
 function ActiveTag() {
+  const t = useT();
   return (
     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-primary)]">
-      Active
+      {t("chrome.active")}
     </span>
   );
 }

@@ -21,7 +21,7 @@ public static class CultureCatalog
 
     /// <summary>
     /// Maps <paramref name="requested"/> to a supported culture.
-    /// Prefers exact match (es-ES), then language match (es), then default.
+    /// Prefers exact match (zh-CN), then language match (zh), then default.
     /// </summary>
     public static string Resolve(string? requested, LocalizationOptions options)
     {

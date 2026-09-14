@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 import { LanguageSwitcher } from "@/i18n/language-switcher";
+import { useT } from "@/i18n/locale-provider";
 
 // ────────────────────────────────────────────────────────────────────────
 // AuthShell — calm centered-card chrome for unauthenticated pages
@@ -43,6 +44,7 @@ export function AuthShell({
   /** Optional row beneath the card — e.g. "Back to sign in" link */
   footer?: ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--color-background)] px-5 py-8 sm:py-12">
       {/* Atmospheric background — three rose/saffron blur orbs at
@@ -78,7 +80,7 @@ export function AuthShell({
           </div>
           <div className="mt-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.7)]">
             <span aria-hidden className="h-px w-6 bg-[var(--color-border)]" />
-            <span>.NET 10 Starter Kit</span>
+            <span>{t("auth.kitCaption")}</span>
             <span aria-hidden className="h-px w-6 bg-[var(--color-border)]" />
           </div>
         </div>
@@ -100,10 +102,10 @@ export function AuthShell({
 
         <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-[var(--color-muted-foreground)]">
           <ShieldCheck className="size-3" />
-          <span>Encrypted in transit · JWT-secured session</span>
+          <span>{t("auth.encrypted")}</span>
         </div>
         <p className="mt-4 text-center text-[10px] font-medium uppercase tracking-wider text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.5)]">
-          fullstackhero Administration
+          {t("auth.administration")}
         </p>
       </div>
     </div>

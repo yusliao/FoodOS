@@ -1,4 +1,4 @@
-export const SUPPORTED_CULTURES = ["en-US", "es-ES", "fr-FR", "de-DE", "zh-CN"] as const;
+export const SUPPORTED_CULTURES = ["en-US", "zh-CN"] as const;
 
 export type SupportedCulture = (typeof SUPPORTED_CULTURES)[number];
 

@@ -10,22 +10,10 @@ type Mode = "light" | "dark";
 
 const MODES: {
   value: Mode;
-  label: string;
   icon: typeof Sun;
-  blurb: string;
 }[] = [
-  {
-    value: "light",
-    label: "Light",
-    icon: Sun,
-    blurb: "Paper-white surfaces, magazine-print mood.",
-  },
-  {
-    value: "dark",
-    label: "Dark",
-    icon: Moon,
-    blurb: "Console-default. Lower glare for long sessions.",
-  },
+  { value: "light", icon: Sun },
+  { value: "dark", icon: Moon },
 ];
 
 /**
@@ -41,13 +29,15 @@ export function AppearanceSettings() {
     <div className="space-y-5 fsh-enter">
       {/* Theme */}
       <SettingsSection
-        title="Theme"
+        title={t("settings.themeTitle")}
         icon={Palette}
-        description="Console looks good in both modes — the editorial-terminal language is built around tone-neutral surfaces with a single chartreuse accent that reads identically on either."
+        description={t("settings.themeDescription")}
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {MODES.map(({ value, label, icon: Icon, blurb }) => {
+          {MODES.map(({ value, icon: Icon }) => {
             const active = theme === value;
+            const label = t(`chrome.${value}`);
+            const blurb = t(`settings.${value}Blurb`);
             return (
               <button
                 key={value}
@@ -76,7 +66,7 @@ export function AppearanceSettings() {
                   </span>
                   {active && (
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-accent-signal)]">
-                      Active
+                      {t("chrome.active")}
                     </span>
                   )}
                 </div>
@@ -102,7 +92,7 @@ export function AppearanceSettings() {
         icon={Palette}
         description={t("settings.languageDescription")}
       >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {SUPPORTED_CULTURES.map((code) => {
             const active = culture === code;
             return (
@@ -130,12 +120,12 @@ export function AppearanceSettings() {
 
       {/* Density — placeholder for a future compact toggle */}
       <SettingsSection
-        title="Density"
+        title={t("settings.densityTitle")}
         icon={Palette}
-        description="Compact mode will reduce card padding and row height for data-dense screens — similar to the dashboard's density toggle."
+        description={t("settings.densityDescription")}
       >
         <Button variant="outline" size="sm" disabled>
-          Compact rows · coming soon
+          {t("settings.densitySoon")}
         </Button>
       </SettingsSection>
     </div>
