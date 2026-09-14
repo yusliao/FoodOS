@@ -7,6 +7,7 @@ using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Warehouse.Contracts.Dtos;
 using FSH.Modules.Warehouse.Contracts.Events;
 using FSH.Modules.Warehouse.Contracts.v1.Cutoff;
+using FSH.Modules.Warehouse.Contracts.v1.Waves;
 using Mediator;
 
 namespace FSH.Modules.Warehouse.Features.v1.Cutoff.ConfirmCutoff;
@@ -29,7 +30,17 @@ public sealed class ConfirmCutoffCommandHandler(
             .Send(new LockOrdersForCutoffCommand(command.WarehouseId, plan.BusinessDate), cancellationToken)
             .ConfigureAwait(false);
 
-        var result = new CutoffResultDto(plan.Id, plan.WarehouseId, plan.BusinessDate, plan.CutoffAt, locked);
+        var waves = await mediator
+            .Send(new GenerateWaveCommand(command.WarehouseId, plan.BusinessDate), cancellationToken)
+            .ConfigureAwait(false);
+
+        var result = new CutoffResultDto(
+            plan.Id,
+            plan.WarehouseId,
+            plan.BusinessDate,
+            plan.CutoffAt,
+            locked,
+            waves.Count);
 
         await eventBus.PublishAsync(
                 new DailyCutoffReachedIntegrationEvent(
@@ -41,7 +52,8 @@ public sealed class ConfirmCutoffCommandHandler(
                     WarehouseId: result.WarehouseId,
                     DailyPlanId: result.DailyPlanId,
                     BusinessDate: result.BusinessDate,
-                    OrdersLocked: result.OrdersLocked),
+                    OrdersLocked: result.OrdersLocked,
+                    WavesGenerated: result.WavesGenerated),
                 cancellationToken)
             .ConfigureAwait(false);
 

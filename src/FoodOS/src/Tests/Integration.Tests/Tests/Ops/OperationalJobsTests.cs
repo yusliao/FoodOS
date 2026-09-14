@@ -27,7 +27,6 @@ public sealed class OperationalJobsTests
         jobs.ShouldContain(j => j.Id == "ordering-reconcile-reminder" && j.Cron == "* * * * *");
         jobs.ShouldContain(j => j.Id == "inventory-near-expiry" && j.Cron == "15 7 * * *");
         jobs.ShouldContain(j => j.Id == "logistics-dispatch-reminder" && j.Cron == "* * * * *");
-        jobs.ShouldContain(j => j.Id == "logistics-dispatch-reminder" && j.Cron == "* * * * *");
     }
 
     [Fact]

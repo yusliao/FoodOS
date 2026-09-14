@@ -12,7 +12,8 @@ public sealed record CutoffResultDto(
     Guid WarehouseId,
     DateOnly BusinessDate,
     DateTimeOffset CutoffAt,
-    int OrdersLocked);
+    int OrdersLocked,
+    int WavesGenerated = 0);
 
 public sealed record PickTaskDto(
     Guid Id,

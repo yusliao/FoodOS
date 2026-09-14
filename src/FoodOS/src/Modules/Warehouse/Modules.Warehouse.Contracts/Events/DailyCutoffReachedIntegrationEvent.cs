@@ -11,4 +11,5 @@ public sealed record DailyCutoffReachedIntegrationEvent(
     Guid WarehouseId,
     Guid DailyPlanId,
     DateOnly BusinessDate,
-    int OrdersLocked) : IIntegrationEvent;
+    int OrdersLocked,
+    int WavesGenerated = 0) : IIntegrationEvent;

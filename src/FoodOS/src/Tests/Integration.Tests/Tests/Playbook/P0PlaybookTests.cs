@@ -120,6 +120,7 @@ public sealed class P0PlaybookTests
         cutoff.StatusCode.ShouldBe(HttpStatusCode.OK, await cutoff.Content.ReadAsStringAsync());
         var cutoffResult = await cutoff.DeserializeAsync<CutoffResultDto>();
         cutoffResult.OrdersLocked.ShouldBe(1);
+        cutoffResult.WavesGenerated.ShouldBe(1);
 
         using var getLocked = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
         (await getLocked.DeserializeAsync<SalesOrderDto>()).Status.ShouldBe("Planned");

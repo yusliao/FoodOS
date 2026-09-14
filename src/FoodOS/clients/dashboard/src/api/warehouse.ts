@@ -66,6 +66,7 @@ export type CutoffResultDto = {
   businessDate: string;
   cutoffAt: string;
   ordersLocked: number;
+  wavesGenerated?: number;
 };
 
 function qs(params: Record<string, string | undefined>): string {

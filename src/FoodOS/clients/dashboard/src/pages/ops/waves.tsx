@@ -97,7 +97,11 @@ export function WavesPage() {
     setBusy("cutoff");
     try {
       const result = await confirmCutoff(warehouseId, newIdempotencyKey());
-      toast.success(t("ops.cutoffDone", "Cutoff locked {n} orders").replace("{n}", String(result.ordersLocked)));
+      toast.success(
+        t("ops.cutoffDone", "Cutoff locked {n} orders, {w} draft waves")
+          .replace("{n}", String(result.ordersLocked))
+          .replace("{w}", String(result.wavesGenerated ?? 0)),
+      );
       await queryClient.invalidateQueries({ queryKey: ["warehouse", "waves"] });
     } catch (err) {
       toast.error(describe(err));
@@ -125,7 +129,7 @@ export function WavesPage() {
       <EntityPageHeader
         icon={Layers}
         title={t("ops.wavesTitle", "Waves")}
-        description={t("ops.wavesDescription", "Cutoff, generate by zone, release FEFO allocation, then pack a tote.")}
+        description={t("ops.wavesDescription", "Cutoff auto-builds draft waves by zone and route. Release FEFO, then pack.")}
       />
       <WarehousePicker
         warehouses={warehouses}
@@ -151,7 +155,7 @@ export function WavesPage() {
         <EntityEmpty
           icon={Layers}
           title={t("ops.noWaves", "No waves")}
-          body={t("ops.noWavesBody", "Run cutoff then generate waves for this warehouse.")}
+          body={t("ops.noWavesBody", "Run cutoff to lock orders and draft waves, then release FEFO.")}
         />
       ) : (
         <div className="space-y-3">

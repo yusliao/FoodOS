@@ -60,6 +60,7 @@ public sealed class WarehouseWaveTests
         cutoff.StatusCode.ShouldBe(HttpStatusCode.OK, await cutoff.Content.ReadAsStringAsync());
         var cutoffResult = await cutoff.DeserializeAsync<CutoffResultDto>();
         cutoffResult.OrdersLocked.ShouldBe(1);
+        cutoffResult.WavesGenerated.ShouldBe(1);
 
         using var getLocked = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
         var locked = await getLocked.DeserializeAsync<SalesOrderDto>();
@@ -232,6 +233,14 @@ public sealed class WarehouseWaveTests
             $"{TestConstants.WarehouseBasePath}/warehouses/{warehouse.Id}/cutoff", new { });
         cutoff.StatusCode.ShouldBe(HttpStatusCode.OK, await cutoff.Content.ReadAsStringAsync());
         var cutoffResult = await cutoff.DeserializeAsync<CutoffResultDto>();
+        cutoffResult.WavesGenerated.ShouldBe(2);
+
+        using var listed = await client.GetAsync(
+            $"{TestConstants.WarehouseBasePath}/waves?warehouseId={warehouse.Id}&businessDate={cutoffResult.BusinessDate:yyyy-MM-dd}");
+        listed.StatusCode.ShouldBe(HttpStatusCode.OK, await listed.Content.ReadAsStringAsync());
+        var autoWaves = await listed.DeserializeAsync<List<WaveDto>>();
+        autoWaves.Count.ShouldBe(2);
+        autoWaves.ShouldAllBe(w => w.Status == "Draft");
 
         using var generate = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/waves",

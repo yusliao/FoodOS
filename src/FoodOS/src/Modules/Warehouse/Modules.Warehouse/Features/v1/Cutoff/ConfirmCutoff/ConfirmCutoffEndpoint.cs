@@ -17,7 +17,7 @@ public static class ConfirmCutoffEndpoint
                 async (Guid warehouseId, IMediator mediator, CancellationToken ct) =>
                     Results.Ok(await mediator.Send(new ConfirmCutoffCommand(warehouseId), ct).ConfigureAwait(false)))
             .WithName("ConfirmCutoff")
-            .WithSummary("Lock reserved orders for the warehouse business date and open the daily plan")
+            .WithSummary("Lock reserved orders, open the daily plan, and generate draft waves (release remains manual)")
             .RequirePermission(WarehousePermissions.Waves.Cutoff)
             .WithIdempotency();
     }

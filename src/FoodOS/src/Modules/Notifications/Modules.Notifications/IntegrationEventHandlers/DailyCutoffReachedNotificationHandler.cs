@@ -19,10 +19,10 @@ public sealed class DailyCutoffReachedNotificationHandler(
             WarehousePermissions.Waves.View,
             "ops.cutoff",
             "Cutoff reached",
-            $"{@event.OrdersLocked} order(s) locked for {@event.BusinessDate:yyyy-MM-dd}.",
+            $"{@event.OrdersLocked} order(s) locked; {@event.WavesGenerated} draft wave(s) for {@event.BusinessDate:yyyy-MM-dd}.",
             $"/ops/waves?cutoff={@event.DailyPlanId:N}",
             @event.Source,
-            new { warehouseId = @event.WarehouseId, dailyPlanId = @event.DailyPlanId, businessDate = @event.BusinessDate },
+            new { warehouseId = @event.WarehouseId, dailyPlanId = @event.DailyPlanId, businessDate = @event.BusinessDate, wavesGenerated = @event.WavesGenerated },
             ct);
     }
 
