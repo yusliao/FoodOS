@@ -25,7 +25,9 @@ const STOP_ID = "13131313-1313-1313-1313-131313131313";
 const ORDER_LINE_ID = "14141414-1414-1414-1414-141414141414";
 
 const OPS_PERMS = [
+  "Permissions.Procurement.Suppliers.Create",
   "Permissions.Procurement.Purchase.View",
+  "Permissions.Procurement.Purchase.Create",
   "Permissions.Procurement.Quality.Pass",
   "Permissions.Procurement.Quality.Fail",
   "Permissions.Warehouse.Putaway.View",
@@ -36,7 +38,11 @@ const OPS_PERMS = [
   "Permissions.Warehouse.Waves.Release",
   "Permissions.Warehouse.Picks.View",
   "Permissions.Warehouse.Picks.Confirm",
+  "Permissions.Logistics.Vehicles.View",
+  "Permissions.Logistics.Drivers.View",
+  "Permissions.Logistics.Routes.View",
   "Permissions.Logistics.Shipments.View",
+  "Permissions.Logistics.Shipments.Create",
   "Permissions.Logistics.Shipments.Load",
   "Permissions.Logistics.POD.Confirm",
 ];
@@ -210,7 +216,7 @@ test("putaway confirms onto a storage location", async ({ page }) => {
   });
 
   await page.goto("/ops/putaway");
-  await expect(page.getByRole("heading", { name: /putaway/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Putaway", exact: true })).toBeVisible();
   await page.getByTestId(`putaway-confirm-${PUTAWAY_ID}`).click();
   await expect.poll(() => posted).toBe(true);
 });
@@ -293,4 +299,123 @@ test("load page scans an order onto the truck", async ({ page }) => {
   await page.getByTestId(`load-scan-${SHIPMENT_ID}`).fill(ORDER_ID);
   await page.getByTestId(`load-confirm-${SHIPMENT_ID}`).click();
   await expect.poll(() => (body as { orderIds?: string[] } | undefined)?.orderIds?.[0]).toBe(ORDER_ID);
+});
+
+test("purchasing desk creates a supplier", async ({ page }) => {
+  await mockOpsApis(page);
+  await mockJsonResponse(page, "**/api/v1/procurement/suppliers**", []);
+  await mockJsonResponse(page, "**/api/v1/catalog/products**", paged([]));
+  let posted: unknown;
+  await page.route("**/api/v1/procurement/suppliers", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    posted = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"),
+    });
+  });
+
+  await page.goto("/ops/purchase");
+  await expect(page.getByRole("heading", { name: /purchasing/i })).toBeVisible();
+  await page.getByTestId("supplier-code").fill("FARM-1");
+  await page.getByTestId("supplier-name").fill("North Farm");
+  await page.getByTestId("supplier-create").click();
+  await expect.poll(() => (posted as { code?: string } | undefined)?.code).toBe("FARM-1");
+});
+
+test("purchasing desk creates a draft PO", async ({ page }) => {
+  await mockOpsApis(page);
+  const supplierId = "16161616-1616-1616-1616-161616161616";
+  const productId = "44444444-4444-4444-4444-444444444444";
+  await mockJsonResponse(page, "**/api/v1/procurement/suppliers**", [
+    { id: supplierId, code: "FARM-1", name: "North Farm", leadDays: 0, status: "Active", createdAtUtc: new Date().toISOString() },
+  ]);
+  await mockJsonResponse(
+    page,
+    "**/api/v1/catalog/products**",
+    paged([
+      {
+        id: productId,
+        sku: "COD-1",
+        name: "Cod loin",
+        slug: "cod-loin",
+        brandId: "b",
+        categoryId: "c",
+        price: { amount: 9.5, currency: "USD" },
+        stock: 0,
+        isActive: true,
+        temperatureZone: "Chilled",
+        images: [],
+        createdAtUtc: new Date().toISOString(),
+      },
+    ]),
+  );
+  let posted: unknown;
+  await page.route("**/api/v1/procurement/purchase-orders", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    posted = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"),
+    });
+  });
+
+  await page.goto("/ops/purchase");
+  await expect(page.getByRole("heading", { name: /purchasing/i })).toBeVisible();
+  await page.getByTestId("po-qty").fill("12");
+  await page.getByTestId("po-create").click();
+  await expect.poll(() => (posted as { supplierId?: string; lines?: Array<{ quantity: number }> } | undefined)?.supplierId).toBe(supplierId);
+  await expect.poll(() => (posted as { lines?: Array<{ quantity: number }> } | undefined)?.lines?.[0]?.quantity).toBe(12);
+});
+
+test("load page creates a shipment for the warehouse route", async ({ page }) => {
+  await mockOpsApis(page);
+  const routeId = "18181818-1818-1818-1818-181818181818";
+  const vehicleId = "19191919-1919-1919-1919-191919191919";
+  const driverId = "20202020-2020-2020-2020-202020202020";
+  await mockJsonResponse(page, "**/api/v1/logistics/vehicles", [{ id: vehicleId, plate: "BOS-1", compartmentZones: "Chilled", payloadKg: 2000 }]);
+  await mockJsonResponse(page, "**/api/v1/logistics/drivers", [{ id: driverId, userId: TEST_USER.sub, phone: "+16175550100" }]);
+  await mockJsonResponse(page, "**/api/v1/logistics/routes**", [
+    { id: routeId, warehouseId: WAREHOUSE.id, code: "R1", storeIds: ["11111111-1111-1111-1111-111111111111"], defaultVehicleId: vehicleId },
+  ]);
+  let posted: unknown;
+  await page.route("**/api/v1/logistics/shipments", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    posted = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "33333333-3333-3333-3333-333333333301",
+        number: "SH-NEW",
+        routeId,
+        warehouseId: WAREHOUSE.id,
+        businessDate: "2026-09-13",
+        vehicleId,
+        driverId,
+        status: "Created",
+        createdAt: new Date().toISOString(),
+        stops: [],
+        lines: [],
+        returns: [],
+      }),
+    });
+  });
+
+  await page.goto("/ops/shipments");
+  await expect(page.getByRole("heading", { name: /load & delivery/i })).toBeVisible();
+  await page.getByTestId("shipment-create").click();
+  await expect.poll(() => (posted as { routeId?: string } | undefined)?.routeId).toBe(routeId);
+  await expect.poll(() => (posted as { vehicleId?: string } | undefined)?.vehicleId).toBe(vehicleId);
 });

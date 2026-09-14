@@ -18,6 +18,7 @@ import {
   Monitor,
   Moon,
   Package,
+  PackagePlus,
   Palette,
   Plus,
   Receipt,
@@ -206,6 +207,15 @@ export function CommandPaletteDialog({
             keywords: ["after-sales", "claim", "shortage", "damage", "return"],
             perform: go("/shop/after-sales"),
             perm: "Permissions.Ordering.Shop.Order",
+          },
+          {
+            id: "nav-ops-purchase",
+            label: "Purchasing",
+            hint: "Suppliers and purchase orders",
+            Icon: PackagePlus,
+            keywords: ["po", "supplier", "purchase", "procurement"],
+            perform: go("/ops/purchase"),
+            perm: "Permissions.Procurement.Purchase.View",
           },
           {
             id: "nav-ops-qc",

@@ -40,24 +40,28 @@ public sealed class GenerateWaveCommandHandler(WarehouseDbContext dbContext, IMe
             .Send(new ListOrdersForWaveQuery(warehouse.Id, businessDate), cancellationToken)
             .ConfigureAwait(false);
 
-        var zoneGroups = orders
+        var zoneRouteGroups = orders
             .SelectMany(o => o.Lines.Select(l => (Order: o, Line: l)))
-            .GroupBy(x => x.Line.Zone, StringComparer.OrdinalIgnoreCase);
+            .GroupBy(x => (
+                Zone: x.Line.Zone.Trim().ToUpperInvariant(),
+                x.Order.RouteId));
 
+        var pickLocations = new Dictionary<Guid, Location>();
         var result = new List<Wave>();
-        foreach (var group in zoneGroups)
+        foreach (var group in zoneRouteGroups)
         {
             var zoneDto = warehouse.Zones.FirstOrDefault(z =>
-                string.Equals(z.Kind, group.Key, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(z.Code, group.Key, StringComparison.OrdinalIgnoreCase))
+                string.Equals(z.Kind, group.Key.Zone, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(z.Code, group.Key.Zone, StringComparison.OrdinalIgnoreCase))
                 ?? throw new CustomException(
-                    $"Warehouse has no zone '{group.Key}'.",
+                    $"Warehouse has no zone '{group.Key.Zone}'.",
                     (IEnumerable<string>?)null,
                     HttpStatusCode.BadRequest);
 
+            Guid? routeId = group.Key.RouteId;
             var existing = await dbContext.Waves
                 .FirstOrDefaultAsync(
-                    w => w.DailyPlanId == plan.Id && w.ZoneId == zoneDto.Id,
+                    w => w.DailyPlanId == plan.Id && w.ZoneId == zoneDto.Id && w.RouteId == routeId,
                     cancellationToken)
                 .ConfigureAwait(false);
             if (existing is not null)
@@ -66,17 +70,21 @@ public sealed class GenerateWaveCommandHandler(WarehouseDbContext dbContext, IMe
                 continue;
             }
 
-            var location = await EnsurePickLocationAsync(
-                    warehouse.Id,
-                    zoneDto.Id,
-                    zoneDto.Code,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            if (!pickLocations.TryGetValue(zoneDto.Id, out var location))
+            {
+                location = await EnsurePickLocationAsync(
+                        warehouse.Id,
+                        zoneDto.Id,
+                        zoneDto.Code,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                pickLocations[zoneDto.Id] = location;
+            }
 
             string number = await WaveNumbers
                 .NextAsync(dbContext, warehouse.Code, zoneDto.Kind, businessDate, cancellationToken)
                 .ConfigureAwait(false);
-            var wave = Wave.Create(number, plan.Id, warehouse.Id, zoneDto.Id, zoneDto.Kind, businessDate);
+            var wave = Wave.Create(number, plan.Id, warehouse.Id, zoneDto.Id, zoneDto.Kind, businessDate, routeId);
             foreach (var (order, line) in group)
             {
                 wave.AddTask(

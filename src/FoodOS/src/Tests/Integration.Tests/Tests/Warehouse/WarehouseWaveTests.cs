@@ -207,6 +207,49 @@ public sealed class WarehouseWaveTests
         fullLine.ShortageReason.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task GenerateWave_Should_SplitByZoneAndStoreRoute()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var productId = await CreateProductAsync(client);
+        await ReceiveAsync(client, warehouse.Id, productId, "LOT-RT", 20m, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20)));
+
+        var orgId = await CreateCustomerOrgAsync(client);
+        var routeA = Guid.CreateVersion7();
+        var routeB = Guid.CreateVersion7();
+        var storeA = await CreateStoreAsync(client, orgId, warehouse.Id, routeA);
+        var storeB = await CreateStoreAsync(client, orgId, warehouse.Id, routeB);
+        await PutCartAsync(client, storeA, productId, 2m);
+        await PutCartAsync(client, storeB, productId, 3m);
+
+        using var placeA = await client.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/orders", new { storeId = storeA });
+        placeA.StatusCode.ShouldBe(HttpStatusCode.OK, await placeA.Content.ReadAsStringAsync());
+        using var placeB = await client.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/orders", new { storeId = storeB });
+        placeB.StatusCode.ShouldBe(HttpStatusCode.OK, await placeB.Content.ReadAsStringAsync());
+
+        using var cutoff = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/warehouses/{warehouse.Id}/cutoff", new { });
+        cutoff.StatusCode.ShouldBe(HttpStatusCode.OK, await cutoff.Content.ReadAsStringAsync());
+        var cutoffResult = await cutoff.DeserializeAsync<CutoffResultDto>();
+
+        using var generate = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves",
+            new { warehouseId = warehouse.Id, businessDate = cutoffResult.BusinessDate });
+        generate.StatusCode.ShouldBe(HttpStatusCode.OK, await generate.Content.ReadAsStringAsync());
+        var waves = await generate.DeserializeAsync<List<WaveDto>>();
+        waves.Count.ShouldBe(2);
+        waves.Select(w => w.Zone).Distinct().ShouldBe(["Ambient"]);
+        waves.Select(w => w.RouteId).ShouldBe([routeA, routeB], ignoreOrder: true);
+        waves.Sum(w => w.Tasks.Sum(t => t.Quantity)).ShouldBe(5m);
+
+        using var again = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves",
+            new { warehouseId = warehouse.Id, businessDate = cutoffResult.BusinessDate });
+        var replay = await again.DeserializeAsync<List<WaveDto>>();
+        replay.Select(w => w.Id).OrderBy(id => id).ShouldBe(waves.Select(w => w.Id).OrderBy(id => id));
+    }
+
     private static async Task PutCartAsync(HttpClient client, Guid storeId, Guid productId, decimal qty)
     {
         using var putCart = await client.PutAsJsonAsync(
@@ -293,7 +336,11 @@ public sealed class WarehouseWaveTests
         return await response.DeserializeAsync<Guid>();
     }
 
-    private static async Task<Guid> CreateStoreAsync(HttpClient client, Guid orgId, Guid warehouseId)
+    private static async Task<Guid> CreateStoreAsync(
+        HttpClient client,
+        Guid orgId,
+        Guid warehouseId,
+        Guid? defaultRouteId = null)
     {
         using var response = await client.PostAsJsonAsync(
             $"{TestConstants.OrderingBasePath}/stores",
@@ -304,7 +351,7 @@ public sealed class WarehouseWaveTests
                 name = Unique("Store"),
                 address = "1 Harbor St",
                 defaultWarehouseId = warehouseId,
-                defaultRouteId = (Guid?)null,
+                defaultRouteId,
                 deliveryWindow = "05:00-08:00",
             });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

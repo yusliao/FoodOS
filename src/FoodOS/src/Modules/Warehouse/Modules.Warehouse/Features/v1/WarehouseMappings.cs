@@ -30,6 +30,7 @@ internal static class WarehouseMappings
             wave.WarehouseId,
             wave.ZoneId,
             wave.Zone,
+            wave.RouteId,
             wave.BusinessDate,
             wave.Status.ToString(),
             wave.CreatedAt,

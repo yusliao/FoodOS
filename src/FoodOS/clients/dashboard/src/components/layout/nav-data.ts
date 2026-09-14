@@ -11,6 +11,7 @@ import {
   Layers,
   MessageCircle,
   Package,
+  PackagePlus,
   Receipt,
   ScanLine,
   ScrollText,
@@ -94,6 +95,7 @@ export const sections: NavSection[] = [
     caption: "Fulfillment",
     icon: Truck,
     items: [
+      { to: "/ops/purchase", label: "Purchasing", icon: PackagePlus, perm: PROCUREMENT_PERMISSIONS.purchaseView },
       { to: "/ops/qc", label: "Quality desk", icon: ClipboardCheck, perm: PROCUREMENT_PERMISSIONS.purchaseView },
       { to: "/ops/putaway", label: "Putaway", icon: Forklift, perm: WAREHOUSE_PERMISSIONS.putawayView },
       { to: "/ops/waves", label: "Waves", icon: Layers, perm: WAREHOUSE_PERMISSIONS.wavesView },

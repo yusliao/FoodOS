@@ -5,9 +5,11 @@ using FSH.Framework.Web.Modules;
 using FSH.Modules.Logistics.Contracts.Authorization;
 using FSH.Modules.Logistics.Data;
 using FSH.Modules.Logistics.Features.v1.Drivers.CreateDriver;
+using FSH.Modules.Logistics.Features.v1.Drivers.SearchDrivers;
 using FSH.Modules.Logistics.Features.v1.Pods.ConfirmPod;
 using FSH.Modules.Logistics.Features.v1.Routes.CreateRoute;
 using FSH.Modules.Logistics.Features.v1.Routes.GetRouteById;
+using FSH.Modules.Logistics.Features.v1.Routes.SearchRoutes;
 using FSH.Modules.Logistics.Features.v1.Shipments.CreateShipment;
 using FSH.Modules.Logistics.Features.v1.Shipments.DepartShipment;
 using FSH.Modules.Logistics.Features.v1.Shipments.GetMyShipments;
@@ -15,6 +17,10 @@ using FSH.Modules.Logistics.Features.v1.Shipments.GetShipmentById;
 using FSH.Modules.Logistics.Features.v1.Shipments.SearchShipments;
 using FSH.Modules.Logistics.Features.v1.Shipments.LoadShipment;
 using FSH.Modules.Logistics.Features.v1.Vehicles.CreateVehicle;
+using FSH.Modules.Logistics.Features.v1.Vehicles.SearchVehicles;
+using FSH.Modules.Logistics.Jobs;
+using Hangfire;
+using Hangfire.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -36,6 +42,7 @@ public sealed class LogisticsModule : IModule
 
         builder.Services.AddHeroDbContext<LogisticsDbContext>();
         builder.Services.AddScoped<IDbInitializer, LogisticsDbInitializer>();
+        builder.Services.AddTransient<DispatchReminderJob>();
 
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<LogisticsDbContext>(
@@ -63,8 +70,11 @@ public sealed class LogisticsModule : IModule
             .WithApiVersionSet(versionSet)
             .RequireAuthorization();
 
+        group.MapSearchVehiclesEndpoint();
         group.MapCreateVehicleEndpoint();
+        group.MapSearchDriversEndpoint();
         group.MapCreateDriverEndpoint();
+        group.MapSearchRoutesEndpoint();
         group.MapCreateRouteEndpoint();
         group.MapGetRouteByIdEndpoint();
         group.MapCreateShipmentEndpoint();
@@ -74,5 +84,15 @@ public sealed class LogisticsModule : IModule
         group.MapConfirmLoadShipmentEndpoint();
         group.MapConfirmDepartShipmentEndpoint();
         group.MapConfirmPodEndpoint();
+
+        var jobManager = endpoints.ServiceProvider.GetService<IRecurringJobManager>();
+        if (jobManager is not null)
+        {
+            jobManager.AddOrUpdate(
+                "logistics-dispatch-reminder",
+                Job.FromExpression<DispatchReminderJob>(j => j.RunAsync(CancellationToken.None)),
+                "* * * * *",
+                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+        }
     }
 }

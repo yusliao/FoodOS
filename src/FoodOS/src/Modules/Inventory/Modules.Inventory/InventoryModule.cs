@@ -4,10 +4,15 @@ using FSH.Framework.Shared.Constants;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Inventory.Contracts.Authorization;
 using FSH.Modules.Inventory.Data;
+using FSH.Modules.Inventory.Features.v1.Lots.GetLotById;
+using FSH.Modules.Inventory.Features.v1.Lots.SearchLots;
+using FSH.Modules.Inventory.Features.v1.Stock.AdjustCountStock;
 using FSH.Modules.Inventory.Features.v1.Stock.GetAvailableQty;
 using FSH.Modules.Inventory.Features.v1.Stock.IsolateStock;
 using FSH.Modules.Inventory.Features.v1.Stock.ReceiveInventory;
 using FSH.Modules.Inventory.Features.v1.Stock.ReserveStock;
+using FSH.Modules.Inventory.Features.v1.Stock.SearchInventoryTransactions;
+using FSH.Modules.Inventory.Features.v1.Stock.SearchLotBalances;
 using FSH.Modules.Inventory.Features.v1.Stock.UnreserveStock;
 using FSH.Modules.Inventory.Features.v1.Warehouses.CreateWarehouse;
 using FSH.Modules.Inventory.Features.v1.Warehouses.GetWarehouseById;
@@ -67,11 +72,16 @@ public sealed class InventoryModule : IModule
         group.MapSearchWarehousesEndpoint();
         group.MapCreateWarehouseEndpoint();
         group.MapGetWarehouseByIdEndpoint();
+        group.MapSearchLotsEndpoint();
+        group.MapGetLotByIdEndpoint();
         group.MapReceiveInventoryEndpoint();
         group.MapGetAvailableQtyEndpoint();
+        group.MapSearchLotBalancesEndpoint();
+        group.MapSearchInventoryTransactionsEndpoint();
         group.MapReserveStockEndpoint();
         group.MapUnreserveStockEndpoint();
         group.MapIsolateStockEndpoint();
+        group.MapAdjustCountStockEndpoint();
 
         var jobManager = endpoints.ServiceProvider.GetService<IRecurringJobManager>();
         if (jobManager is not null)

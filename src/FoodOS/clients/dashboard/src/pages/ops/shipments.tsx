@@ -1,22 +1,28 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Truck } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/use-auth";
+import { Visibility } from "@/api/files";
 import {
   confirmPod,
+  createShipment,
   departShipment,
   loadShipment,
   LOGISTICS_PERMISSIONS,
+  searchDrivers,
+  searchRoutes,
   searchShipments,
+  searchVehicles,
   type ShipmentDto,
 } from "@/api/logistics";
+import { FileDropzone } from "@/components/file/file-dropzone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EntityEmpty, EntityPageHeader, EntityStatusBadge, ErrorBand, Field } from "@/components/list";
+import { Combobox, EntityEmpty, EntityPageHeader, EntityStatusBadge, ErrorBand, Field } from "@/components/list";
 import { describe } from "@/lib/list-helpers";
 import { useT } from "@/i18n/locale-provider";
-import { JobCard, newIdempotencyKey, useOpsWarehouse, WarehousePicker } from "./ops-helpers";
+import { JobCard, newIdempotencyKey, todayIsoDate, useOpsWarehouse, WarehousePicker } from "./ops-helpers";
 
 function ShipmentCard({ shipment }: { shipment: ShipmentDto }) {
   const t = useT();
@@ -68,24 +74,19 @@ function ShipmentCard({ shipment }: { shipment: ShipmentDto }) {
   });
 
   const openStop = shipment.stops.find((s) => s.status !== "Delivered");
+  const [photoFileIds, setPhotoFileIds] = useState<string[]>([]);
 
   const pod = useMutation({
-    mutationFn: () => {
-      if (!openStop) throw new Error("No open stop");
-      const stopLots = shipment.lines.filter((l) => l.storeId === openStop.storeId).flatMap((l) => l.lots);
-      return confirmPod(
-        openStop.id,
+    mutationFn: (input: { stopId: string; signerName: string; photoFileIds: string[]; lines: Array<{ orderLineId: string; lotId: string; signedQty: number }> }) =>
+      confirmPod(
+        input.stopId,
         {
-          signerName: signerName.trim(),
-          lines: stopLots.map((lot) => ({
-            orderLineId: lot.orderLineId,
-            lotId: lot.lotId,
-            signedQty: Number(signedQty[`${lot.orderLineId}:${lot.lotId}`] ?? lot.quantity),
-          })),
+          signerName: input.signerName,
+          photoFileIds: input.photoFileIds,
+          lines: input.lines,
         },
         newIdempotencyKey(),
-      );
-    },
+      ),
     onSuccess: async () => {
       toast.success(t("ops.podRecorded", "Proof of delivery recorded"));
       await invalidate();
@@ -157,11 +158,155 @@ function ShipmentCard({ shipment }: { shipment: ShipmentDto }) {
                 </Field>
               );
             })}
-          <Button data-testid={`pod-confirm-${openStop.id}`} disabled={!signerName.trim() || pod.isPending} onClick={() => pod.mutate()}>
+          <div>
+            <p className="mb-2 text-[12px] text-[var(--color-muted-foreground)]">
+              {t("ops.podPhotos", "Delivery photos")}
+              {photoFileIds.length > 0 ? ` · ${photoFileIds.length}` : ""}
+            </p>
+            <FileDropzone
+              options={{
+                ownerType: "MyFiles",
+                ownerId: openStop.id,
+                category: "Image",
+                visibility: Visibility.Private,
+                allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+              }}
+              accept="image/jpeg,image/png,image/webp"
+              onUploaded={(asset) => setPhotoFileIds((prev) => [...prev, asset.id])}
+            />
+          </div>
+          <Button
+            data-testid={`pod-confirm-${openStop.id}`}
+            disabled={!signerName.trim() || pod.isPending}
+            onClick={() => {
+              const stopLots = shipment.lines.filter((l) => l.storeId === openStop.storeId).flatMap((l) => l.lots);
+              pod.mutate({
+                stopId: openStop.id,
+                signerName: signerName.trim(),
+                photoFileIds,
+                lines: stopLots.map((lot) => ({
+                  orderLineId: lot.orderLineId,
+                  lotId: lot.lotId,
+                  signedQty: Number(signedQty[`${lot.orderLineId}:${lot.lotId}`] ?? lot.quantity),
+                })),
+              });
+            }}
+          >
             {t("ops.confirmPod", "Confirm POD")}
           </Button>
         </div>
       ) : null}
+    </JobCard>
+  );
+}
+
+function CreateShipmentForm({ warehouseId }: { warehouseId: string }) {
+  const t = useT();
+  const { user } = useAuth();
+  const perms = user?.permissions ?? [];
+  const queryClient = useQueryClient();
+  const canCreate = perms.includes(LOGISTICS_PERMISSIONS.shipmentsCreate);
+  const [routeId, setRouteId] = useState<string | null>(null);
+  const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const [driverId, setDriverId] = useState<string | null>(null);
+  const [businessDate, setBusinessDate] = useState(todayIsoDate);
+
+  const routes = useQuery({
+    queryKey: ["logistics", "routes", warehouseId],
+    queryFn: () => searchRoutes(warehouseId),
+    enabled: canCreate,
+  });
+  const vehicles = useQuery({
+    queryKey: ["logistics", "vehicles"],
+    queryFn: searchVehicles,
+    enabled: canCreate && perms.includes(LOGISTICS_PERMISSIONS.vehiclesView),
+  });
+  const drivers = useQuery({
+    queryKey: ["logistics", "drivers"],
+    queryFn: searchDrivers,
+    enabled: canCreate && perms.includes(LOGISTICS_PERMISSIONS.driversView),
+  });
+
+  useEffect(() => {
+    if (!routeId && routes.data?.[0]) setRouteId(routes.data[0].id);
+  }, [routeId, routes.data]);
+  useEffect(() => {
+    if (!vehicleId && vehicles.data?.[0]) setVehicleId(vehicles.data[0].id);
+  }, [vehicleId, vehicles.data]);
+  useEffect(() => {
+    if (!driverId && drivers.data?.[0]) setDriverId(drivers.data[0].id);
+  }, [driverId, drivers.data]);
+
+  const create = useMutation({
+    mutationFn: (input: { routeId: string; warehouseId: string; vehicleId: string; driverId: string; businessDate: string }) =>
+      createShipment(input, newIdempotencyKey()),
+    onSuccess: async () => {
+      toast.success(t("ops.shipmentCreated", "Shipment created"));
+      await queryClient.invalidateQueries({ queryKey: ["logistics", "shipments"] });
+    },
+    onError: (error) => toast.error(describe(error)),
+  });
+
+  if (!canCreate) return null;
+
+  return (
+    <JobCard>
+      <p className="mb-3 text-[13px] font-medium">{t("ops.newShipment", "New shipment")}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field id="ship-route" label={t("ops.route", "Route")} required>
+          <Combobox
+            label={t("ops.route", "Route")}
+            searchable
+            value={routeId}
+            onChange={(id) => {
+              setRouteId(id);
+              const route = (routes.data ?? []).find((r) => r.id === id);
+              if (route?.defaultVehicleId) setVehicleId(route.defaultVehicleId);
+            }}
+            placeholder={t("ops.chooseRoute", "Choose a route")}
+            options={(routes.data ?? []).map((r) => ({ value: r.id, label: r.code }))}
+          />
+        </Field>
+        <Field id="ship-vehicle" label={t("ops.vehicle", "Vehicle")} required>
+          <Combobox
+            label={t("ops.vehicle", "Vehicle")}
+            searchable
+            value={vehicleId}
+            onChange={setVehicleId}
+            placeholder={t("ops.chooseVehicle", "Choose a vehicle")}
+            options={(vehicles.data ?? []).map((v) => ({ value: v.id, label: v.plate, hint: v.compartmentZones }))}
+          />
+        </Field>
+        <Field id="ship-driver" label={t("ops.driver", "Driver")} required>
+          <Combobox
+            label={t("ops.driver", "Driver")}
+            searchable
+            value={driverId}
+            onChange={setDriverId}
+            placeholder={t("ops.chooseDriver", "Choose a driver")}
+            options={(drivers.data ?? []).map((d) => ({ value: d.id, label: d.phone }))}
+          />
+        </Field>
+        <Field id="ship-date" label={t("ops.businessDate", "Business date")} required>
+          <Input id="ship-date" type="date" value={businessDate} onChange={(e) => setBusinessDate(e.target.value)} />
+        </Field>
+      </div>
+      <Button
+        className="mt-3"
+        data-testid="shipment-create"
+        disabled={create.isPending || !routeId || !vehicleId || !driverId}
+        onClick={() =>
+          create.mutate({
+            routeId: routeId!,
+            warehouseId,
+            vehicleId: vehicleId!,
+            driverId: driverId!,
+            businessDate,
+          })
+        }
+      >
+        {t("ops.createShipment", "Create shipment")}
+      </Button>
     </JobCard>
   );
 }
@@ -180,7 +325,7 @@ export function ShipmentsPage() {
       <EntityPageHeader
         icon={Truck}
         title={t("ops.shipmentsTitle", "Load & delivery")}
-        description={t("ops.shipmentsDescription", "Scan an order or tote onto the truck, depart, then capture POD. Short sign-off returns the lot.")}
+        description={t("ops.shipmentsDescription", "Build a route shipment, scan an order or tote onto the truck, depart, then capture POD with photos.")}
       />
       <WarehousePicker
         warehouses={warehouses}
@@ -190,11 +335,12 @@ export function ShipmentsPage() {
       />
       {isError ? <ErrorBand message={describe(error)} /> : null}
       {query.isError ? <ErrorBand message={describe(query.error)} /> : null}
+      {warehouseId ? <CreateShipmentForm warehouseId={warehouseId} /> : null}
       {(query.data ?? []).length === 0 && !query.isLoading ? (
         <EntityEmpty
           icon={Truck}
           title={t("ops.noShipments", "No shipments")}
-          body={t("ops.noShipmentsBody", "Create a shipment for this warehouse (HTTP) then load it here.")}
+          body={t("ops.noShipmentsBody", "Create a shipment for packed orders on a route, then load it here.")}
         />
       ) : (
         <div className="space-y-3">

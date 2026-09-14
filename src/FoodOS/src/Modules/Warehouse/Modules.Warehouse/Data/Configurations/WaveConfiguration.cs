@@ -13,7 +13,14 @@ public sealed class WaveConfiguration : IEntityTypeConfiguration<Wave>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Number).IsRequired().HasMaxLength(48);
         builder.HasIndex(x => x.Number).IsUnique();
-        builder.HasIndex(x => new { x.DailyPlanId, x.ZoneId }).IsUnique();
+        builder.HasIndex(x => new { x.DailyPlanId, x.ZoneId, x.RouteId })
+            .IsUnique()
+            .HasFilter("\"RouteId\" IS NOT NULL")
+            .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_RouteId");
+        builder.HasIndex(x => new { x.DailyPlanId, x.ZoneId })
+            .IsUnique()
+            .HasFilter("\"RouteId\" IS NULL")
+            .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_Unrouted");
         builder.Property(x => x.Zone).IsRequired().HasMaxLength(16);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
         builder.HasMany(x => x.Tasks)

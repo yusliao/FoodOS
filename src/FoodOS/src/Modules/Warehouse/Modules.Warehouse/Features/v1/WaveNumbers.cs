@@ -1,5 +1,6 @@
 using System.Globalization;
 using FSH.Modules.Warehouse.Data;
+using FSH.Modules.Warehouse.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Warehouse.Features.v1;
@@ -15,11 +16,15 @@ internal static class WaveNumbers
     {
         ArgumentNullException.ThrowIfNull(dbContext);
         string prefix = $"WV{warehouseCode.Trim().ToUpperInvariant()}{zone.Trim().ToUpperInvariant()}{businessDate:yyyyMMdd}";
-        int existing = await dbContext.Waves
+        int persisted = await dbContext.Waves
             .CountAsync(
                 w => w.Number.StartsWith(prefix),
                 cancellationToken)
             .ConfigureAwait(false);
-        return $"{prefix}{(existing + 1).ToString("D2", CultureInfo.InvariantCulture)}";
+        int pending = dbContext.ChangeTracker.Entries<Wave>()
+            .Count(e =>
+                e.State == EntityState.Added
+                && e.Entity.Number.StartsWith(prefix, StringComparison.Ordinal));
+        return $"{prefix}{(persisted + pending + 1).ToString("D2", CultureInfo.InvariantCulture)}";
     }
 }

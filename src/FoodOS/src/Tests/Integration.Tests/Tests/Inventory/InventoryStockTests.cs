@@ -267,6 +267,68 @@ public sealed class InventoryStockTests
     }
 
     [Fact]
+    public async Task LotArchiveBalancesLedgerAndCount_Should_RoundTrip()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var productId = Guid.CreateVersion7();
+        var lotId = await ReceiveAsync(client, warehouse.Id, productId, "LOT-ARCH", 10m);
+
+        using var getLot = await client.GetAsync($"{TestConstants.InventoryBasePath}/lots/{lotId}");
+        getLot.StatusCode.ShouldBe(HttpStatusCode.OK, await getLot.Content.ReadAsStringAsync());
+        var detail = await getLot.DeserializeAsync<LotDetailDto>();
+        detail.Lot.LotNo.ShouldBe("LOT-ARCH");
+        detail.Lot.ProductId.ShouldBe(productId);
+        var lotBalance = detail.Balances.ShouldHaveSingleItem();
+        lotBalance.Available.ShouldBe(10m);
+        lotBalance.ZoneKind.ShouldBe("Ambient");
+
+        using var searchLots = await client.GetAsync(
+            $"{TestConstants.InventoryBasePath}/lots?warehouseId={warehouse.Id}&productId={productId}&lotNo=ARCH");
+        searchLots.StatusCode.ShouldBe(HttpStatusCode.OK, await searchLots.Content.ReadAsStringAsync());
+        var lotsPage = await searchLots.DeserializeAsync<PagedResponse<LotDto>>();
+        lotsPage.Items.ShouldContain(l => l.Id == lotId);
+
+        using var balances = await client.GetAsync(
+            $"{TestConstants.InventoryBasePath}/stock/balances?warehouseId={warehouse.Id}&zone=Ambient&lotId={lotId}");
+        balances.StatusCode.ShouldBe(HttpStatusCode.OK, await balances.Content.ReadAsStringAsync());
+        var balancePage = await balances.DeserializeAsync<PagedResponse<LotBalanceDto>>();
+        balancePage.Items.ShouldHaveSingleItem().OnHand.ShouldBe(10m);
+
+        using var txns = await client.GetAsync(
+            $"{TestConstants.InventoryBasePath}/stock/transactions?warehouseId={warehouse.Id}&lotId={lotId}");
+        txns.StatusCode.ShouldBe(HttpStatusCode.OK, await txns.Content.ReadAsStringAsync());
+        var txnPage = await txns.DeserializeAsync<PagedResponse<InventoryTransactionDto>>();
+        txnPage.Items.ShouldContain(t => t.Type == "Receive" && t.Quantity == 10m);
+
+        var countKey = $"cnt-{Guid.NewGuid():N}";
+        var countBody = new
+        {
+            warehouseId = warehouse.Id,
+            zone = "Ambient",
+            productId,
+            lotId,
+            countedAvailable = 7m,
+            idempotencyKey = countKey,
+        };
+        using var count = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/count", countBody);
+        count.StatusCode.ShouldBe(HttpStatusCode.OK, await count.Content.ReadAsStringAsync());
+        (await count.DeserializeAsync<Guid>()).ShouldBe(lotId);
+
+        using var replay = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/count", countBody);
+        replay.StatusCode.ShouldBe(HttpStatusCode.OK, await replay.Content.ReadAsStringAsync());
+        (await replay.DeserializeAsync<Guid>()).ShouldBe(lotId);
+
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(7m);
+
+        using var afterCount = await client.GetAsync(
+            $"{TestConstants.InventoryBasePath}/stock/transactions?warehouseId={warehouse.Id}&lotId={lotId}");
+        var afterPage = await afterCount.DeserializeAsync<PagedResponse<InventoryTransactionDto>>();
+        afterPage.Items.Count(t => t.Type == "AdjustCount").ShouldBe(1);
+        afterPage.Items.ShouldContain(t => t.Type == "AdjustCount" && t.Quantity == 3m);
+    }
+
+    [Fact]
     public async Task InventoryEndpoints_Should_Return401_When_Anonymous()
     {
         using var client = _factory.CreateClient();

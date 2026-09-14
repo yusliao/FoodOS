@@ -214,6 +214,23 @@ public sealed class LotBalance : BaseEntity<Guid>
         Version++;
     }
 
+    public void CountGain(decimal qty) => Receive(qty);
+
+    /// <summary>
+    /// Cycle-count write-down against available ATP only (does not consume Isolated).
+    /// </summary>
+    public void CountLoss(decimal qty)
+    {
+        EnsurePositive(qty);
+        if (Available < qty)
+        {
+            throw new InvalidOperationException("Insufficient available quantity to count down.");
+        }
+
+        OnHand -= qty;
+        Version++;
+    }
+
     private static void EnsurePositive(decimal qty)
     {
         if (qty <= 0)

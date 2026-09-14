@@ -150,4 +150,41 @@ public sealed class LotBalanceTests
         Should.Throw<InvalidOperationException>(() => balance.Shrink(3));
         balance.OnHand.ShouldBe(5m);
     }
+
+    [Fact]
+    public void CountGain_Should_IncreaseOnHandAndAvailable()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        balance.Receive(5);
+
+        balance.CountGain(3);
+
+        balance.OnHand.ShouldBe(8m);
+        balance.Available.ShouldBe(8m);
+    }
+
+    [Fact]
+    public void CountLoss_Should_WriteDownAvailable_WithoutTouchingIsolated()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        balance.Receive(10);
+        balance.Isolate(4);
+
+        balance.CountLoss(3);
+
+        balance.OnHand.ShouldBe(7m);
+        balance.Isolated.ShouldBe(4m);
+        balance.Available.ShouldBe(3m);
+    }
+
+    [Fact]
+    public void CountLoss_Should_Throw_When_ExceedsAvailable()
+    {
+        var balance = LotBalance.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        balance.Receive(5);
+        balance.Isolate(3);
+
+        Should.Throw<InvalidOperationException>(() => balance.CountLoss(3));
+        balance.OnHand.ShouldBe(5m);
+    }
 }

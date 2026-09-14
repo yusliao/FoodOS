@@ -18,6 +18,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\Modules\Logistics\Modules.Logistics\Modules.Logistics.csproj" />
+		<ProjectReference Include="..\..\Modules\Inventory\Modules.Inventory.Contracts\Modules.Inventory.Contracts.csproj" />
 	</ItemGroup>
 
 </Project>

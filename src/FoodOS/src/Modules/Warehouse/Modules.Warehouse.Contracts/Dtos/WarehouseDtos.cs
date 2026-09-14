@@ -34,6 +34,7 @@ public sealed record WaveDto(
     Guid WarehouseId,
     Guid ZoneId,
     string Zone,
+    Guid? RouteId,
     DateOnly BusinessDate,
     string Status,
     DateTimeOffset CreatedAt,

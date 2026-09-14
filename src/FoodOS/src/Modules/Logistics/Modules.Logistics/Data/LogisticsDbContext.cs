@@ -30,6 +30,7 @@ public sealed class LogisticsDbContext : BaseDbContext
     public DbSet<ReturnOnTruck> ReturnsOnTruck => Set<ReturnOnTruck>();
     public DbSet<TraceEvent> TraceEvents => Set<TraceEvent>();
     public DbSet<TemperatureReading> TemperatureReadings => Set<TemperatureReading>();
+    public DbSet<DispatchReminderLog> DispatchReminderLogs => Set<DispatchReminderLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

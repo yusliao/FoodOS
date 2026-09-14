@@ -27,6 +27,15 @@ public sealed class ListOrdersForWaveQueryHandler(OrderingDbContext dbContext)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return orders.Select(o => o.ToDto()).ToList();
+        var storeIds = orders.Select(o => o.StoreId).Distinct().ToList();
+        var routeByStore = await dbContext.Stores
+            .AsNoTracking()
+            .Where(s => storeIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.DefaultRouteId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return orders
+            .Select(o => o.ToDto(routeByStore.GetValueOrDefault(o.StoreId)))
+            .ToList();
     }
 }

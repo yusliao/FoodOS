@@ -113,8 +113,64 @@ export function confirmPod(
   });
 }
 
+export type VehicleDto = {
+  id: string;
+  plate: string;
+  compartmentZones: string;
+  payloadKg: number;
+};
+
+export type DriverDto = {
+  id: string;
+  userId: string;
+  phone: string;
+};
+
+export type RouteDto = {
+  id: string;
+  warehouseId: string;
+  code: string;
+  storeIds: string[];
+  defaultVehicleId?: string | null;
+};
+
+export function searchVehicles(): Promise<VehicleDto[]> {
+  return apiFetch<VehicleDto[]>("/api/v1/logistics/vehicles");
+}
+
+export function searchDrivers(): Promise<DriverDto[]> {
+  return apiFetch<DriverDto[]>("/api/v1/logistics/drivers");
+}
+
+export function searchRoutes(warehouseId: string): Promise<RouteDto[]> {
+  return apiFetch<RouteDto[]>(
+    `/api/v1/logistics/routes?warehouseId=${encodeURIComponent(warehouseId)}`,
+  );
+}
+
+export function createShipment(
+  body: {
+    routeId: string;
+    warehouseId: string;
+    vehicleId: string;
+    driverId: string;
+    businessDate?: string | null;
+  },
+  idempotencyKey: string,
+): Promise<ShipmentDto> {
+  return apiFetch<ShipmentDto>("/api/v1/logistics/shipments", {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(body),
+  });
+}
+
 export const LOGISTICS_PERMISSIONS = {
+  vehiclesView: "Permissions.Logistics.Vehicles.View",
+  driversView: "Permissions.Logistics.Drivers.View",
+  routesView: "Permissions.Logistics.Routes.View",
   shipmentsView: "Permissions.Logistics.Shipments.View",
+  shipmentsCreate: "Permissions.Logistics.Shipments.Create",
   shipmentsLoad: "Permissions.Logistics.Shipments.Load",
   shipmentsDepart: "Permissions.Logistics.Shipments.Depart",
   podConfirm: "Permissions.Logistics.POD.Confirm",

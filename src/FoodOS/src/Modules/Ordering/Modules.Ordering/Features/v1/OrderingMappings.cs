@@ -27,7 +27,7 @@ internal static class OrderingMappings
             cart.Lines.Select(l => new CartLineDto(l.Id, l.ProductId, l.Quantity, l.Zone)).ToList(),
             cart.UpdatedAt);
 
-    public static SalesOrderDto ToDto(this SalesOrder order)
+    public static SalesOrderDto ToDto(this SalesOrder order, Guid? routeId = null)
         => new(
             order.Id,
             order.Number,
@@ -58,7 +58,8 @@ internal static class OrderingMappings
                     lot.LotNo,
                     lot.ShippedQty,
                     lot.DeliveredQty,
-                    lot.ReturnedQty)).ToList())).ToList());
+                    lot.ReturnedQty)).ToList())).ToList(),
+            routeId);
 
     public static AfterSalesTicketDto ToDto(this AfterSalesTicket ticket)
         => new(

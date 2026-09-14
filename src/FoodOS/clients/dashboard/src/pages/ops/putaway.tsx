@@ -104,7 +104,7 @@ export function PutawayPage() {
       />
       {isError ? <ErrorBand message={describe(error)} /> : null}
       {query.isError ? <ErrorBand message={describe(query.error)} /> : null}
-      {tasks.length === 0 && !query.isLoading ? (
+      {warehouseId && !query.isLoading && tasks.length === 0 ? (
         <EntityEmpty
           icon={Forklift}
           title={t("ops.noPutaway", "No putaway tasks")}
