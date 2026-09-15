@@ -23,11 +23,15 @@ public sealed class UpdateCartCommandHandler(OrderingDbContext dbContext, IMedia
             throw new NotFoundException($"Store {command.StoreId} not found.");
         }
 
+        var products = await ShopCatalog.GetActiveManyAsync(
+                mediator,
+                command.Lines.Select(line => line.ProductId),
+                cancellationToken)
+            .ConfigureAwait(false);
         var resolved = new List<(Guid ProductId, decimal Quantity, string Zone)>(command.Lines.Count);
         foreach (var line in command.Lines)
         {
-            var (_, zone) = await ShopCatalog.GetActiveAsync(mediator, line.ProductId, cancellationToken)
-                .ConfigureAwait(false);
+            var (_, zone) = products[line.ProductId];
             resolved.Add((line.ProductId, line.Quantity, zone.ToString()));
         }
 

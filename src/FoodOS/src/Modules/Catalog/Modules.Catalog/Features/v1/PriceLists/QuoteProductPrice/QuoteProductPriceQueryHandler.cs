@@ -33,6 +33,7 @@ public sealed class QuoteProductPriceQueryHandler(CatalogDbContext dbContext, Ti
         var lists = await dbContext.PriceLists
             .AsNoTracking()
             .Where(l => l.CustomerOrgId == query.CustomerOrgId || l.CustomerOrgId == null)
+            .Include(l => l.Lines)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 

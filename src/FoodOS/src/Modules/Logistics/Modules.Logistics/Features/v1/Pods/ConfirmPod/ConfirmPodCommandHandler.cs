@@ -5,6 +5,7 @@ using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
 using FSH.Framework.Eventing.Abstractions;
+using FSH.Framework.Shared.Constants;
 using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Inventory.Contracts.v1.Stock;
 using FSH.Modules.Logistics.Contracts.Dtos;
@@ -36,6 +37,16 @@ public sealed class ConfirmPodCommandHandler(
             .FirstOrDefaultAsync(s => s.Stops.Any(st => st.Id == command.StopId), cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Stop {command.StopId} not found.");
+
+        Guid userId = currentUser.GetUserId();
+        bool assignedToCurrentDriver = await dbContext.Drivers
+            .AsNoTracking()
+            .AnyAsync(driver => driver.Id == shipment.DriverId && driver.UserId == userId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!assignedToCurrentDriver && !currentUser.IsInRole(RoleConstants.Admin))
+        {
+            throw new NotFoundException($"Stop {command.StopId} not found.");
+        }
 
         var stop = shipment.Stops.First(s => s.Id == command.StopId);
         if (stop.Status == StopStatus.Delivered)

@@ -57,7 +57,7 @@ public static class CatalogPermissions
         new("Delete Categories",  ActionConstants.Delete, Categories.Resource),
         new("Restore Categories", "Restore",              Categories.Resource),
 
-        new("View Products",        ActionConstants.View,   Products.Resource, IsBasic: true, IsCustomer: true),
+        new("View Products",        ActionConstants.View,   Products.Resource, IsBasic: true),
         new("Create Products",      ActionConstants.Create, Products.Resource),
         new("Update Products",      ActionConstants.Update, Products.Resource),
         new("Delete Products",      ActionConstants.Delete, Products.Resource),

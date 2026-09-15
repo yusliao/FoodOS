@@ -75,6 +75,7 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE")
                         .HasDatabaseName("IX_Brands_Slug");
 
                     b.ToTable("Brands", "catalog");
@@ -133,6 +134,7 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE")
                         .HasDatabaseName("IX_Categories_Slug");
 
                     b.ToTable("Categories", "catalog");
@@ -314,10 +316,12 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Sku", "TenantId")
                         .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE")
                         .HasDatabaseName("IX_Products_Sku");
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE")
                         .HasDatabaseName("IX_Products_Slug");
 
                     b.ToTable("Products", "catalog");

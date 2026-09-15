@@ -17,6 +17,6 @@ public static class GetCartEndpoint
                     mediator.Send(new GetCartQuery(storeId), ct))
             .WithName("GetCart")
             .WithSummary("Get the cart for a store")
-            .RequirePermission(OrderingPermissions.Shop.Order);
+            .RequirePermission(OrderingPermissions.Orders.View);
     }
 }

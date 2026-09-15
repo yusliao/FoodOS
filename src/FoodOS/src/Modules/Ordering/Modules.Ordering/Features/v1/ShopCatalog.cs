@@ -11,36 +11,51 @@ namespace FSH.Modules.Ordering.Features.v1;
 
 internal static class ShopCatalog
 {
-    public static async Task<(ProductDto Product, TemperatureZoneKind Zone)> GetActiveAsync(
+    public static async Task<IReadOnlyDictionary<Guid, (ProductDto Product, TemperatureZoneKind Zone)>> GetActiveManyAsync(
         IMediator mediator,
-        Guid productId,
+        IEnumerable<Guid> productIds,
         CancellationToken cancellationToken)
     {
-        var product = await mediator.Send(new GetProductByIdQuery(productId), cancellationToken).ConfigureAwait(false);
-        if (!product.IsActive)
+        var ids = productIds.Distinct().ToList();
+        var products = await mediator.Send(new GetProductsByIdsQuery(ids), cancellationToken).ConfigureAwait(false);
+        var result = new Dictionary<Guid, (ProductDto Product, TemperatureZoneKind Zone)>(products.Count);
+        foreach (var product in products)
         {
-            throw new CustomException(
-                $"Product {productId} is not available.",
-                (IEnumerable<string>?)null,
-                HttpStatusCode.Conflict);
+            if (!product.IsActive)
+            {
+                throw new CustomException(
+                    $"Product {product.Id} is not available.",
+                    (IEnumerable<string>?)null,
+                    HttpStatusCode.Conflict);
+            }
+
+            if (!Enum.TryParse(product.TemperatureZone, ignoreCase: true, out TemperatureZoneKind zone))
+            {
+                throw new CustomException(
+                    string.Create(CultureInfo.InvariantCulture, $"Unknown temperature zone '{product.TemperatureZone}'."),
+                    (IEnumerable<string>?)null,
+                    HttpStatusCode.BadRequest);
+            }
+
+            result.Add(product.Id, (product, zone));
         }
 
-        if (!Enum.TryParse(product.TemperatureZone, ignoreCase: true, out TemperatureZoneKind zone))
-        {
-            throw new CustomException(
-                string.Create(CultureInfo.InvariantCulture, $"Unknown temperature zone '{product.TemperatureZone}'."),
-                (IEnumerable<string>?)null,
-                HttpStatusCode.BadRequest);
-        }
-
-        return (product, zone);
+        return result;
     }
 
-    public static ValueTask<PriceQuoteDto> QuoteAsync(
+    public static async Task<IReadOnlyDictionary<Guid, PriceQuoteDto>> QuoteManyAsync(
         IMediator mediator,
         Guid customerOrgId,
-        Guid productId,
-        decimal quantity,
+        IEnumerable<(Guid ProductId, decimal Quantity)> lines,
         CancellationToken cancellationToken)
-        => mediator.Send(new QuoteProductPriceQuery(customerOrgId, productId, quantity), cancellationToken);
+    {
+        var requests = lines
+            .Select(line => new ProductPriceRequestDto(line.ProductId, line.Quantity))
+            .ToList();
+        var quotes = await mediator.Send(
+                new QuoteProductPricesQuery(customerOrgId, requests),
+                cancellationToken)
+            .ConfigureAwait(false);
+        return quotes.ToDictionary(quote => quote.ProductId);
+    }
 }

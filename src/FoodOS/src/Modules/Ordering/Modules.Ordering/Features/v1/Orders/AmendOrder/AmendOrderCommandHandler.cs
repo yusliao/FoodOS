@@ -46,17 +46,21 @@ public sealed class AmendOrderCommandHandler(OrderingDbContext dbContext, IMedia
 
         var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
         var zones = new Dictionary<Guid, TemperatureZoneKind>();
+        var products = await ShopCatalog.GetActiveManyAsync(
+                mediator,
+                command.Lines.Select(line => line.ProductId),
+                cancellationToken)
+            .ConfigureAwait(false);
+        var quotes = await ShopCatalog.QuoteManyAsync(
+                mediator,
+                order.CustomerOrgId,
+                command.Lines.Select(line => (line.ProductId, line.Quantity)),
+                cancellationToken)
+            .ConfigureAwait(false);
         foreach (var line in command.Lines)
         {
-            var (_, zone) = await ShopCatalog.GetActiveAsync(mediator, line.ProductId, cancellationToken)
-                .ConfigureAwait(false);
-            var quote = await ShopCatalog.QuoteAsync(
-                    mediator,
-                    order.CustomerOrgId,
-                    line.ProductId,
-                    line.Quantity,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            var (_, zone) = products[line.ProductId];
+            var quote = quotes[line.ProductId];
             draftLines.Add((line.ProductId, zone.ToString(), line.Quantity, quote.UnitPrice, quote.Currency));
             zones[line.ProductId] = zone;
         }

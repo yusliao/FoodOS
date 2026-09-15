@@ -18,7 +18,7 @@ public static class PlaceOrderEndpoint
                     Results.Ok(await mediator.Send(command, ct).ConfigureAwait(false)))
             .WithName("PlaceOrder")
             .WithSummary("Place an order from the store cart and reserve ATP")
-            .RequirePermission(OrderingPermissions.Shop.Order)
+            .RequirePermission(OrderingPermissions.Orders.Manage)
             .WithIdempotency();
     }
 }

@@ -16,7 +16,7 @@ public static class GetStoresEndpoint
                 (Guid? customerOrgId, IMediator mediator, CancellationToken ct) =>
                     mediator.Send(new GetStoresQuery(customerOrgId), ct))
             .WithName("GetStores")
-            .WithSummary("List stores for the current tenant")
-            .RequirePermission(OrderingPermissions.Shop.View);
+            .WithSummary("List stores for operator administration")
+            .RequirePermission(OrderingPermissions.Stores.View);
     }
 }

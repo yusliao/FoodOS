@@ -34,25 +34,23 @@ public sealed class ReconcileReminderJob(
             return;
         }
 
-        var tenants = await tenantStore.GetAllAsync().ConfigureAwait(false);
-        DateTimeOffset utcNow = timeProvider.GetUtcNow();
-        int published = 0;
-
-        foreach (var tenant in tenants)
+        var operatorTenant = await tenantStore.GetAsync(MultitenancyConstants.Root.Id).ConfigureAwait(false);
+        if (operatorTenant is null || !operatorTenant.IsActive)
         {
-            if (!tenant.IsActive)
-            {
-                continue;
-            }
+            logger.LogWarning("[Ordering] reconcile reminder skipped because the operator tenant is unavailable");
+            return;
+        }
 
-            try
-            {
-                published += await ProcessTenantAsync(tenant, utcNow, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "[Ordering] reconcile reminder failed for tenant {TenantId}", tenant.Id);
-            }
+        DateTimeOffset utcNow = timeProvider.GetUtcNow();
+        int published;
+        try
+        {
+            published = await ProcessTenantAsync(operatorTenant, utcNow, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[Ordering] reconcile reminder failed for the operator tenant");
+            return;
         }
 
         if (logger.IsEnabled(LogLevel.Information))

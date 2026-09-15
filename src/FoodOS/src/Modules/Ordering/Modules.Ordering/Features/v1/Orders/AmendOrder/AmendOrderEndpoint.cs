@@ -18,7 +18,7 @@ public static class AmendOrderEndpoint
                     Results.Ok(await mediator.Send(command with { OrderId = orderId }, ct).ConfigureAwait(false)))
             .WithName("AmendOrder")
             .WithSummary("Amend a reserved order before cutoff")
-            .RequirePermission(OrderingPermissions.Shop.Order)
+            .RequirePermission(OrderingPermissions.Orders.Manage)
             .WithIdempotency();
     }
 }

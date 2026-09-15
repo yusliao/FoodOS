@@ -56,4 +56,10 @@ public sealed class Store : AggregateRoot<Guid>, IOperatorOwnedEntity
             CreatedAtUtc = DateTime.UtcNow
         };
     }
+
+    public void AssignCustomerTenant(string customerTenantId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerTenantId);
+        CustomerTenantId = customerTenantId.Trim().ToUpperInvariant();
+    }
 }

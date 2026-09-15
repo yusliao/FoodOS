@@ -80,6 +80,7 @@ public sealed class LogisticsModule : IModule
         group.MapCreateShipmentEndpoint();
         group.MapSearchShipmentsEndpoint();
         group.MapGetMyShipmentsEndpoint();
+        group.MapGetMyShipmentByIdEndpoint();
         group.MapGetShipmentByIdEndpoint();
         group.MapConfirmLoadShipmentEndpoint();
         group.MapConfirmDepartShipmentEndpoint();

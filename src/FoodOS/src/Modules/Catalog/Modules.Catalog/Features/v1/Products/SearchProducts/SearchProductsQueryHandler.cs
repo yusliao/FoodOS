@@ -50,6 +50,9 @@ public sealed class SearchProductsQueryHandler(CatalogDbContext dbContext)
         var products = await q
             .Skip((page - 1) * size)
             .Take(size)
+            .Include(product => product.Images)
+            .Include(product => product.Translations)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 

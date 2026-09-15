@@ -17,6 +17,6 @@ public static class GetMyShipmentsEndpoint
                     mediator.Send(new GetMyShipmentsQuery(), ct))
             .WithName("GetMyShipments")
             .WithSummary("List shipments assigned to the current driver")
-            .RequirePermission(LogisticsPermissions.Shipments.View);
+            .RequirePermission(LogisticsPermissions.Shipments.ViewAssigned);
     }
 }

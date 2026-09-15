@@ -29,6 +29,7 @@ public static class LogisticsPermissions
     {
         public const string Resource = "Logistics.Shipments";
         public const string View = $"Permissions.{Resource}.View";
+        public const string ViewAssigned = $"Permissions.{Resource}.ViewAssigned";
         public const string Create = $"Permissions.{Resource}.Create";
         public const string Load = $"Permissions.{Resource}.Load";
         public const string Depart = $"Permissions.{Resource}.Depart";
@@ -49,6 +50,7 @@ public static class LogisticsPermissions
         new("View Routes", ActionConstants.View, Routes.Resource, IsBasic: true),
         new("Create Routes", ActionConstants.Create, Routes.Resource),
         new("View Shipments", ActionConstants.View, Shipments.Resource, IsBasic: true),
+        new("View Assigned Shipments", "ViewAssigned", Shipments.Resource),
         new("Create Shipments", ActionConstants.Create, Shipments.Resource),
         new("Load Shipments", "Load", Shipments.Resource),
         new("Depart Shipments", "Depart", Shipments.Resource),

@@ -19,6 +19,6 @@ public static class SearchOrdersEndpoint
                         ct))
             .WithName("SearchOrders")
             .WithSummary("Search sales orders")
-            .RequirePermission(OrderingPermissions.Shop.View);
+            .RequirePermission(OrderingPermissions.Orders.View);
     }
 }

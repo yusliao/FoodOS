@@ -17,6 +17,6 @@ public static class UpdateCartEndpoint
                     Results.Ok(await mediator.Send(command with { StoreId = storeId }, ct).ConfigureAwait(false)))
             .WithName("UpdateCart")
             .WithSummary("Replace the cart for a store")
-            .RequirePermission(OrderingPermissions.Shop.Order);
+            .RequirePermission(OrderingPermissions.Orders.Manage);
     }
 }

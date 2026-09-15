@@ -115,14 +115,16 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                 schema: "warehouse",
                 table: "Waves",
                 columns: new[] { "DailyPlanId", "ZoneId", "RouteId", "TenantId" },
-                unique: true);
+                unique: true,
+                filter: "\"RouteId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Waves_DailyPlanId_ZoneId_Unrouted",
                 schema: "warehouse",
                 table: "Waves",
                 columns: new[] { "DailyPlanId", "ZoneId", "TenantId" },
-                unique: true);
+                unique: true,
+                filter: "\"RouteId\" IS NULL");
         }
 
         /// <inheritdoc />

@@ -470,10 +470,12 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.HasIndex("DailyPlanId", "ZoneId", "TenantId")
                         .IsUnique()
+                        .HasFilter("\"RouteId\" IS NULL")
                         .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_Unrouted");
 
                     b.HasIndex("DailyPlanId", "ZoneId", "RouteId", "TenantId")
                         .IsUnique()
+                        .HasFilter("\"RouteId\" IS NOT NULL")
                         .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_RouteId");
 
                     b.ToTable("Waves", "warehouse");

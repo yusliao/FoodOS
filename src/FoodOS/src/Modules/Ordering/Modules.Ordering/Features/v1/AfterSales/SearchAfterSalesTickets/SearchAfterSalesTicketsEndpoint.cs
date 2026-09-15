@@ -17,6 +17,6 @@ public static class SearchAfterSalesTicketsEndpoint
                     mediator.Send(new SearchAfterSalesTicketsQuery(storeId, orderId), ct))
             .WithName("SearchAfterSalesTickets")
             .WithSummary("List after-sales tickets for a store")
-            .RequirePermission(OrderingPermissions.Shop.View);
+            .RequirePermission(OrderingPermissions.Orders.View);
     }
 }

@@ -69,6 +69,13 @@ internal sealed class DemoSeeder
         Issuer: "fsh.demo.globex",
         PlanKey: "free");
 
+    public static readonly DemoTenant Operator = new(
+        Id: MultitenancyConstants.Root.Id,
+        Name: MultitenancyConstants.Root.Name,
+        AdminEmail: MultitenancyConstants.Root.EmailAddress,
+        Issuer: MultitenancyConstants.Root.Issuer,
+        PlanKey: string.Empty);
+
     public DemoSeeder(IServiceProvider services, IConfiguration config, ILogger<DemoSeeder> logger)
     {
         _services = services;
@@ -85,22 +92,22 @@ internal sealed class DemoSeeder
 
         await EnsureDemoTenantsExistAsync(cancellationToken).ConfigureAwait(false);
         await SeedRootSuperAdminAsync(cancellationToken).ConfigureAwait(false);
+        await SeedTenantCatalogAsync(Operator, cancellationToken).ConfigureAwait(false);
 
         foreach (var demo in new[] { Acme, Globex })
         {
             await SeedTenantSubscriptionAsync(demo, cancellationToken).ConfigureAwait(false);
             await SeedTenantUsersAsync(demo, cancellationToken).ConfigureAwait(false);
-            await SeedTenantCatalogAsync(demo, cancellationToken).ConfigureAwait(false);
             await SeedTenantTicketsAsync(demo, cancellationToken).ConfigureAwait(false);
             await SeedTenantChatAsync(demo, cancellationToken).ConfigureAwait(false);
         }
 
-        await FoodOsOperationalSeeder.SeedAcmeAsync(_services, _logger, cancellationToken).ConfigureAwait(false);
+        await FoodOsOperationalSeeder.SeedOperatorAsync(_services, _logger, cancellationToken).ConfigureAwait(false);
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "[demo-seed] complete · root superadmin + {Acme} + {Globex} populated with users / catalog / tickets / chat / FoodOS ops",
+                "[demo-seed] complete · root operator + restaurant customers {Acme} and {Globex} populated",
                 Acme.Id, Globex.Id);
         }
     }
@@ -283,7 +290,7 @@ internal sealed class DemoSeeder
             adminEmail: MultitenancyConstants.Root.EmailAddress,
             issuer: MultitenancyConstants.Root.Issuer);
 
-        await SeedUsersInTenantAsync(rootTenant, BuildRootUsers(), [], cancellationToken).ConfigureAwait(false);
+        await SeedUsersInTenantAsync(rootTenant, BuildRootUsers(), BuildOperatorRoles(), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task SeedTenantUsersAsync(DemoTenant demo, CancellationToken cancellationToken)
@@ -294,8 +301,7 @@ internal sealed class DemoSeeder
         if (tenant is null) return;
 
         var users = demo.Id == Acme.Id ? BuildAcmeUsers() : BuildGlobexUsers();
-        var customRoles = demo.Id == Acme.Id ? BuildAcmeCustomRoles() : Array.Empty<DemoRole>();
-        await SeedUsersInTenantAsync(tenant, users, customRoles, cancellationToken).ConfigureAwait(false);
+        await SeedUsersInTenantAsync(tenant, users, [], cancellationToken).ConfigureAwait(false);
     }
 
     private async Task SeedUsersInTenantAsync(
@@ -813,19 +819,21 @@ internal sealed class DemoSeeder
     private static IReadOnlyList<DemoUser> BuildRootUsers() =>
     [
         new("superadmin", "superadmin@root.com", "Super", "Admin", [RoleConstants.Admin]),
+        new("operator.manager", "manager@root.com", "Maya", "Lin", ["Manager"]),
+        new("operator.support", "support@root.com", "Sam", "Rivera", ["Support"]),
+        new("operator.purchaser", "purchaser@root.com", "Pat", "Chen", ["Purchaser"]),
+        new("operator.qc", "qc@root.com", "Quinn", "Diaz", ["QcInspector"]),
+        new("operator.whlead", "whlead@root.com", "Wendy", "Lee", ["WarehouseLead"]),
+        new("operator.picker", "picker@root.com", "Pete", "Park", ["WarehousePicker"]),
+        new("operator.dispatch", "dispatch@root.com", "Dana", "Cole", ["Dispatcher"]),
+        new("operator.driver", "driver@root.com", "Drew", "Nash", ["Driver"]),
+        new("operator.finance", "finance@root.com", "Faye", "Ortiz", ["FinanceClerk"]),
     ];
 
     private static IReadOnlyList<DemoUser> BuildAcmeUsers() =>
     [
-        new("acme.manager",  "manager@acme.com",  "Maya",   "Lin",      ["Manager"]),
-        new("acme.support",  "support@acme.com",  "Sam",    "Rivera",   ["Support"]),
-        new("acme.purchaser","purchaser@acme.com","Pat",    "Chen",     ["Purchaser"]),
-        new("acme.qc",       "qc@acme.com",       "Quinn",  "Diaz",     ["QcInspector"]),
-        new("acme.whlead",   "whlead@acme.com",   "Wendy",  "Lee",      ["WarehouseLead"]),
-        new("acme.picker",   "picker@acme.com",   "Pete",   "Park",     ["WarehousePicker"]),
-        new("acme.dispatch", "dispatch@acme.com", "Dana",   "Cole",     ["Dispatcher"]),
-        new("acme.driver",   "driver@acme.com",   "Drew",   "Nash",     ["Driver"]),
-        new("acme.finance",  "finance@acme.com",  "Faye",   "Ortiz",    ["FinanceClerk"]),
+        new("acme.manager",  "manager@acme.com",  "Maya",   "Lin",      [RoleConstants.Basic]),
+        new("acme.support",  "support@acme.com",  "Sam",    "Rivera",   [RoleConstants.Basic]),
         new("acme.alice",    "alice@acme.com",    "Alice",  "Nguyen",   [RoleConstants.Basic]),
         new("acme.bob",      "bob@acme.com",      "Bob",    "Patel",    [RoleConstants.Basic]),
         new("acme.carol",    "carol@acme.com",    "Carol",  "Smith",    [RoleConstants.Basic]),
@@ -845,7 +853,7 @@ internal sealed class DemoSeeder
     // A hand-typed name that doesn't match a registry entry (e.g. the old
     // "Permissions.Brands.View" vs the real "Permissions.Catalog.Brands.View")
     // is a claim that grants nothing, silently.
-    private static IReadOnlyList<DemoRole> BuildAcmeCustomRoles() =>
+    private static IReadOnlyList<DemoRole> BuildOperatorRoles() =>
     [
         new(
             "Manager",
@@ -953,7 +961,7 @@ internal sealed class DemoSeeder
             "Driver",
             "Confirms electronic proof of delivery. Cannot create or depart shipments.",
             [
-                LogisticsPermissions.Shipments.View,
+                LogisticsPermissions.Shipments.ViewAssigned,
                 LogisticsPermissions.ProofOfDelivery.Confirm,
             ]),
 

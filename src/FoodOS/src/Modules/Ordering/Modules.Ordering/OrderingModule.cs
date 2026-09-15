@@ -23,6 +23,11 @@ using FSH.Modules.Ordering.Features.v1.Stores.GetStoreById;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStores;
 using FSH.Modules.Ordering.Features.v1.StoreAccess.GetMyStoreAccess;
 using FSH.Modules.Ordering.Features.v1.StoreAccess.SetUserStoreAccess;
+using FSH.Modules.Ordering.Features.v1.Shop.SearchShopProducts;
+using FSH.Modules.Ordering.Features.v1.Shop.GetMyStores;
+using FSH.Modules.Ordering.Features.v1.Shop.ShopCartOrders;
+using FSH.Modules.Ordering.Features.v1.Shop.ShopAfterSales;
+using FSH.Modules.Ordering.Features.v1.Shop.SearchShopDeliveries;
 using FSH.Modules.Ordering.Jobs;
 using Hangfire;
 using Hangfire.Common;
@@ -93,6 +98,18 @@ public sealed class OrderingModule : IModule
         group.MapConfirmReconcileOrderEndpoint();
         group.MapSearchAfterSalesTicketsEndpoint();
         group.MapCreateAfterSalesTicketEndpoint();
+
+        var shopGroup = endpoints
+            .MapGroup("api/v{version:apiVersion}/shop")
+            .WithTags("Shop")
+            .WithApiVersionSet(versionSet)
+            .RequireAuthorization();
+        shopGroup.MapSearchShopProductsEndpoint();
+        shopGroup.MapGetMyStoresEndpoint();
+        shopGroup.MapGetMyStoreByIdEndpoint();
+        shopGroup.MapShopCartOrdersEndpoints();
+        shopGroup.MapShopAfterSalesEndpoints();
+        shopGroup.MapSearchShopDeliveriesEndpoint();
 
         var jobManager = endpoints.ServiceProvider.GetService<IRecurringJobManager>();
         if (jobManager is not null)

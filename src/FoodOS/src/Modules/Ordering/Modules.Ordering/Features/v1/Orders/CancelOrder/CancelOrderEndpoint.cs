@@ -18,7 +18,7 @@ public static class CancelOrderEndpoint
                     Results.Ok(await mediator.Send(new CancelOrderCommand(orderId), ct).ConfigureAwait(false)))
             .WithName("CancelOrder")
             .WithSummary("Cancel a reserved order before cutoff")
-            .RequirePermission(OrderingPermissions.Shop.Order)
+            .RequirePermission(OrderingPermissions.Orders.Manage)
             .WithIdempotency();
     }
 }

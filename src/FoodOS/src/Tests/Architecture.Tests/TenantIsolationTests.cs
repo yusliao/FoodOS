@@ -67,6 +67,58 @@ public sealed class TenantIsolationTests
             $"Violations:\n  {string.Join("\n  ", violations)}");
     }
 
+    [Fact]
+    public void OperatorOwnedEntities_Should_Use_RootOwnership_And_RootScopedUniqueIndexes()
+    {
+        var violations = new List<string>();
+
+        foreach (var ctxType in DiscoverBaseDbContextTypes())
+        {
+            using var ctx = ConstructDbContext(ctxType);
+            foreach (var entityType in ctx.Model.GetEntityTypes()
+                         .Where(type => type.ClrType is not null
+                             && typeof(IOperatorOwnedEntity).IsAssignableFrom(type.ClrType)))
+            {
+                var tenantProperty = entityType.FindProperty("TenantId");
+                if (tenantProperty is null
+                    || !string.Equals(
+                        tenantProperty.GetDefaultValue()?.ToString(),
+                        MultitenancyConstants.Root.Id,
+                        StringComparison.Ordinal))
+                {
+                    violations.Add($"{ctxType.Name} → {entityType.ClrType.Name} has no root-owned TenantId default");
+                    continue;
+                }
+
+                if (entityType.GetDeclaredQueryFilters().Count == 0)
+                {
+                    violations.Add($"{ctxType.Name} → {entityType.ClrType.Name} has no operator ownership query filter");
+                }
+
+                foreach (var index in entityType.GetIndexes().Where(index => index.IsUnique))
+                {
+                    bool backsUniqueRelationship = entityType.GetForeignKeys().Any(foreignKey =>
+                        foreignKey.IsUnique && foreignKey.Properties.SequenceEqual(index.Properties));
+                    if (backsUniqueRelationship)
+                    {
+                        continue;
+                    }
+
+                    if (!index.Properties.Contains(tenantProperty))
+                    {
+                        violations.Add(
+                            $"{ctxType.Name} → {entityType.ClrType.Name} unique index {index.GetDatabaseName()} is not root-scoped");
+                    }
+                }
+            }
+        }
+
+        violations.ShouldBeEmpty(
+            "Operator-owned entities must remain readable independently of the requesting restaurant while " +
+            "their compatibility TenantId and unique keys stay fixed to the root operator. " +
+            $"Violations:\n  {string.Join("\n  ", violations)}");
+    }
+
     private static IEnumerable<Type> DiscoverBaseDbContextTypes()
     {
         return ModuleAssemblyDiscovery.GetModuleAssemblies()

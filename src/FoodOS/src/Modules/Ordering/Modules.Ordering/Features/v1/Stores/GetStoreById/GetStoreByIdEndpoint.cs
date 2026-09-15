@@ -17,6 +17,6 @@ public static class GetStoreByIdEndpoint
                     mediator.Send(new GetStoreByIdQuery(storeId), ct))
             .WithName("GetStoreById")
             .WithSummary("Get a store by id")
-            .RequirePermission(OrderingPermissions.Shop.View);
+            .RequirePermission(OrderingPermissions.Stores.View);
     }
 }

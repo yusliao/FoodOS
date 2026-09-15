@@ -18,7 +18,7 @@ public static class CreateAfterSalesTicketEndpoint
                     Results.Ok(await mediator.Send(command, ct).ConfigureAwait(false)))
             .WithName("CreateAfterSalesTicket")
             .WithSummary("File a shortage, damage, or return claim against a received order")
-            .RequirePermission(OrderingPermissions.Shop.Order)
+            .RequirePermission(OrderingPermissions.Orders.Manage)
             .WithIdempotency();
     }
 }

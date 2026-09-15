@@ -17,6 +17,6 @@ public static class GetOrderByIdEndpoint
                     mediator.Send(new GetOrderByIdQuery(orderId), ct))
             .WithName("GetOrderById")
             .WithSummary("Get a sales order by id")
-            .RequirePermission(OrderingPermissions.Shop.View);
+            .RequirePermission(OrderingPermissions.Orders.View);
     }
 }

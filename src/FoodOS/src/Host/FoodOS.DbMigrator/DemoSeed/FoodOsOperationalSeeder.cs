@@ -28,8 +28,8 @@ using WarehouseLocationType = FSH.Modules.Warehouse.Domain.LocationType;
 namespace FoodOS.DbMigrator.DemoSeed;
 
 /// <summary>
-/// Acme-only FoodOS demo chain: one DC, three zones, locations, supplier lots,
-/// two customer orgs × two stores, one truck / driver / route. Idempotent.
+/// Single-operator FoodOS demo chain: one DC, three zones, locations, supplier lots,
+/// two restaurant customers, one truck / driver / route. Idempotent.
 /// </summary>
 internal static class FoodOsOperationalSeeder
 {
@@ -37,16 +37,16 @@ internal static class FoodOsOperationalSeeder
     internal const string SupplierCode = "HARBOR";
     internal const string VehiclePlate = "BOS-001";
     internal const string RouteCode = "R01";
-    internal const string DriverEmail = "driver@acme.com";
+    internal const string DriverEmail = "driver@root.com";
 
-    public static async Task SeedAcmeAsync(
+    public static async Task SeedOperatorAsync(
         IServiceProvider services,
         ILogger logger,
         CancellationToken cancellationToken)
     {
         using var scope = services.CreateScope();
         var tenantStore = scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>();
-        var tenant = await tenantStore.GetAsync(DemoSeeder.Acme.Id).ConfigureAwait(false);
+        var tenant = await tenantStore.GetAsync(MultitenancyConstants.Root.Id).ConfigureAwait(false);
         if (tenant is null)
         {
             return;
@@ -70,6 +70,7 @@ internal static class FoodOsOperationalSeeder
             .ConfigureAwait(false);
         var stores = await EnsureCustomersAndStoresAsync(ordering, warehouse.Id, logger, cancellationToken)
             .ConfigureAwait(false);
+        await EnsureCustomerStoreAccessAsync(services, ordering, stores, logger, cancellationToken).ConfigureAwait(false);
         await EnsureContractPricesAsync(catalog, ordering, logger, cancellationToken).ConfigureAwait(false);
         await EnsureLogisticsAsync(logistics, users, warehouse.Id, stores, logger, cancellationToken)
             .ConfigureAwait(false);
@@ -99,7 +100,7 @@ internal static class FoodOsOperationalSeeder
         {
             logger.LogInformation(
                 "[demo-seed] [{Tenant}] warehouse {Code} with 3 temperature zones (cutoff 16:00 {Tz})",
-                DemoSeeder.Acme.Id, warehouse.Code, warehouse.TimeZoneId);
+                MultitenancyConstants.Root.Id, warehouse.Code, warehouse.TimeZoneId);
         }
         return warehouse;
     }
@@ -139,7 +140,7 @@ internal static class FoodOsOperationalSeeder
         await warehouseDb.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("[demo-seed] [{Tenant}] seeded {Count} warehouse locations", DemoSeeder.Acme.Id, added);
+            logger.LogInformation("[demo-seed] [{Tenant}] seeded {Count} warehouse locations", MultitenancyConstants.Root.Id, added);
         }
     }
 
@@ -182,7 +183,7 @@ internal static class FoodOsOperationalSeeder
         await procurement.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("[demo-seed] [{Tenant}] supplier {Code}", DemoSeeder.Acme.Id, supplier.Code);
+            logger.LogInformation("[demo-seed] [{Tenant}] supplier {Code}", MultitenancyConstants.Root.Id, supplier.Code);
         }
         return supplier;
     }
@@ -209,7 +210,7 @@ internal static class FoodOsOperationalSeeder
         {
             if (logger.IsEnabled(LogLevel.Warning))
             {
-                logger.LogWarning("[demo-seed] [{Tenant}] no food SKUs in catalog — skip lots", DemoSeeder.Acme.Id);
+                logger.LogWarning("[demo-seed] [{Tenant}] no food SKUs in catalog — skip lots", MultitenancyConstants.Root.Id);
             }
             return;
         }
@@ -270,7 +271,7 @@ internal static class FoodOsOperationalSeeder
         {
             logger.LogInformation(
                 "[demo-seed] [{Tenant}] received {Lots} QC-passed lots (staggered expiry + 1 isolated)",
-                DemoSeeder.Acme.Id, lotsAdded);
+                MultitenancyConstants.Root.Id, lotsAdded);
         }
     }
 
@@ -372,25 +373,27 @@ internal static class FoodOsOperationalSeeder
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var harbor = await GetOrCreateOrgAsync(ordering, "HBRBISTRO", "Harbor Bistro Group", cancellationToken)
+        var harbor = await GetOrCreateOrgAsync(
+                ordering, "HBRBISTRO", "Harbor Bistro Group", DemoSeeder.Acme.Id, cancellationToken)
             .ConfigureAwait(false);
-        var campus = await GetOrCreateOrgAsync(ordering, "CAMPUS", "Campus Dining Co", cancellationToken)
+        var campus = await GetOrCreateOrgAsync(
+                ordering, "CAMPUS", "Campus Dining Co", DemoSeeder.Globex.Id, cancellationToken)
             .ConfigureAwait(false);
         await ordering.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         var stores = new List<Store>
         {
-            await GetOrCreateStoreAsync(ordering, harbor.Id, "HB-DT", "Harbor Downtown", "100 Atlantic Ave, Boston", warehouseId, cancellationToken).ConfigureAwait(false),
-            await GetOrCreateStoreAsync(ordering, harbor.Id, "HB-BB", "Harbor Back Bay", "500 Boylston St, Boston", warehouseId, cancellationToken).ConfigureAwait(false),
-            await GetOrCreateStoreAsync(ordering, campus.Id, "CD-MN", "Campus Main Cafe", "1 University Rd, Cambridge", warehouseId, cancellationToken).ConfigureAwait(false),
-            await GetOrCreateStoreAsync(ordering, campus.Id, "CD-NK", "Campus North Kiosk", "88 Hampshire St, Cambridge", warehouseId, cancellationToken).ConfigureAwait(false),
+            await GetOrCreateStoreAsync(ordering, harbor.Id, DemoSeeder.Acme.Id, "HB-DT", "Harbor Downtown", "100 Atlantic Ave, Boston", warehouseId, cancellationToken).ConfigureAwait(false),
+            await GetOrCreateStoreAsync(ordering, harbor.Id, DemoSeeder.Acme.Id, "HB-BB", "Harbor Back Bay", "500 Boylston St, Boston", warehouseId, cancellationToken).ConfigureAwait(false),
+            await GetOrCreateStoreAsync(ordering, campus.Id, DemoSeeder.Globex.Id, "CD-MN", "Campus Main Cafe", "1 University Rd, Cambridge", warehouseId, cancellationToken).ConfigureAwait(false),
+            await GetOrCreateStoreAsync(ordering, campus.Id, DemoSeeder.Globex.Id, "CD-NK", "Campus North Kiosk", "88 Hampshire St, Cambridge", warehouseId, cancellationToken).ConfigureAwait(false),
         };
         await ordering.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "[demo-seed] [{Tenant}] 2 customer orgs × 4 stores on warehouse {Warehouse}",
-                DemoSeeder.Acme.Id, WarehouseCode);
+                MultitenancyConstants.Root.Id, WarehouseCode);
         }
         return stores;
     }
@@ -399,6 +402,7 @@ internal static class FoodOsOperationalSeeder
         OrderingDbContext ordering,
         string code,
         string name,
+        string customerTenantId,
         CancellationToken cancellationToken)
     {
         string normalized = code.Trim().ToUpperInvariant();
@@ -407,10 +411,19 @@ internal static class FoodOsOperationalSeeder
             .ConfigureAwait(false);
         if (existing is not null)
         {
+            if (existing.CustomerTenantId is null)
+            {
+                existing.AssignCustomerTenant(customerTenantId);
+            }
+            else if (!string.Equals(existing.CustomerTenantId, customerTenantId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Customer organization '{normalized}' is already mapped to tenant '{existing.CustomerTenantId}'.");
+            }
             return existing;
         }
 
-        var org = CustomerOrg.Create(normalized, name);
+        var org = CustomerOrg.Create(normalized, name, customerTenantId: customerTenantId);
         ordering.CustomerOrgs.Add(org);
         return org;
     }
@@ -418,6 +431,7 @@ internal static class FoodOsOperationalSeeder
     private static async Task<Store> GetOrCreateStoreAsync(
         OrderingDbContext ordering,
         Guid orgId,
+        string customerTenantId,
         string code,
         string name,
         string address,
@@ -430,12 +444,106 @@ internal static class FoodOsOperationalSeeder
             .ConfigureAwait(false);
         if (existing is not null)
         {
+            if (existing.CustomerTenantId is null)
+            {
+                existing.AssignCustomerTenant(customerTenantId);
+            }
+            else if (!string.Equals(existing.CustomerTenantId, customerTenantId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Store '{normalized}' is already mapped to tenant '{existing.CustomerTenantId}'.");
+            }
             return existing;
         }
 
-        var store = Store.Create(orgId, normalized, name, address, warehouseId, deliveryWindow: "05:00-08:00");
+        var store = Store.Create(
+            orgId,
+            normalized,
+            name,
+            address,
+            warehouseId,
+            deliveryWindow: "05:00-08:00",
+            customerTenantId: customerTenantId);
         ordering.Stores.Add(store);
         return store;
+    }
+
+    private static async Task EnsureCustomerStoreAccessAsync(
+        IServiceProvider services,
+        OrderingDbContext ordering,
+        IReadOnlyList<Store> stores,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        int added = 0;
+        foreach (var customerTenantId in new[] { DemoSeeder.Acme.Id, DemoSeeder.Globex.Id })
+        {
+            string normalizedCustomerTenantId = customerTenantId.ToUpperInvariant();
+            var tenantStores = stores
+                .Where(store => string.Equals(store.CustomerTenantId, customerTenantId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (tenantStores.Count == 0)
+            {
+                continue;
+            }
+
+            using var identityScope = services.CreateScope();
+            var tenantStore = identityScope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>();
+            var tenant = await tenantStore.GetAsync(customerTenantId).ConfigureAwait(false);
+            if (tenant is null)
+            {
+                continue;
+            }
+
+            identityScope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>()
+                .MultiTenantContext = new MultiTenantContext<AppTenantInfo>(tenant);
+            var users = identityScope.ServiceProvider.GetRequiredService<UserManager<FshUser>>();
+            var userIds = await users.Users
+                .Select(user => user.Id)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (var userIdText in userIds)
+            {
+                if (!Guid.TryParse(userIdText, out var userId))
+                {
+                    continue;
+                }
+
+                foreach (var store in tenantStores)
+                {
+                    bool exists = await ordering.CustomerUserStoreAccesses.AnyAsync(
+                            access => access.CustomerTenantId == normalizedCustomerTenantId
+                                && access.UserId == userId
+                                && access.StoreId == store.Id,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (exists)
+                    {
+                        continue;
+                    }
+
+                    ordering.CustomerUserStoreAccesses.Add(CustomerUserStoreAccess.Create(
+                        customerTenantId,
+                        store.CustomerOrgId,
+                        store.Id,
+                        userId,
+                        DateTimeOffset.UtcNow));
+                    added++;
+                }
+            }
+        }
+
+        if (added == 0)
+        {
+            return;
+        }
+
+        await ordering.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("[demo-seed] [root] assigned {Count} customer user/store access row(s)", added);
+        }
     }
 
     private static async Task EnsureContractPricesAsync(
@@ -488,7 +596,7 @@ internal static class FoodOsOperationalSeeder
         await catalog.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("[demo-seed] [{Tenant}] seeded 2 customer contract price lists", DemoSeeder.Acme.Id);
+            logger.LogInformation("[demo-seed] [{Tenant}] seeded 2 customer contract price lists", MultitenancyConstants.Root.Id);
         }
     }
 
@@ -551,7 +659,7 @@ internal static class FoodOsOperationalSeeder
             {
                 logger.LogWarning(
                     "[demo-seed] [{Tenant}] {Email} not found — skip Driver row",
-                    DemoSeeder.Acme.Id, DriverEmail);
+                    MultitenancyConstants.Root.Id, DriverEmail);
             }
         }
 
@@ -569,7 +677,7 @@ internal static class FoodOsOperationalSeeder
         {
             logger.LogInformation(
                 "[demo-seed] [{Tenant}] vehicle {Plate}, route {Route}, driver {Email}",
-                DemoSeeder.Acme.Id, VehiclePlate, RouteCode, DriverEmail);
+                MultitenancyConstants.Root.Id, VehiclePlate, RouteCode, DriverEmail);
         }
     }
 
