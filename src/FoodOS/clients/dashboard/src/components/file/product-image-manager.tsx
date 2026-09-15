@@ -22,6 +22,7 @@ import {
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -43,6 +44,7 @@ type Props = {
  *   - Clicking an image opens a fullscreen preview modal.
  */
 export function ProductImageManager({ productId, images, invalidateKey, className }: Props) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [pendingRemove, setPendingRemove] = useState<ProductImageDto | null>(null);
@@ -63,27 +65,27 @@ export function ProductImageManager({ productId, images, invalidateKey, classNam
       void queryClient.invalidateQueries({ queryKey: invalidateKey });
     },
     onError: (e: unknown) => {
-      toast.error(extract(e, "Failed to attach image"));
+      toast.error(extract(e, t("catalog.products.attachFailed")));
     },
   });
 
   const thumbnailMutation = useMutation({
     mutationFn: (imageId: string) => setProductThumbnail(productId, imageId),
     onSuccess: () => {
-      toast.success("Cover image updated");
+      toast.success(t("catalog.products.coverUpdated"));
       void queryClient.invalidateQueries({ queryKey: invalidateKey });
     },
-    onError: (e: unknown) => toast.error(extract(e, "Failed to set cover")),
+    onError: (e: unknown) => toast.error(extract(e, t("catalog.products.coverFailed"))),
   });
 
   const removeMutation = useMutation({
     mutationFn: (imageId: string) => removeProductImage(productId, imageId),
     onSuccess: () => {
-      toast.success("Image removed");
+      toast.success(t("catalog.products.imageRemoved"));
       void queryClient.invalidateQueries({ queryKey: invalidateKey });
       setPendingRemove(null);
     },
-    onError: (e: unknown) => toast.error(extract(e, "Failed to remove image")),
+    onError: (e: unknown) => toast.error(extract(e, t("catalog.products.removeFailed"))),
   });
 
   const handlePick = () => {
@@ -99,11 +101,11 @@ export function ProductImageManager({ productId, images, invalidateKey, classNam
           const asset = await upload(file);
           const meta = await getFileMetadata(asset.id);
           if (!meta.publicUrl) {
-            throw new Error("Server returned no publicUrl for the uploaded image.");
+            throw new Error(t("catalog.products.noPublicUrl"));
           }
           await attachMutation.mutateAsync({ fileAssetId: asset.id, url: meta.publicUrl });
         } catch (e) {
-          toast.error(extract(e, `Upload failed: ${file.name}`));
+          toast.error(extract(e, t("catalog.products.uploadFailed").replace("{name}", file.name)));
         }
       }
       reset();
@@ -122,7 +124,7 @@ export function ProductImageManager({ productId, images, invalidateKey, classNam
           {isUploading || attachMutation.isPending
             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
             : <Upload className="h-3.5 w-3.5" />}
-          Upload images
+          {t("catalog.products.uploadImages")}
         </Button>
         {progress && progress.status !== "done" && (
           <span className="text-[11.5px] tabular-nums text-[var(--color-muted-foreground)]">
@@ -130,14 +132,16 @@ export function ProductImageManager({ productId, images, invalidateKey, classNam
           </span>
         )}
         <span className="ml-auto text-[11.5px] text-[var(--color-muted-foreground)]">
-          {sorted.length} image{sorted.length === 1 ? "" : "s"} · JPG / PNG / WebP / GIF · up to 10 MB
+          {(sorted.length === 1 ? t("catalog.products.imageCountOne") : t("catalog.products.imageCount")).replace("{n}", String(sorted.length))}
+          {" · "}
+          {t("catalog.products.imageFormats")}
         </span>
       </div>
 
       {/* Gallery grid */}
       {sorted.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-[var(--color-muted)] px-6 py-10 text-center text-sm text-[var(--color-muted-foreground)]">
-          No images yet. Upload one to set the product's cover.
+          {t("catalog.products.noImages")}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -178,6 +182,7 @@ function ImageTile({
   onRemove: () => void;
   busy: boolean;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -191,7 +196,7 @@ function ImageTile({
         type="button"
         onClick={onPreview}
         className="block aspect-square w-full cursor-pointer"
-        aria-label="Preview image"
+        aria-label={t("catalog.products.previewImage")}
       >
         <img
           src={image.url}
@@ -204,7 +209,7 @@ function ImageTile({
       {image.isThumbnail && (
         <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-primary-foreground)]">
           <Star className="h-3 w-3 fill-current" />
-          Cover
+          {t("catalog.products.cover")}
         </span>
       )}
 
@@ -219,8 +224,8 @@ function ImageTile({
               onSetThumbnail();
             }}
             disabled={busy}
-            title="Set as cover"
-            aria-label="Set as cover"
+            title={t("catalog.products.setAsCover")}
+            aria-label={t("catalog.products.setAsCover")}
             className="bg-[var(--color-overlay)] text-[var(--color-overlay-foreground)] hover:bg-[oklch(0_0_0/0.65)]"
           >
             <StarOff className="h-4 w-4" />
@@ -235,8 +240,8 @@ function ImageTile({
             onRemove();
           }}
           disabled={busy}
-          title="Remove image"
-          aria-label="Remove image"
+          title={t("catalog.products.removeImage")}
+          aria-label={t("catalog.products.removeImage")}
           className="bg-[var(--color-overlay)] text-[var(--color-overlay-foreground)] hover:bg-[var(--color-destructive)]"
         >
           <Trash2 className="h-4 w-4" />
@@ -247,13 +252,14 @@ function ImageTile({
 }
 
 function PreviewDialog({ image, onClose }: { image: ProductImageDto | null; onClose: () => void }) {
+  const t = useT();
   return (
     <Dialog open={image !== null} onOpenChange={(o) => (o ? undefined : onClose())}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="truncate">Image preview</DialogTitle>
+          <DialogTitle className="truncate">{t("catalog.products.imagePreview")}</DialogTitle>
           <DialogDescription>
-            {image?.isThumbnail ? "Current cover image." : "Click outside to close."}
+            {image?.isThumbnail ? t("catalog.products.currentCover") : t("catalog.products.clickOutside")}
           </DialogDescription>
         </DialogHeader>
         {image && (
@@ -267,7 +273,7 @@ function PreviewDialog({ image, onClose }: { image: ProductImageDto | null; onCl
         )}
         <DialogFooter>
           <DialogClose asChild>
-            <Button size="sm">Close</Button>
+            <Button size="sm">{t("catalog.products.close")}</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
@@ -286,28 +292,28 @@ function RemoveDialog({
   onConfirm: () => void;
   busy: boolean;
 }) {
+  const t = useT();
   return (
     <Dialog open={image !== null} onOpenChange={(o) => (o ? undefined : onCancel())}>
       <DialogContent>
         <DialogHeader>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-destructive)]">
-            Remove image
+            {t("catalog.products.removeImage")}
           </span>
-          <DialogTitle>Detach this image?</DialogTitle>
+          <DialogTitle>{t("catalog.products.detachTitle")}</DialogTitle>
           <DialogDescription>
-            The image is removed from this product. {image?.isThumbnail
-              ? "It's currently the cover — another image will be promoted automatically."
-              : ""}
+            {t("catalog.products.detachBody")}
+            {image?.isThumbnail ? ` ${t("catalog.products.detachCoverNote")}` : ""}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={busy}>
-              Cancel
+              {t("chrome.cancel")}
             </Button>
           </DialogClose>
           <Button variant="destructive" onClick={onConfirm} disabled={busy}>
-            {busy ? "Removing…" : "Remove"}
+            {busy ? t("catalog.products.removing") : t("catalog.products.remove")}
           </Button>
         </DialogFooter>
       </DialogContent>

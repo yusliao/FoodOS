@@ -55,6 +55,7 @@ import {
 } from "@/components/list";
 import { cn } from "@/lib/cn";
 import { describe } from "@/lib/list-helpers";
+import { useT } from "@/i18n/locale-provider";
 
 const PAGE_SIZE = 20;
 
@@ -65,10 +66,10 @@ type EmailFilter = "all" | "confirmed" | "unconfirmed";
 const DESKTOP_COLS =
   "grid-cols-[1fr_140px_24px] lg:grid-cols-[1.6fr_140px_180px_24px]";
 
-function fullName(u: UserDto): string {
+function fullName(u: UserDto, unnamed: string): string {
   const parts = [u.firstName, u.lastName].filter(Boolean);
   if (parts.length > 0) return parts.join(" ");
-  return u.userName ?? u.email ?? "Unnamed user";
+  return u.userName ?? u.email ?? unnamed;
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ function fullName(u: UserDto): string {
 // ───────────────────────────────────────────────────────────────────────
 
 export function UsersPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
@@ -140,49 +142,49 @@ export function UsersPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Users}
-        title="Users"
+        title={t("identity.users.title")}
         total={data?.totalCount ?? null}
-        unit="user"
-        description="Every member with access to this tenant. Register newcomers, review status, and manage roles."
+        unit={t("identity.users.unit")}
+        description={t("identity.users.description")}
       >
         <Button
           onClick={() => setRegisterOpen(true)}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <Plus className="size-4" />
-          Register user
+          {t("identity.users.register")}
         </Button>
       </EntityPageHeader>
 
       <EntitySearch
         value={search}
         onChange={setSearch}
-        placeholder="Search by name, username, or email…"
+        placeholder={t("identity.users.searchPlaceholder")}
       />
 
       <div className="flex flex-wrap items-center gap-2">
         <EntityFilterPill
-          label="Account status"
+          label={t("identity.users.accountStatus")}
           value={statusFilter}
           onChange={setStatusFilter}
           options={[
-            { value: "all", label: "All" },
-            { value: "active", label: "Active" },
-            { value: "inactive", label: "Inactive" },
+            { value: "all", label: t("identity.users.all") },
+            { value: "active", label: t("identity.active") },
+            { value: "inactive", label: t("identity.inactive") },
           ]}
         />
         <EntityFilterPill
-          label="Email status"
+          label={t("identity.users.emailStatus")}
           value={emailFilter}
           onChange={setEmailFilter}
           options={[
-            { value: "all", label: "Any email" },
-            { value: "confirmed", label: "Confirmed" },
-            { value: "unconfirmed", label: "Pending" },
+            { value: "all", label: t("identity.users.anyEmail") },
+            { value: "confirmed", label: t("identity.users.confirmed") },
+            { value: "unconfirmed", label: t("identity.users.pending") },
           ]}
         />
         <Combobox
-          label="Role"
+          label={t("identity.users.role")}
           value={roleFilter}
           onChange={setRoleFilter}
           options={(rolesQuery.data ?? []).map((r) => ({
@@ -200,13 +202,13 @@ export function UsersPage() {
       ) : items.length === 0 ? (
         <EntityEmpty
           icon={Users}
-          title={searchActive ? "No users found" : "No users yet"}
+          title={searchActive ? t("identity.users.emptySearchTitle") : t("identity.users.emptyTitle")}
           body={
             searchActive
               ? debouncedSearch
-                ? `Nothing matches "${debouncedSearch}". Try a different term or clear the filters.`
-                : "No users match the current filters."
-              : "Register the first member to seed this tenant. They'll receive a confirmation email if email confirmation is enabled."
+                ? t("identity.users.emptySearchBody").replace("{q}", debouncedSearch)
+                : t("identity.users.emptyFilterBody")
+              : t("identity.users.emptyBody")
           }
           action={
             searchActive ? (
@@ -215,7 +217,7 @@ export function UsersPage() {
                 onClick={clearFilters}
                 className="h-9 rounded-lg px-4 text-[13px]"
               >
-                Clear filters
+                {t("identity.clearFilters")}
               </Button>
             ) : (
               <Button
@@ -223,7 +225,7 @@ export function UsersPage() {
                 className="h-9 rounded-lg px-4 text-[13px]"
               >
                 <Plus className="mr-1.5 size-4" />
-                Register user
+                {t("identity.users.register")}
               </Button>
             )
           }
@@ -232,8 +234,7 @@ export function UsersPage() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {data?.totalCount ?? 0} user
-              {(data?.totalCount ?? 0) !== 1 ? "s" : ""} found
+              {t("identity.users.found").replace("{n}", String(data?.totalCount ?? 0))}
             </p>
           </div>
 
@@ -247,9 +248,9 @@ export function UsersPage() {
           {/* Desktop: table */}
           <EntityListCard className="hidden md:block">
             <EntityListHeader className={DESKTOP_COLS}>
-              <span>Name</span>
-              <span>Username</span>
-              <span className="hidden lg:block">Status</span>
+              <span>{t("identity.users.colName")}</span>
+              <span>{t("identity.users.colUsername")}</span>
+              <span className="hidden lg:block">{t("identity.users.colStatus")}</span>
               <span />
             </EntityListHeader>
 
@@ -295,12 +296,13 @@ export function UsersPage() {
 // ───────────────────────────────────────────────────────────────────────
 
 function UserMobileCard({ user }: { user: UserDto }) {
-  const display = fullName(user);
+  const t = useT();
+  const display = fullName(user, t("identity.unnamedUser"));
   const href = user.id ? `/identity/users/${user.id}` : "#";
   return (
     <EntityMobileCard
       href={href}
-      aria-label={`Open user ${display}`}
+      aria-label={t("identity.users.openUser").replace("{name}", display)}
       dim={!user.isActive}
     >
       <div className="flex items-center justify-between">
@@ -311,7 +313,7 @@ function UserMobileCard({ user }: { user: UserDto }) {
               {display}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-[var(--color-muted-foreground)]">
-              {user.email ?? "no email"}
+              {user.email ?? t("identity.users.noEmail")}
             </p>
           </div>
         </div>
@@ -319,10 +321,10 @@ function UserMobileCard({ user }: { user: UserDto }) {
       </div>
       <div className="mt-2 ml-[52px] flex flex-wrap items-center gap-1.5">
         <EntityStatusBadge tone={user.isActive ? "success" : "default"}>
-          {user.isActive ? "Active" : "Inactive"}
+          {user.isActive ? t("identity.active") : t("identity.inactive")}
         </EntityStatusBadge>
         <EntityStatusBadge tone={user.emailConfirmed ? "info" : "warning"}>
-          {user.emailConfirmed ? "Email confirmed" : "Email pending"}
+          {user.emailConfirmed ? t("identity.users.emailConfirmed") : t("identity.users.emailPending")}
         </EntityStatusBadge>
       </div>
     </EntityMobileCard>
@@ -330,7 +332,8 @@ function UserMobileCard({ user }: { user: UserDto }) {
 }
 
 function UserDesktopRow({ user, isLast }: { user: UserDto; isLast: boolean }) {
-  const display = fullName(user);
+  const t = useT();
+  const display = fullName(user, t("identity.unnamedUser"));
   const href = user.id ? `/identity/users/${user.id}` : "#";
   return (
     <EntityListRow className={DESKTOP_COLS} isLast={isLast} dim={!user.isActive}>
@@ -351,7 +354,7 @@ function UserDesktopRow({ user, isLast }: { user: UserDto; isLast: boolean }) {
               !user.email && "italic opacity-60",
             )}
           >
-            {user.email ?? "no email on file"}
+            {user.email ?? t("identity.users.noEmailOnFile")}
           </span>
         </div>
       </Link>
@@ -367,10 +370,10 @@ function UserDesktopRow({ user, isLast }: { user: UserDto; isLast: boolean }) {
       {/* Status (lg+) */}
       <div className="hidden items-center gap-1.5 lg:flex">
         <EntityStatusBadge tone={user.isActive ? "success" : "default"}>
-          {user.isActive ? "Active" : "Inactive"}
+          {user.isActive ? t("identity.active") : t("identity.inactive")}
         </EntityStatusBadge>
         <EntityStatusBadge tone={user.emailConfirmed ? "info" : "warning"}>
-          {user.emailConfirmed ? "Confirmed" : "Pending"}
+          {user.emailConfirmed ? t("identity.users.confirmed") : t("identity.users.pending")}
         </EntityStatusBadge>
       </div>
 
@@ -392,6 +395,7 @@ function RegisterUserDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -419,14 +423,14 @@ function RegisterUserDialog({
   const mutation = useMutation({
     mutationFn: (input: RegisterUserInput) => registerUser(input),
     onSuccess: () => {
-      toast.success("User registered", {
-        description: "An email confirmation may be required before sign-in.",
+      toast.success(t("identity.users.registered"), {
+        description: t("identity.users.registeredBody"),
       });
       void queryClient.invalidateQueries({ queryKey: ["identity", "users"] });
       onClose();
     },
     onError: (err) =>
-      toast.error("Registration failed", { description: describe(err) }),
+      toast.error(t("identity.users.registerFailed"), { description: describe(err) }),
   });
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -448,16 +452,15 @@ function RegisterUserDialog({
       <DialogContent className="!max-w-lg">
         <form onSubmit={onSubmit}>
           <DialogHeader>
-            <DialogTitle>Register a member</DialogTitle>
+            <DialogTitle>{t("identity.users.registerTitle")}</DialogTitle>
             <DialogDescription>
-              Add a new user to this tenant. Username and email must be unique.
-              Passwords need an uppercase letter, lowercase letter, and a digit.
+              {t("identity.users.registerDesc")}
             </DialogDescription>
           </DialogHeader>
 
           <DialogBody className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field id="reg-first" label="First name" required>
+              <Field id="reg-first" label={t("identity.users.firstName")} required>
                 <Input
                   id="reg-first"
                   value={firstName}
@@ -467,7 +470,7 @@ function RegisterUserDialog({
                   required
                 />
               </Field>
-              <Field id="reg-last" label="Last name" required>
+              <Field id="reg-last" label={t("identity.users.lastName")} required>
                 <Input
                   id="reg-last"
                   value={lastName}
@@ -480,9 +483,9 @@ function RegisterUserDialog({
 
             <Field
               id="reg-username"
-              label="Username"
+              label={t("identity.users.username")}
               required
-              hint="Used at sign-in. Lowercase, no spaces."
+              hint={t("identity.users.usernameHint")}
             >
               <Input
                 id="reg-username"
@@ -494,7 +497,7 @@ function RegisterUserDialog({
               />
             </Field>
 
-            <Field id="reg-email" label="Email" required>
+            <Field id="reg-email" label={t("identity.users.email")} required>
               <Input
                 id="reg-email"
                 type="email"
@@ -505,7 +508,7 @@ function RegisterUserDialog({
               />
             </Field>
 
-            <Field id="reg-phone" label="Phone" hint="Optional contact number.">
+            <Field id="reg-phone" label={t("identity.users.phone")} hint={t("identity.users.phoneHint")}>
               <Input
                 id="reg-phone"
                 value={phoneNumber}
@@ -515,7 +518,7 @@ function RegisterUserDialog({
             </Field>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field id="reg-pwd" label="Password" required>
+              <Field id="reg-pwd" label={t("identity.users.password")} required>
                 <Input
                   id="reg-pwd"
                   type="password"
@@ -527,9 +530,9 @@ function RegisterUserDialog({
               </Field>
               <Field
                 id="reg-pwd2"
-                label="Confirm"
+                label={t("identity.users.confirm")}
                 required
-                hint={passwordMismatch ? "Passwords don't match." : undefined}
+                hint={passwordMismatch ? t("identity.users.passwordMismatch") : undefined}
               >
                 <Input
                   id="reg-pwd2"
@@ -551,7 +554,7 @@ function RegisterUserDialog({
                 variant="outline"
                 disabled={mutation.isPending}
               >
-                Cancel
+                {t("chrome.cancel")}
               </Button>
             </DialogClose>
             <Button
@@ -560,7 +563,7 @@ function RegisterUserDialog({
               className="gap-1.5"
             >
               <UserPlus className="h-4 w-4" />
-              {mutation.isPending ? "Registering…" : "Register user"}
+              {mutation.isPending ? t("identity.users.registering") : t("identity.users.register")}
             </Button>
           </DialogFooter>
         </form>

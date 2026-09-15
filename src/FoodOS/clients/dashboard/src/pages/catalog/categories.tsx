@@ -59,6 +59,7 @@ import {
   Field,
 } from "@/components/list";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 import {
   describe,
   formatDate,
@@ -100,6 +101,7 @@ type EditorState =
 // ───────────────────────────────────────────────────────────────────────
 
 export function CategoriesPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
@@ -157,24 +159,24 @@ export function CategoriesPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Layers}
-        title="Categories"
+        title={t("catalog.categories.title")}
         total={data?.totalCount ?? null}
-        unit="category"
-        description="Group products into shelves. Categories nest under parents to form the taxonomy customers browse."
+        unit={t("catalog.categories.unit")}
+        description={t("catalog.categories.pageDesc")}
       >
         <Button
           onClick={() => setEditor({ mode: "create" })}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <Plus className="size-4" />
-          New category
+          {t("catalog.categories.newCategory")}
         </Button>
       </EntityPageHeader>
 
       <EntitySearch
         value={search}
         onChange={setSearch}
-        placeholder="Search by name or slug…"
+        placeholder={t("catalog.categories.searchPlaceholder")}
       />
 
       {query.isLoading && items.length === 0 ? (
@@ -182,13 +184,13 @@ export function CategoriesPage() {
       ) : items.length === 0 ? (
         <EntityEmpty
           icon={searchActive ? Search : Layers}
-          title={searchActive ? "No categories found" : "No categories yet"}
+          title={searchActive ? t("catalog.categories.emptySearchTitle") : t("catalog.categories.emptyTitle")}
           body={
             searchActive
               ? debouncedSearch
-                ? `Nothing matches "${debouncedSearch}". Try a different term or clear the search.`
-                : "No categories match the current filters."
-              : "Categories give your catalog its tree. Create root shelves, then nest sub-shelves under them."
+                ? t("catalog.categories.emptySearchBody").replace("{q}", debouncedSearch)
+                : t("catalog.categories.emptyFilterBody")
+              : t("catalog.categories.emptyBody")
           }
           action={
             searchActive ? (
@@ -197,7 +199,7 @@ export function CategoriesPage() {
                 onClick={() => setSearch("")}
                 className="h-9 rounded-lg px-4 text-[13px]"
               >
-                Clear search
+                {t("identity.clearSearch")}
               </Button>
             ) : (
               <Button
@@ -205,7 +207,7 @@ export function CategoriesPage() {
                 className="h-9 rounded-lg px-4 text-[13px]"
               >
                 <Plus className="mr-1.5 size-4" />
-                Add category
+                {t("catalog.categories.addCategory")}
               </Button>
             )
           }
@@ -214,8 +216,9 @@ export function CategoriesPage() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {data?.totalCount ?? 0} categor
-              {(data?.totalCount ?? 0) !== 1 ? "ies" : "y"} found
+              {(data?.totalCount ?? 0) === 1
+                ? t("catalog.categories.foundOne").replace("{n}", String(data?.totalCount ?? 0))
+                : t("catalog.categories.found").replace("{n}", String(data?.totalCount ?? 0))}
             </p>
           </div>
 
@@ -238,9 +241,9 @@ export function CategoriesPage() {
           {/* Desktop: list card */}
           <EntityListCard className="hidden md:block">
             <EntityListHeader className="grid-cols-[1fr_180px_140px_24px]">
-              <span>Category</span>
-              <span>Slug</span>
-              <span>Created</span>
+              <span>{t("catalog.categories.colCategory")}</span>
+              <span>{t("catalog.slug")}</span>
+              <span>{t("catalog.created")}</span>
               <span />
             </EntityListHeader>
 
@@ -306,6 +309,7 @@ function MobileCard({
   parentName: string | undefined;
   onEdit: () => void;
 }) {
+  const t = useT();
   return (
     <EntityMobileCard
       href="#"
@@ -313,7 +317,7 @@ function MobileCard({
         e.preventDefault();
         onEdit();
       }}
-      aria-label={`Edit category ${category.name}`}
+      aria-label={t("catalog.categories.editAria").replace("{name}", category.name)}
     >
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -333,12 +337,12 @@ function MobileCard({
         {category.parentCategoryId ? (
           <>
             <ChevronsRight className="size-3 opacity-60" />
-            <span>under {parentName ?? "(parent)"}</span>
+            <span>{t("catalog.categories.under").replace("{name}", parentName ?? t("catalog.categories.parentFallback"))}</span>
           </>
         ) : (
           <>
             <GitBranch className="size-3 opacity-60" />
-            <span>root</span>
+            <span>{t("catalog.categories.root")}</span>
           </>
         )}
         {category.description && (
@@ -371,6 +375,7 @@ function DesktopRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   return (
     <EntityListRow
       className="grid-cols-[1fr_180px_140px_24px]"
@@ -388,13 +393,13 @@ function DesktopRow({
               <>
                 <ChevronsRight className="size-3 shrink-0 opacity-60" />
                 <span className="truncate">
-                  under {parentName ?? "(parent)"}
+                  {t("catalog.categories.under").replace("{name}", parentName ?? t("catalog.categories.parentFallback"))}
                 </span>
               </>
             ) : (
               <>
                 <GitBranch className="size-3 shrink-0 opacity-60" />
-                <span>root</span>
+                <span>{t("catalog.categories.root")}</span>
               </>
             )}
             {category.description && (
@@ -429,7 +434,7 @@ function DesktopRow({
       <div className="flex items-center justify-end gap-1">
         <button
           type="button"
-          aria-label={`Edit ${category.name}`}
+          aria-label={t("catalog.editNamed").replace("{name}", category.name)}
           onClick={onEdit}
           className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-muted-foreground)] opacity-0 transition-all hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] group-hover:opacity-100"
         >
@@ -437,7 +442,7 @@ function DesktopRow({
         </button>
         <button
           type="button"
-          aria-label={`Delete ${category.name}`}
+          aria-label={t("catalog.deleteNamed").replace("{name}", category.name)}
           onClick={onDelete}
           className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-muted-foreground)] opacity-0 transition-all hover:bg-[var(--color-muted)] hover:text-[var(--color-destructive)] group-hover:opacity-100"
         >
@@ -462,6 +467,7 @@ function CategoryEditorDialog({
   onClose: () => void;
   tree: CategoryTreeNodeDto[];
 }) {
+  const t = useT();
   const isOpen = state.mode === "create" || state.mode === "edit";
   const category = state.mode === "edit" ? state.category : undefined;
   const queryClient = useQueryClient();
@@ -505,21 +511,21 @@ function CategoryEditorDialog({
   const createMutation = useMutation({
     mutationFn: (input: CreateCategoryInput) => createCategory(input),
     onSuccess: () => {
-      toast.success("Category created");
+      toast.success(t("catalog.categories.created"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "categories"] });
       onClose();
     },
-    onError: (err) => toast.error("Create failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.createFailed"), { description: describe(err) }),
   });
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateCategoryInput) => updateCategory(input),
     onSuccess: () => {
-      toast.success("Category updated");
+      toast.success(t("catalog.categories.updated"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "categories"] });
       onClose();
     },
-    onError: (err) => toast.error("Update failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.updateFailed"), { description: describe(err) }),
   });
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -546,17 +552,17 @@ function CategoryEditorDialog({
         <form onSubmit={onSubmit}>
           <DialogHeader>
             <DialogTitle>
-              {category ? "Edit category" : "Add a category"}
+              {category ? t("catalog.categories.editTitle") : t("catalog.categories.addTitle")}
             </DialogTitle>
             <DialogDescription>
               {category
-                ? `Update details for ${category.name}. The slug is re-derived from the name.`
-                : "Add a category to your catalog. The slug is generated automatically from the name."}
+                ? t("catalog.categories.editDesc").replace("{name}", category.name)
+                : t("catalog.categories.addDesc")}
             </DialogDescription>
           </DialogHeader>
 
           <DialogBody className="space-y-5">
-            <Field id="category-name" label="Name" required>
+            <Field id="category-name" label={t("catalog.name")} required>
               <Input
                 id="category-name"
                 value={name}
@@ -570,8 +576,8 @@ function CategoryEditorDialog({
 
             <Field
               id="category-slug"
-              label="Slug"
-              hint="Auto-derived from the name. Used in URLs."
+              label={t("catalog.slug")}
+              hint={t("catalog.slugHint")}
             >
               <div className="flex h-9 items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3">
                 <code className="truncate font-mono text-[12.5px] tracking-tight text-[var(--color-foreground)]">
@@ -582,13 +588,13 @@ function CategoryEditorDialog({
 
             <Field
               id="category-parent"
-              label="Parent"
-              hint="Optional. Leave empty to make this a root category."
+              label={t("catalog.categories.parent")}
+              hint={t("catalog.categories.parentHint")}
             >
               <Combobox
                 id="category-parent"
-                label="Parent category"
-                placeholder="No parent (root)"
+                label={t("catalog.categories.parentLabel")}
+                placeholder={t("catalog.categories.noParent")}
                 value={parentCategoryId || null}
                 onChange={(v) => setParentCategoryId(v ?? "")}
                 options={parentOptions.map((opt) => ({
@@ -608,20 +614,20 @@ function CategoryEditorDialog({
                         aria-hidden
                         className="text-[10.5px] font-semibold uppercase tracking-wider text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.6)]"
                       >
-                        root
+                        {t("catalog.categories.root")}
                       </span>
                     ),
                 }))}
                 searchable
                 clearable
-                emptyOptionLabel="No parent (root)"
+                emptyOptionLabel={t("catalog.categories.noParent")}
               />
             </Field>
 
             <Field
               id="category-description"
-              label="Description"
-              hint="Shown on category browse pages."
+              label={t("catalog.description")}
+              hint={t("catalog.categories.catDescHint")}
             >
               <textarea
                 id="category-description"
@@ -642,11 +648,11 @@ function CategoryEditorDialog({
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={isPending}>
-                Cancel
+                {t("chrome.cancel")}
               </Button>
             </DialogClose>
             <Button type="submit" disabled={isPending || !trimmedName}>
-              {isPending ? "Saving…" : category ? "Save changes" : "Add category"}
+              {isPending ? t("identity.saving") : category ? t("identity.saveChanges") : t("catalog.categories.addCategory")}
             </Button>
           </DialogFooter>
         </form>
@@ -666,6 +672,7 @@ function DeleteCategoryDialog({
   state: EditorState;
   onClose: () => void;
 }) {
+  const t = useT();
   const isOpen = state.mode === "delete";
   const category = state.mode === "delete" ? state.category : undefined;
   const queryClient = useQueryClient();
@@ -673,12 +680,12 @@ function DeleteCategoryDialog({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteCategory(id),
     onSuccess: () => {
-      toast.success("Category deleted");
+      toast.success(t("catalog.categories.deleted"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "categories"] });
       queryClient.invalidateQueries({ queryKey: ["trash", "categories"] });
       onClose();
     },
-    onError: (err) => toast.error("Delete failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.deleteFailed"), { description: describe(err) }),
   });
 
   return (
@@ -686,24 +693,23 @@ function DeleteCategoryDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="text-[var(--color-destructive)]">
-            Delete category
+            {t("catalog.categories.deleteTitle")}
           </DialogTitle>
           <DialogDescription>
-            This permanently removes{" "}
-            <span className="font-medium text-[var(--color-foreground)]">
-              {category?.name}
-            </span>{" "}
-            <span className="opacity-70">
-              (created {category && formatDate(category.createdAtUtc)})
-            </span>
-            . Categories with child categories cannot be deleted — move or delete the
-            children first.
+            {t("catalog.categories.deleteBody")
+              .replace("{name}", category?.name ?? "")
+              .replace(
+                "{created}",
+                category
+                  ? t("catalog.createdAgo").replace("{date}", formatDate(category.createdAtUtc))
+                  : "",
+              )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={deleteMutation.isPending}>
-              Cancel
+              {t("chrome.cancel")}
             </Button>
           </DialogClose>
           <Button
@@ -711,7 +717,7 @@ function DeleteCategoryDialog({
             onClick={() => category && deleteMutation.mutate(category.id)}
             disabled={deleteMutation.isPending || !category}
           >
-            {deleteMutation.isPending ? "Deleting…" : "Delete category"}
+            {deleteMutation.isPending ? t("identity.deleting") : t("catalog.categories.deleteCategory")}
           </Button>
         </DialogFooter>
       </DialogContent>

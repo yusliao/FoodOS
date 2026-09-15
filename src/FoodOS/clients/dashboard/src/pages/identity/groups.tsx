@@ -46,10 +46,12 @@ import {
 } from "@/components/list";
 import { cn } from "@/lib/cn";
 import { describe } from "@/lib/list-helpers";
+import { useT } from "@/i18n/locale-provider";
 
 const DESKTOP_COLUMNS = "grid-cols-[1fr_160px_120px_24px]";
 
 export function GroupsPage() {
+  const t = useT();
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -72,24 +74,24 @@ export function GroupsPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={UsersRound}
-        title="Groups"
+        title={t("identity.groups.title")}
         total={query.data ? groups.length : null}
-        unit="group"
-        description="Groups bundle members and roles into reusable cohorts. Add a user to a group to grant every role attached to that group."
+        unit={t("identity.groups.unit")}
+        description={t("identity.groups.description")}
       >
         <Button
           onClick={() => setCreateOpen(true)}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <Plus className="size-4" />
-          New group
+          {t("identity.groups.newGroup")}
         </Button>
       </EntityPageHeader>
 
       <EntitySearch
         value={search}
         onChange={setSearch}
-        placeholder="Search by name or description…"
+        placeholder={t("identity.searchNameDesc")}
       />
 
       {query.isLoading ? (
@@ -97,23 +99,23 @@ export function GroupsPage() {
       ) : groups.length === 0 ? (
         <EntityEmpty
           icon={searchActive ? Search : UsersRound}
-          title={searchActive ? "No groups found" : "No groups yet"}
+          title={searchActive ? t("identity.groups.emptySearchTitle") : t("identity.groups.emptyTitle")}
           body={
             searchActive
               ? debounced
-                ? `Nothing matches "${debounced}". Try a different term.`
-                : "No groups match the current filters."
-              : "Create the first group to bundle members and roles. Useful for teams, departments, or feature cohorts."
+                ? t("identity.groups.emptySearchBody").replace("{q}", debounced)
+                : t("identity.groups.emptyFilterBody")
+              : t("identity.groups.emptyBody")
           }
           action={
             searchActive ? (
               <Button variant="outline" onClick={() => setSearch("")} className="h-9 rounded-lg px-4 text-[13px]">
-                Clear search
+                {t("identity.clearSearch")}
               </Button>
             ) : (
               <Button onClick={() => setCreateOpen(true)} className="h-9 rounded-lg px-4 text-[13px]">
                 <Plus className="mr-1.5 size-4" />
-                Add group
+                {t("identity.groups.addGroup")}
               </Button>
             )
           }
@@ -122,7 +124,7 @@ export function GroupsPage() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {groups.length} group{groups.length === 1 ? "" : "s"} found
+              {t("identity.groups.found").replace("{n}", String(groups.length))}
             </p>
           </div>
 
@@ -136,9 +138,9 @@ export function GroupsPage() {
           {/* Desktop table */}
           <EntityListCard className="hidden md:block">
             <EntityListHeader className={DESKTOP_COLUMNS}>
-              <span>Group</span>
-              <span>Composition</span>
-              <span>Flags</span>
+              <span>{t("identity.groups.colGroup")}</span>
+              <span>{t("identity.groups.colComposition")}</span>
+              <span>{t("identity.groups.colFlags")}</span>
               <span />
             </EntityListHeader>
             {groups.map((group, i) => (
@@ -166,11 +168,24 @@ export function GroupsPage() {
   );
 }
 
+function memberCountLabel(n: number, t: (key: string) => string) {
+  return n === 1
+    ? t("identity.groups.memberCountOne")
+    : t("identity.groups.memberCount").replace("{n}", String(n));
+}
+
+function roleCountLabel(n: number, t: (key: string) => string) {
+  return n === 1
+    ? t("identity.groups.roleCountOne")
+    : t("identity.groups.roleCount").replace("{n}", String(n));
+}
+
 function MobileGroupCard({ group }: { group: GroupDto }) {
+  const t = useT();
   return (
     <EntityMobileCard
       href={`/identity/groups/${group.id}`}
-      aria-label={`Open group ${group.name}`}
+      aria-label={t("identity.groups.openGroup").replace("{name}", group.name)}
     >
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -183,11 +198,11 @@ function MobileGroupCard({ group }: { group: GroupDto }) {
               {group.isDefault && (
                 <EntityStatusBadge tone="info">
                   <Star className="mr-0.5 size-2.5" />
-                  Default
+                  {t("identity.default")}
                 </EntityStatusBadge>
               )}
               {group.isSystemGroup && (
-                <EntityStatusBadge tone="default">System</EntityStatusBadge>
+                <EntityStatusBadge tone="default">{t("identity.system")}</EntityStatusBadge>
               )}
             </div>
             <p
@@ -196,7 +211,7 @@ function MobileGroupCard({ group }: { group: GroupDto }) {
                 !group.description && "italic opacity-70",
               )}
             >
-              {group.description ?? "No description on file."}
+              {group.description ?? t("identity.noDescription")}
             </p>
           </div>
         </div>
@@ -204,12 +219,11 @@ function MobileGroupCard({ group }: { group: GroupDto }) {
       </div>
       <div className="mt-2 ml-[52px] flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-muted-foreground)]">
         <span>
-          {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
+          {memberCountLabel(group.memberCount, t)}
         </span>
         <span className="opacity-40">·</span>
         <span>
-          {group.roleNames?.length ?? 0}{" "}
-          {(group.roleNames?.length ?? 0) === 1 ? "role" : "roles"}
+          {roleCountLabel(group.roleNames?.length ?? 0, t)}
         </span>
       </div>
     </EntityMobileCard>
@@ -223,6 +237,7 @@ function DesktopGroupRow({
   group: GroupDto;
   isLast: boolean;
 }) {
+  const t = useT();
   const navigate = useNavigate();
   return (
     <EntityListRow
@@ -249,7 +264,7 @@ function DesktopGroupRow({
               !group.description && "italic opacity-70",
             )}
           >
-            {group.description ?? "No description on file."}
+            {group.description ?? t("identity.noDescription")}
           </p>
         </div>
       </Link>
@@ -257,11 +272,10 @@ function DesktopGroupRow({
       {/* Composition */}
       <div className="flex flex-col text-[12px] text-[var(--color-muted-foreground)]">
         <span className="font-mono text-[11px] uppercase tracking-wider text-[var(--color-foreground)]">
-          {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
+          {memberCountLabel(group.memberCount, t)}
         </span>
         <span className="font-mono text-[11px] uppercase tracking-wider">
-          {group.roleNames?.length ?? 0}{" "}
-          {(group.roleNames?.length ?? 0) === 1 ? "role" : "roles"}
+          {roleCountLabel(group.roleNames?.length ?? 0, t)}
         </span>
       </div>
 
@@ -270,11 +284,11 @@ function DesktopGroupRow({
         {group.isDefault && (
           <EntityStatusBadge tone="info">
             <Star className="mr-0.5 size-2.5" />
-            Default
+            {t("identity.default")}
           </EntityStatusBadge>
         )}
         {group.isSystemGroup && (
-          <EntityStatusBadge tone="default">System</EntityStatusBadge>
+          <EntityStatusBadge tone="default">{t("identity.system")}</EntityStatusBadge>
         )}
         {!group.isDefault && !group.isSystemGroup && (
           <span className="text-[12px] text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.5)]">
@@ -290,6 +304,7 @@ function DesktopGroupRow({
 }
 
 function CreateGroupDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -313,12 +328,12 @@ function CreateGroupDialog({ open, onClose }: { open: boolean; onClose: () => vo
         roleIds: [],
       }),
     onSuccess: (group) => {
-      toast.success("Group created", { description: "Add members and roles next." });
+      toast.success(t("identity.groups.created"), { description: t("identity.groups.createdBody") });
       void queryClient.invalidateQueries({ queryKey: ["identity", "groups"] });
       onClose();
       navigate(`/identity/groups/${group.id}`);
     },
-    onError: (err) => toast.error("Create failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.createFailed"), { description: describe(err) }),
   });
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -332,14 +347,13 @@ function CreateGroupDialog({ open, onClose }: { open: boolean; onClose: () => vo
       <DialogContent>
         <form onSubmit={onSubmit}>
           <DialogHeader>
-            <DialogTitle>Create a group</DialogTitle>
+            <DialogTitle>{t("identity.groups.createTitle")}</DialogTitle>
             <DialogDescription>
-              Groups bundle members and roles. After creating, you'll be taken
-              to the editor to attach roles and add members.
+              {t("identity.groups.createDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
-            <Field id="group-name" label="Name" required>
+            <Field id="group-name" label={t("identity.groups.name")} required>
               <Input
                 id="group-name"
                 value={name}
@@ -352,8 +366,8 @@ function CreateGroupDialog({ open, onClose }: { open: boolean; onClose: () => vo
             </Field>
             <Field
               id="group-description"
-              label="Description"
-              hint="Helps admins understand what this cohort represents."
+              label={t("identity.groups.descriptionLabel")}
+              hint={t("identity.groups.descriptionHint")}
             >
               <Input
                 id="group-description"
@@ -366,27 +380,27 @@ function CreateGroupDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-muted)] px-4 py-3">
               <div className="min-w-0">
                 <span className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                  Default group
+                  {t("identity.groups.defaultGroup")}
                 </span>
                 <span className="mt-0.5 block text-[12.5px] text-[var(--color-muted-foreground)]">
-                  Newly registered users join automatically.
+                  {t("identity.groups.defaultHint")}
                 </span>
               </div>
               <Switch
                 checked={isDefault}
                 onCheckedChange={setIsDefault}
-                aria-label="Default group"
+                aria-label={t("identity.groups.defaultGroup")}
               />
             </div>
           </DialogBody>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={mutation.isPending}>
-                Cancel
+                {t("chrome.cancel")}
               </Button>
             </DialogClose>
             <Button type="submit" disabled={mutation.isPending || !name.trim()}>
-              {mutation.isPending ? "Creating…" : "Create group"}
+              {mutation.isPending ? t("identity.creating") : t("identity.groups.createGroup")}
             </Button>
           </DialogFooter>
         </form>

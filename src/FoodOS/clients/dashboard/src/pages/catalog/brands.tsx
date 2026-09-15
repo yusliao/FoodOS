@@ -54,6 +54,7 @@ import {
   Field,
 } from "@/components/list";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 import {
   describe,
   formatDate,
@@ -74,6 +75,7 @@ type EditorState =
 // ───────────────────────────────────────────────────────────────────────
 
 export function BrandsPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
@@ -113,24 +115,24 @@ export function BrandsPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Tag}
-        title="Brands"
+        title={t("catalog.brands.title")}
         total={data?.totalCount ?? null}
-        unit="brand"
-        description="Curate the maker imprints behind every product. Each brand carries its own slug, story, and logo."
+        unit={t("catalog.brands.unit")}
+        description={t("catalog.brands.pageDesc")}
       >
         <Button
           onClick={() => setEditor({ mode: "create" })}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <Plus className="size-4" />
-          New brand
+          {t("catalog.brands.newBrand")}
         </Button>
       </EntityPageHeader>
 
       <EntitySearch
         value={search}
         onChange={setSearch}
-        placeholder="Search by name or slug…"
+        placeholder={t("catalog.brands.searchPlaceholder")}
       />
 
       {query.isLoading && items.length === 0 ? (
@@ -138,13 +140,13 @@ export function BrandsPage() {
       ) : items.length === 0 ? (
         <EntityEmpty
           icon={searchActive ? Search : Tag}
-          title={searchActive ? "No brands found" : "No brands yet"}
+          title={searchActive ? t("catalog.brands.emptySearchTitle") : t("catalog.brands.emptyTitle")}
           body={
             searchActive
               ? debouncedSearch
-                ? `Nothing matches "${debouncedSearch}". Try a different term or clear the search.`
-                : "No brands match the current filters."
-              : "Add your first brand to start building the catalog. Each brand carries its own slug, description, and logo."
+                ? t("catalog.brands.emptySearchBody").replace("{q}", debouncedSearch)
+                : t("catalog.brands.emptyFilterBody")
+              : t("catalog.brands.emptyBody")
           }
           action={
             searchActive ? (
@@ -153,7 +155,7 @@ export function BrandsPage() {
                 onClick={() => setSearch("")}
                 className="h-9 rounded-lg px-4 text-[13px]"
               >
-                Clear search
+                {t("identity.clearSearch")}
               </Button>
             ) : (
               <Button
@@ -161,7 +163,7 @@ export function BrandsPage() {
                 className="h-9 rounded-lg px-4 text-[13px]"
               >
                 <Plus className="mr-1.5 size-4" />
-                Add brand
+                {t("catalog.brands.addBrand")}
               </Button>
             )
           }
@@ -170,8 +172,9 @@ export function BrandsPage() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {data?.totalCount ?? 0} brand
-              {(data?.totalCount ?? 0) !== 1 ? "s" : ""} found
+              {(data?.totalCount ?? 0) === 1
+                ? t("catalog.brands.foundOne").replace("{n}", String(data?.totalCount ?? 0))
+                : t("catalog.brands.found").replace("{n}", String(data?.totalCount ?? 0))}
             </p>
           </div>
 
@@ -189,9 +192,9 @@ export function BrandsPage() {
           {/* Desktop: list card */}
           <EntityListCard className="hidden md:block">
             <EntityListHeader className="grid-cols-[1fr_180px_140px_24px]">
-              <span>Brand</span>
-              <span>Slug</span>
-              <span>Created</span>
+              <span>{t("catalog.brands.colBrand")}</span>
+              <span>{t("catalog.slug")}</span>
+              <span>{t("catalog.created")}</span>
               <span />
             </EntityListHeader>
 
@@ -249,6 +252,7 @@ function MobileCard({
   brand: BrandDto;
   onEdit: () => void;
 }) {
+  const t = useT();
   return (
     <EntityMobileCard
       href="#"
@@ -256,7 +260,7 @@ function MobileCard({
         e.preventDefault();
         onEdit();
       }}
-      aria-label={`Edit brand ${brand.name}`}
+      aria-label={t("catalog.brands.editAria").replace("{name}", brand.name)}
     >
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -298,6 +302,7 @@ function DesktopRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   return (
     <EntityListRow
       className="grid-cols-[1fr_180px_140px_24px]"
@@ -341,7 +346,7 @@ function DesktopRow({
       <div className="flex items-center justify-end gap-1">
         <button
           type="button"
-          aria-label={`Edit ${brand.name}`}
+          aria-label={t("catalog.editNamed").replace("{name}", brand.name)}
           onClick={onEdit}
           className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-muted-foreground)] opacity-0 transition-all hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] group-hover:opacity-100"
         >
@@ -349,7 +354,7 @@ function DesktopRow({
         </button>
         <button
           type="button"
-          aria-label={`Delete ${brand.name}`}
+          aria-label={t("catalog.deleteNamed").replace("{name}", brand.name)}
           onClick={onDelete}
           className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-muted-foreground)] opacity-0 transition-all hover:bg-[var(--color-muted)] hover:text-[var(--color-destructive)] group-hover:opacity-100"
         >
@@ -413,6 +418,7 @@ function BrandEditorDialog({
   state: EditorState;
   onClose: () => void;
 }) {
+  const t = useT();
   const isOpen = state.mode === "create" || state.mode === "edit";
   const brand = state.mode === "edit" ? state.brand : undefined;
   const queryClient = useQueryClient();
@@ -443,21 +449,21 @@ function BrandEditorDialog({
   const createMutation = useMutation({
     mutationFn: (input: CreateBrandInput) => createBrand(input),
     onSuccess: () => {
-      toast.success("Brand created");
+      toast.success(t("catalog.brands.created"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "brands"] });
       onClose();
     },
-    onError: (err) => toast.error("Create failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.createFailed"), { description: describe(err) }),
   });
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateBrandInput) => updateBrand(input),
     onSuccess: () => {
-      toast.success("Brand updated");
+      toast.success(t("catalog.brands.updated"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "brands"] });
       onClose();
     },
-    onError: (err) => toast.error("Update failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.updateFailed"), { description: describe(err) }),
   });
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -483,16 +489,16 @@ function BrandEditorDialog({
       <DialogContent className="!max-w-lg">
         <form onSubmit={onSubmit}>
           <DialogHeader>
-            <DialogTitle>{brand ? "Edit brand" : "Add a brand"}</DialogTitle>
+            <DialogTitle>{brand ? t("catalog.brands.editTitle") : t("catalog.brands.addTitle")}</DialogTitle>
             <DialogDescription>
               {brand
-                ? `Update details for ${brand.name}. The slug is re-derived from the name.`
-                : "Add a brand to your catalog. The slug is generated automatically from the name."}
+                ? t("catalog.brands.editDesc").replace("{name}", brand.name)
+                : t("catalog.brands.addDesc")}
             </DialogDescription>
           </DialogHeader>
 
           <DialogBody className="space-y-5">
-            <Field id="brand-name" label="Name" required>
+            <Field id="brand-name" label={t("catalog.name")} required>
               <Input
                 id="brand-name"
                 value={name}
@@ -506,8 +512,8 @@ function BrandEditorDialog({
 
             <Field
               id="brand-slug"
-              label="Slug"
-              hint="Auto-derived from the name. Used in URLs."
+              label={t("catalog.slug")}
+              hint={t("catalog.slugHint")}
             >
               <div className="flex h-9 items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3">
                 <code className="truncate font-mono text-[12.5px] tracking-tight text-[var(--color-foreground)]">
@@ -518,8 +524,8 @@ function BrandEditorDialog({
 
             <Field
               id="brand-description"
-              label="Description"
-              hint="Shown on listing and product detail pages."
+              label={t("catalog.description")}
+              hint={t("catalog.descListingHint")}
             >
               <textarea
                 id="brand-description"
@@ -538,8 +544,8 @@ function BrandEditorDialog({
 
             <Field
               id="brand-logo"
-              label="Logo URL"
-              hint="Optional. Public URL to the brand's logo image."
+              label={t("catalog.brands.logoUrl")}
+              hint={t("catalog.brands.logoHint")}
             >
               <Input
                 id="brand-logo"
@@ -555,11 +561,11 @@ function BrandEditorDialog({
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={isPending}>
-                Cancel
+                {t("chrome.cancel")}
               </Button>
             </DialogClose>
             <Button type="submit" disabled={isPending || !trimmedName}>
-              {isPending ? "Saving…" : brand ? "Save changes" : "Add brand"}
+              {isPending ? t("identity.saving") : brand ? t("identity.saveChanges") : t("catalog.brands.addBrand")}
             </Button>
           </DialogFooter>
         </form>
@@ -579,6 +585,7 @@ function DeleteBrandDialog({
   state: EditorState;
   onClose: () => void;
 }) {
+  const t = useT();
   const isOpen = state.mode === "delete";
   const brand = state.mode === "delete" ? state.brand : undefined;
   const queryClient = useQueryClient();
@@ -586,12 +593,12 @@ function DeleteBrandDialog({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteBrand(id),
     onSuccess: () => {
-      toast.success("Brand deleted");
+      toast.success(t("catalog.brands.deleted"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "brands"] });
       queryClient.invalidateQueries({ queryKey: ["trash", "brands"] });
       onClose();
     },
-    onError: (err) => toast.error("Delete failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.deleteFailed"), { description: describe(err) }),
   });
 
   return (
@@ -599,23 +606,23 @@ function DeleteBrandDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="text-[var(--color-destructive)]">
-            Delete brand
+            {t("catalog.brands.deleteTitle")}
           </DialogTitle>
           <DialogDescription>
-            This permanently removes{" "}
-            <span className="font-medium text-[var(--color-foreground)]">
-              {brand?.name}
-            </span>{" "}
-            <span className="opacity-70">
-              (created {brand && formatDate(brand.createdAtUtc)})
-            </span>
-            . Products referencing this brand will need to be reassigned.
+            {t("catalog.brands.deleteBody")
+              .replace("{name}", brand?.name ?? "")
+              .replace(
+                "{created}",
+                brand
+                  ? t("catalog.createdAgo").replace("{date}", formatDate(brand.createdAtUtc))
+                  : "",
+              )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={deleteMutation.isPending}>
-              Cancel
+              {t("chrome.cancel")}
             </Button>
           </DialogClose>
           <Button
@@ -623,7 +630,7 @@ function DeleteBrandDialog({
             onClick={() => brand && deleteMutation.mutate(brand.id)}
             disabled={deleteMutation.isPending || !brand}
           >
-            {deleteMutation.isPending ? "Deleting…" : "Delete brand"}
+            {deleteMutation.isPending ? t("identity.deleting") : t("catalog.brands.deleteBrand")}
           </Button>
         </DialogFooter>
       </DialogContent>

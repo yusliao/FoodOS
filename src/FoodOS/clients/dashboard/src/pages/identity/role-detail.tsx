@@ -53,6 +53,7 @@ import {
 } from "@/components/list";
 import { describe, pad2 } from "@/lib/list-helpers";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 // System roles defined by the framework (RoleConstants.DefaultRoles on the
 // server). These cannot be deleted, renamed, re-described, or have their
@@ -64,6 +65,7 @@ const isSystemRoleName = (name?: string | null): boolean =>
   !!name && SYSTEM_ROLE_NAMES.includes(name);
 
 export function RoleDetailPage() {
+  const t = useT();
   const { roleId = "" } = useParams<{ roleId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -230,7 +232,7 @@ export function RoleDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ["identity", "roles"] });
       void queryClient.invalidateQueries({ queryKey: ["identity", "roles", roleId] });
     },
-    onError: (err) => toast.error("Update failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.updateFailed"), { description: describe(err) }),
   });
 
   const savePerms = useMutation({
@@ -238,18 +240,18 @@ export function RoleDetailPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["identity", "roles", roleId] });
     },
-    onError: (err) => toast.error("Permissions update failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.roles.permsUpdateFailed"), { description: describe(err) }),
   });
 
   const removeRole = useMutation({
     mutationFn: () => deleteRole(roleId),
     onSuccess: () => {
-      toast.success("Role deleted");
+      toast.success(t("identity.roles.deleted"));
       void queryClient.invalidateQueries({ queryKey: ["identity", "roles"] });
       navigate("/identity/roles");
     },
     onError: (err) => {
-      toast.error("Delete failed", { description: describe(err) });
+      toast.error(t("identity.deleteFailed"), { description: describe(err) });
       setConfirmDelete(false);
     },
   });
@@ -258,7 +260,7 @@ export function RoleDetailPage() {
     try {
       if (dirtyMeta) await saveMeta.mutateAsync();
       if (dirtyPerms) await savePerms.mutateAsync();
-      toast.success("Role saved");
+      toast.success(t("identity.roles.saved"));
     } catch {
       // mutations report their own errors via toast
     }
@@ -278,7 +280,7 @@ export function RoleDetailPage() {
   if (roleQuery.isLoading || catalogQuery.isLoading) {
     return (
       <div className="space-y-6">
-        <EntityDetailBack to="/identity/roles" label="Back to roles" />
+        <EntityDetailBack to="/identity/roles" label={t("identity.roles.back")} />
         <Skeleton className="h-32 rounded-xl" />
         <Skeleton className="h-96 rounded-xl" />
       </div>
@@ -288,8 +290,8 @@ export function RoleDetailPage() {
   if (roleQuery.isError || !role) {
     return (
       <div className="space-y-4">
-        <EntityDetailBack to="/identity/roles" label="Back to roles" />
-        <ErrorBand message={roleQuery.error ? describe(roleQuery.error) : "Role not found."} />
+        <EntityDetailBack to="/identity/roles" label={t("identity.roles.back")} />
+        <ErrorBand message={roleQuery.error ? describe(roleQuery.error) : t("identity.roles.notFound")} />
       </div>
     );
   }
@@ -297,9 +299,9 @@ export function RoleDetailPage() {
   if (catalogQuery.isError) {
     return (
       <div className="space-y-4">
-        <EntityDetailBack to="/identity/roles" label="Back to roles" />
+        <EntityDetailBack to="/identity/roles" label={t("identity.roles.back")} />
         <ErrorBand
-          message={`Couldn't load the permission catalog: ${describe(catalogQuery.error)}`}
+          message={t("identity.roles.catalogFailed").replace("{error}", describe(catalogQuery.error))}
         />
       </div>
     );
@@ -311,7 +313,7 @@ export function RoleDetailPage() {
 
   return (
     <div className="space-y-5 pb-12">
-      <EntityDetailBack to="/identity/roles" label="Back to roles" />
+      <EntityDetailBack to="/identity/roles" label={t("identity.roles.back")} />
 
       <EntityDetailHero
         avatar={<EntityDetailAvatar name={role.name} icon={ShieldCheck} />}
@@ -320,21 +322,21 @@ export function RoleDetailPage() {
           <>
             {isSystem && (
               <Badge variant="outline">
-                <Lock className="h-3 w-3" /> System
+                <Lock className="h-3 w-3" /> {t("identity.system")}
               </Badge>
             )}
           </>
         }
-        subtitle={role.description || (isSystem ? "Built-in role managed by the framework." : "Custom role.")}
+        subtitle={role.description || (isSystem ? t("identity.roles.systemSubtitle") : t("identity.roles.customSubtitle"))}
         actions={
           <Button
             variant="destructive"
             size="sm"
             onClick={() => setConfirmDelete(true)}
             disabled={isSystem}
-            title={isSystem ? "System roles cannot be deleted." : undefined}
+            title={isSystem ? t("identity.roles.cannotDeleteSystem") : undefined}
           >
-            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete role
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("identity.roles.deleteRole")}
           </Button>
         }
         stats={
@@ -342,7 +344,7 @@ export function RoleDetailPage() {
             <EntityDetailStat
               icon={KeyRound}
               value={`${pad2(totalSelected)} / ${pad2(totalCatalog)}`}
-              label="permissions"
+              label={t("identity.roles.permissions")}
               tone="primary"
             />
           </>
@@ -363,13 +365,10 @@ export function RoleDetailPage() {
           </span>
           <div className="min-w-0 text-sm leading-relaxed">
             <p className="font-medium text-[var(--color-foreground)]">
-              Built-in role — read only
+              {t("identity.roles.systemBannerTitle")}
             </p>
             <p className="mt-0.5 text-[12.5px] text-[var(--color-muted-foreground)]">
-              <span className="font-mono font-medium">{role.name}</span> ships with the framework.
-              Its name, description, and permissions are managed centrally so the seed contract
-              and the runtime permission syncer stay in agreement. Create a custom role if you
-              need a different set of grants.
+              <span className="font-mono font-medium">{role.name}</span> {t("identity.roles.systemBannerBody")}
             </p>
           </div>
         </div>
@@ -377,12 +376,12 @@ export function RoleDetailPage() {
 
       {/* Metadata */}
       <EntityDetailSection
-        title="Role details"
+        title={t("identity.roles.details")}
         icon={ShieldCheck}
-        description="The display label and a one-line summary admins will see at assignment time."
+        description={t("identity.roles.detailsDesc")}
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <Field id="role-name" label="Name" required>
+          <Field id="role-name" label={t("identity.roles.name")} required>
             <Input
               id="role-name"
               value={name}
@@ -393,12 +392,12 @@ export function RoleDetailPage() {
               className={cn(isSystem && "cursor-not-allowed opacity-70")}
             />
           </Field>
-          <Field id="role-desc" label="Description">
+          <Field id="role-desc" label={t("identity.roles.descriptionLabel")}>
             <Input
               id="role-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Short description for this role"
+              placeholder={t("identity.roles.descPlaceholder")}
               maxLength={512}
               readOnly={isSystem}
               aria-readonly={isSystem || undefined}
@@ -410,19 +409,19 @@ export function RoleDetailPage() {
 
       {/* Permission editor */}
       <EntityDetailSection
-        title="Permissions"
+        title={t("identity.roles.permsTitle")}
         icon={KeyRound}
-        description="Search, filter, and toggle individual permissions — or seed a sensible default from a preset. Some root-level permissions may be filtered server-side."
+        description={t("identity.roles.permsDesc")}
         action={
           <div className="flex flex-wrap gap-1.5">
             <PresetButton
               onClick={presetBasic}
               icon={<Sparkles className="h-3 w-3" />}
-              label="Basic"
+              label={t("identity.roles.presetBasic")}
               disabled={isSystem}
             />
-            <PresetButton onClick={presetAll} label="All" disabled={isSystem} />
-            <PresetButton onClick={presetClear} label="Clear" disabled={isSystem} />
+            <PresetButton onClick={presetAll} label={t("identity.roles.presetAll")} disabled={isSystem} />
+            <PresetButton onClick={presetClear} label={t("identity.roles.presetClear")} disabled={isSystem} />
           </div>
         }
         padded={false}
@@ -433,22 +432,22 @@ export function RoleDetailPage() {
                 {isDirty ? (
                   <span className="inline-flex items-center gap-1.5 text-[var(--color-warning)]">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-warning)]" />
-                    Unsaved changes
+                    {t("identity.roles.unsaved")}
                   </span>
                 ) : (
-                  "All changes saved"
+                  t("identity.roles.allSaved")
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={reset} disabled={!isDirty || isSaving}>
-                  Discard
+                  {t("identity.discard")}
                 </Button>
                 <Button
                   size="sm"
                   onClick={saveAll}
                   disabled={!isDirty || isSaving}
                 >
-                  {isSaving ? "Saving…" : "Save changes"}
+                  {isSaving ? t("identity.saving") : t("identity.saveChanges")}
                 </Button>
               </div>
             </div>
@@ -467,8 +466,8 @@ export function RoleDetailPage() {
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by resource, action, or description…"
-                aria-label="Search permissions"
+                placeholder={t("identity.roles.searchPerms")}
+                aria-label={t("identity.roles.searchPermsAria")}
                 className={cn(
                   "h-9 w-full rounded-md border border-[var(--color-input)] bg-transparent pl-9 pr-9",
                   "text-[13px] outline-none transition-colors",
@@ -483,7 +482,7 @@ export function RoleDetailPage() {
                     setSearchQuery("");
                     searchInputRef.current?.focus();
                   }}
-                  aria-label="Clear search"
+                  aria-label={t("identity.clearSearch")}
                   className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 cursor-pointer place-items-center rounded text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
                 >
                   <X className="size-3" />
@@ -492,7 +491,7 @@ export function RoleDetailPage() {
             </div>
             <div className="flex items-center gap-1 overflow-x-auto">
               <FilterChip active={filter === "all"} count={totalCatalog} onClick={() => setFilter("all")}>
-                All
+                {t("identity.roles.filterAll")}
               </FilterChip>
               <FilterChip
                 active={filter === "enabled"}
@@ -500,7 +499,7 @@ export function RoleDetailPage() {
                 onClick={() => setFilter("enabled")}
                 disabled={totalSelected === 0}
               >
-                Enabled
+                {t("identity.roles.filterEnabled")}
               </FilterChip>
               <FilterChip
                 active={filter === "modified"}
@@ -509,14 +508,14 @@ export function RoleDetailPage() {
                 onClick={() => setFilter("modified")}
                 disabled={modifiedCount === 0}
               >
-                Modified
+                {t("identity.roles.filterModified")}
               </FilterChip>
               <FilterChip
                 active={filter === "basic"}
                 count={basicCount}
                 onClick={() => setFilter("basic")}
               >
-                Basic
+                {t("identity.roles.filterBasic")}
               </FilterChip>
             </div>
           </div>
@@ -528,19 +527,23 @@ export function RoleDetailPage() {
             <span className="font-mono font-semibold tabular-nums text-[var(--color-foreground)]">
               {pad2(totalSelected)} / {pad2(totalCatalog)}
             </span>
-            <span className="text-[var(--color-muted-foreground)]">enabled</span>
+            <span className="text-[var(--color-muted-foreground)]">{t("identity.roles.enabled")}</span>
             {modifiedCount > 0 && (
               <span className="inline-flex items-center gap-1 text-[var(--color-warning)]">
                 <span aria-hidden className="text-[var(--color-muted-foreground)]">·</span>
                 <span aria-hidden className="inline-block size-1.5 rounded-full bg-[var(--color-warning)]" />
-                {modifiedCount} modified
+                {t("identity.roles.modifiedCount").replace("{n}", String(modifiedCount))}
               </span>
             )}
             {forceExpand && visibleGroups.length > 0 && (
               <span className="text-[var(--color-muted-foreground)]">
                 <span aria-hidden className="mr-1">·</span>
-                showing {visibleGroups.reduce((n, g) => n + g.permissions.length, 0)} match
-                {visibleGroups.reduce((n, g) => n + g.permissions.length, 0) === 1 ? "" : "es"}
+                {visibleGroups.reduce((n, g) => n + g.permissions.length, 0) === 1
+                  ? t("identity.roles.showingMatchOne")
+                  : t("identity.roles.showingMatches").replace(
+                      "{n}",
+                      String(visibleGroups.reduce((n, g) => n + g.permissions.length, 0)),
+                    )}
               </span>
             )}
           </div>
@@ -554,7 +557,7 @@ export function RoleDetailPage() {
                 forceExpand && "cursor-not-allowed opacity-40 hover:text-[var(--color-muted-foreground)]",
               )}
             >
-              Expand all
+              {t("identity.roles.expandAll")}
             </button>
             <span aria-hidden className="text-[var(--color-border-strong)]">·</span>
             <button
@@ -566,7 +569,7 @@ export function RoleDetailPage() {
                 forceExpand && "cursor-not-allowed opacity-40 hover:text-[var(--color-muted-foreground)]",
               )}
             >
-              Collapse all
+              {t("identity.roles.collapseAll")}
             </button>
           </div>
         </div>
@@ -582,10 +585,10 @@ export function RoleDetailPage() {
             </span>
             <div>
               <p className="text-[13px] font-medium text-[var(--color-foreground)]">
-                No permissions match
+                {t("identity.roles.noPermsMatch")}
               </p>
               <p className="mt-0.5 text-[11.5px] text-[var(--color-muted-foreground)]">
-                Try a different term or clear the current filter.
+                {t("identity.roles.noPermsMatchBody")}
               </p>
             </div>
             {(searchQuery || filter !== "all") && (
@@ -602,7 +605,7 @@ export function RoleDetailPage() {
                   "text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]",
                 )}
               >
-                <X className="size-3" /> Reset filters
+                <X className="size-3" /> {t("identity.roles.resetFilters")}
               </button>
             )}
           </div>
@@ -652,17 +655,15 @@ export function RoleDetailPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete role</DialogTitle>
+            <DialogTitle>{t("identity.roles.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              This permanently removes{" "}
-              <span className="font-medium text-[var(--color-foreground)]">{role.name}</span>.
-              Members currently assigned will lose its permissions immediately.
+              {t("identity.roles.deleteBody").replace("{name}", role.name)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={removeRole.isPending}>
-                Cancel
+                {t("chrome.cancel")}
               </Button>
             </DialogClose>
             <Button
@@ -670,7 +671,7 @@ export function RoleDetailPage() {
               onClick={() => removeRole.mutate()}
               disabled={removeRole.isPending}
             >
-              {removeRole.isPending ? "Deleting…" : "Delete role"}
+              {removeRole.isPending ? t("identity.deleting") : t("identity.roles.deleteRole")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -811,6 +812,7 @@ function PermissionGroupCard({
   initial: Set<string>;
   disabled?: boolean;
 }) {
+  const t = useT();
   return (
     <div>
       {/* Header — clickable to toggle expand. The group checkbox + chip
@@ -841,7 +843,7 @@ function PermissionGroupCard({
             onSetGroupAll(!allOn);
           }}
           disabled={disabled}
-          aria-label={`Toggle all ${resource}`}
+          aria-label={t("identity.roles.toggleAll").replace("{resource}", resource)}
           className={cn(
             "grid size-5 shrink-0 cursor-pointer place-items-center rounded border transition-colors",
             allOn
@@ -870,15 +872,21 @@ function PermissionGroupCard({
           {groupModified > 0 && (
             <span
               className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-warning)]"
-              title={`${groupModified} unsaved change${groupModified === 1 ? "" : "s"}`}
+              title={
+                groupModified === 1
+                  ? t("identity.roles.unsavedChangeOne")
+                  : t("identity.roles.unsavedChanges").replace("{n}", String(groupModified))
+              }
             >
               <span aria-hidden className="size-1.5 rounded-full bg-[var(--color-warning)]" />
-              {groupModified} changed
+              {t("identity.roles.changedCount").replace("{n}", String(groupModified))}
             </span>
           )}
           {showingPartial && (
             <span className="text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-muted-foreground)]">
-              · {visibleCount} match{visibleCount === 1 ? "" : "es"}
+              · {visibleCount === 1
+                ? t("identity.roles.matchCountOne")
+                : t("identity.roles.matchCount").replace("{n}", String(visibleCount))}
             </span>
           )}
         </div>
@@ -900,7 +908,7 @@ function PermissionGroupCard({
               (disabled || allOn) && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-[var(--color-muted-foreground)]",
             )}
           >
-            All
+            {t("identity.roles.presetAll")}
           </button>
           <button
             type="button"
@@ -916,7 +924,7 @@ function PermissionGroupCard({
               (disabled || onCount === 0) && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-[var(--color-muted-foreground)]",
             )}
           >
-            None
+            {t("identity.roles.none")}
           </button>
         </div>
 
@@ -1000,6 +1008,7 @@ function PermissionRow({
   onToggle: () => void;
   disabled?: boolean;
 }) {
+  const t = useT();
   return (
     <label
       className={cn(
@@ -1063,9 +1072,9 @@ function PermissionRow({
               "rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]",
               "bg-[oklch(from_var(--color-saffron)_l_c_h_/_0.16)] text-[var(--color-saffron)]",
             )}
-            title="Root-level permission. May be filtered server-side."
+            title={t("identity.roles.rootTitle")}
           >
-            root
+            {t("identity.roles.root")}
           </span>
         )}
         {perm.isBasic && (
@@ -1075,12 +1084,12 @@ function PermissionRow({
               "bg-[oklch(from_var(--color-info)_l_c_h_/_0.16)] text-[var(--color-info)]",
             )}
           >
-            basic
+            {t("identity.roles.basic")}
           </span>
         )}
         {dirty && (
           <span
-            aria-label="modified"
+            aria-label={t("identity.users.modified")}
             className="inline-block size-1.5 rounded-full bg-[var(--color-warning)]"
           />
         )}

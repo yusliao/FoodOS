@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { searchUsers, type UserDto } from "@/api/identity";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 /**
  * UserPicker — debounced typeahead over /identity/users/search. Replaces
@@ -26,7 +27,7 @@ export function UserPicker({
   value,
   onChange,
   initialSelected,
-  placeholder = "Search by name or email…",
+  placeholder,
   disabled,
 }: {
   value: string | null;
@@ -35,6 +36,8 @@ export function UserPicker({
   placeholder?: string;
   disabled?: boolean;
 }) {
+  const t = useT();
+  const searchPlaceholder = placeholder ?? t("identity.picker.placeholder");
   const [selected, setSelected] = useState<UserDto | null>(initialSelected ?? null);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -128,11 +131,11 @@ export function UserPicker({
               variant="ghost"
               size="sm"
               onClick={clear}
-              aria-label="Clear selection"
+              aria-label={t("identity.picker.clearAria")}
               className="shrink-0"
             >
               <X className="h-3.5 w-3.5" />
-              Clear
+              {t("identity.picker.clear")}
             </Button>
           )}
         </div>
@@ -145,7 +148,7 @@ export function UserPicker({
         />
         <Input
           type="search"
-          placeholder={selected ? "Search to reassign…" : placeholder}
+          placeholder={selected ? t("identity.picker.reassign") : searchPlaceholder}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -169,14 +172,14 @@ export function UserPicker({
             {resultsQuery.isFetching && results.length === 0 ? (
               <div className="flex items-center gap-2 px-3 py-2.5 text-[12.5px] text-[var(--color-muted-foreground)]">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Searching for "{debounced}"…
+                {t("identity.picker.searching").replace("{q}", debounced)}
               </div>
             ) : results.length === 0 ? (
               <div className="px-3 py-3 text-center text-[12.5px] text-[var(--color-muted-foreground)]">
-                No users match "{debounced}".
+                {t("identity.picker.noMatch").replace("{q}", debounced)}
               </div>
             ) : (
-              <div role="listbox" aria-label="Search results">
+              <div role="listbox" aria-label={t("identity.picker.results")}>
                 {results.map((u) => (
                   <div key={u.id}>
                     <button

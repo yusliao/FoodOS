@@ -61,6 +61,7 @@ import {
   Field,
 } from "@/components/list";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 import {
   describe,
   formatDate,
@@ -100,10 +101,11 @@ function FilterRow({
   activeFilter: boolean | null;
   setActiveFilter: (v: boolean | null) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Combobox
-        label="Brand"
+        label={t("catalog.products.brand")}
         value={brandFilter}
         onChange={setBrandFilter}
         options={brands.map((b) => ({ value: b.id, label: b.name }))}
@@ -112,7 +114,7 @@ function FilterRow({
         clearable
       />
       <Combobox
-        label="Category"
+        label={t("catalog.products.category")}
         value={categoryFilter}
         onChange={setCategoryFilter}
         options={categories.map((c) => ({ value: c.id, label: c.name }))}
@@ -132,16 +134,17 @@ function ActivePill({
   value: boolean | null;
   onChange: (v: boolean | null) => void;
 }) {
+  const t = useT();
   return (
     <div
       role="group"
-      aria-label="Active filter"
+      aria-label={t("catalog.products.activeFilter")}
       className="inline-flex h-8 items-center rounded-full border border-[var(--color-border)] bg-[var(--color-card)] p-0.5 text-[11px] font-semibold uppercase tracking-wider"
     >
       {[
-        { v: null, label: "All" },
-        { v: true, label: "Active" },
-        { v: false, label: "Hidden" },
+        { v: null, label: t("catalog.products.all") },
+        { v: true, label: t("catalog.products.active") },
+        { v: false, label: t("catalog.products.hidden") },
       ].map((opt) => {
         const isActive = value === opt.v;
         return (
@@ -170,6 +173,7 @@ function ActivePill({
 // ───────────────────────────────────────────────────────────────────────
 
 export function ProductsPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -258,16 +262,16 @@ export function ProductsPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Package}
-        title="Products"
+        title={t("catalog.products.title")}
         total={data?.totalCount ?? null}
-        description="Browse and manage the catalog. Each product carries a SKU, brand, category, and list price. Available quantity is Inventory ATP."
+        description={t("catalog.products.pageDesc")}
       >
         <Button
           onClick={() => setEditor({ mode: "create" })}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <Plus className="size-4" />
-          New product
+          {t("catalog.products.newProduct")}
         </Button>
       </EntityPageHeader>
 
@@ -276,7 +280,7 @@ export function ProductsPage() {
         <Search className="absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.5)]" />
         <input
           type="text"
-          placeholder="Search by name, SKU, or slug…"
+          placeholder={t("catalog.products.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className={cn(
@@ -293,7 +297,7 @@ export function ProductsPage() {
             onClick={() => setSearch("")}
             className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.5)] transition-colors hover:text-[var(--color-muted-foreground)]"
           >
-            Clear
+            {t("catalog.clear")}
           </button>
         )}
       </div>
@@ -329,8 +333,9 @@ export function ProductsPage() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {data?.totalCount ?? 0} product
-              {(data?.totalCount ?? 0) !== 1 ? "s" : ""} found
+              {(data?.totalCount ?? 0) === 1
+                ? t("catalog.products.foundOne").replace("{n}", String(data?.totalCount ?? 0))
+                : t("catalog.products.found").replace("{n}", String(data?.totalCount ?? 0))}
             </p>
           </div>
 
@@ -354,10 +359,10 @@ export function ProductsPage() {
           <div className="hidden overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-xs md:block">
             {/* Header */}
             <div className="grid grid-cols-[1fr_120px_24px] gap-3 border-b border-[var(--color-border)] bg-[oklch(from_var(--color-muted)_l_c_h_/_0.4)] px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] lg:grid-cols-[1fr_140px_110px_120px_90px]">
-              <span>Product</span>
-              <span>SKU</span>
-              <span className="hidden lg:block">Brand</span>
-              <span className="hidden lg:block">Price</span>
+              <span>{t("catalog.products.colProduct")}</span>
+              <span>{t("catalog.products.colSku")}</span>
+              <span className="hidden lg:block">{t("catalog.products.colBrand")}</span>
+              <span className="hidden lg:block">{t("catalog.products.colPrice")}</span>
               <span />
             </div>
 
@@ -433,10 +438,11 @@ function MobileCard({
   warehouseName?: string;
   onEdit: () => void;
 }) {
+  const t = useT();
   return (
     <Link
       to={`/catalog/products/${product.id}`}
-      aria-label={`Open product ${product.name}`}
+      aria-label={t("catalog.products.openProduct").replace("{name}", product.name)}
       className={cn(
         "block rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-left",
         "shadow-xs",
@@ -458,7 +464,7 @@ function MobileCard({
               </p>
               {!product.isActive && (
                 <span className="inline-flex h-4 items-center rounded-full border border-[oklch(from_var(--color-destructive)_l_c_h_/_0.20)] bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.10)] px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider text-[var(--color-destructive)]">
-                  Hidden
+                  {t("catalog.products.hidden")}
                 </span>
               )}
             </div>
@@ -472,7 +478,7 @@ function MobileCard({
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            aria-label={`Edit ${product.name}`}
+            aria-label={t("catalog.editNamed").replace("{name}", product.name)}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -533,6 +539,7 @@ function DesktopRow({
   onDelete: () => void;
   onPriceChange: () => void;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -558,7 +565,7 @@ function DesktopRow({
         </span>
         {!product.isActive && (
           <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-[oklch(from_var(--color-destructive)_l_c_h_/_0.20)] bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.10)] px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider text-[var(--color-destructive)]">
-            Hidden
+            {t("catalog.products.hidden")}
           </span>
         )}
       </Link>
@@ -594,7 +601,7 @@ function DesktopRow({
         <button
           type="button"
           onClick={onPriceChange}
-          title="Change price"
+          title={t("catalog.products.changePrice")}
           className="cursor-pointer rounded-md px-1.5 py-0.5 text-left font-display text-[14px] font-semibold tabular-nums transition-colors hover:bg-[var(--color-muted)]"
         >
           {formatMoney(product.price.amount, product.price.currency)}
@@ -606,7 +613,7 @@ function DesktopRow({
       <div className="flex items-center justify-end gap-1">
         <button
           type="button"
-          aria-label={`Edit ${product.name}`}
+          aria-label={t("catalog.editNamed").replace("{name}", product.name)}
           onClick={onEdit}
           className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-muted-foreground)] opacity-0 transition-all hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] group-hover:opacity-100"
         >
@@ -614,7 +621,7 @@ function DesktopRow({
         </button>
         <button
           type="button"
-          aria-label={`Delete ${product.name}`}
+          aria-label={t("catalog.deleteNamed").replace("{name}", product.name)}
           onClick={onDelete}
           className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-muted-foreground)] opacity-0 transition-all hover:bg-[var(--color-muted)] hover:text-[var(--color-destructive)] group-hover:opacity-100"
         >
@@ -641,6 +648,7 @@ function EmptyResults({
   onCreate: () => void;
   onClear: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-[var(--color-muted)]">
@@ -651,23 +659,23 @@ function EmptyResults({
         )}
       </div>
       <h3 className="mb-1.5 font-display text-[17px] font-semibold text-[var(--color-foreground)]">
-        {searchActive ? "No products found" : "No products yet"}
+        {searchActive ? t("catalog.products.emptySearchTitle") : t("catalog.products.emptyTitle")}
       </h3>
       <p className="mb-6 max-w-[320px] text-[13px] text-[var(--color-muted-foreground)]">
         {searchActive
           ? search
-            ? `Nothing matches "${search}". Try a different term or clear the filters.`
-            : "No products match the current filters."
-          : "Add your first product to start selling. Each carries its own SKU, price, and image. Stock is received in Inventory."}
+            ? t("catalog.products.emptySearchBody").replace("{q}", search)
+            : t("catalog.products.emptyFilterBody")
+          : t("catalog.products.emptyBody")}
       </p>
       {searchActive ? (
         <Button variant="outline" onClick={onClear} className="h-9 rounded-lg px-4 text-[13px]">
-          Clear filters
+          {t("identity.clearFilters")}
         </Button>
       ) : (
         <Button onClick={onCreate} className="h-9 rounded-lg px-4 text-[13px]">
           <Plus className="mr-1.5 size-4" />
-          Add product
+          {t("catalog.products.addProduct")}
         </Button>
       )}
     </div>
@@ -732,6 +740,7 @@ function AtpChip({
   loading: boolean;
   warehouseName?: string;
 }) {
+  const t = useT();
   if (loading && available === undefined) {
     return <Skeleton className="h-6 w-12 rounded-full" />;
   }
@@ -753,8 +762,8 @@ function AtpChip({
       "bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.14)] text-[var(--color-destructive)]",
   } as const;
   const title = warehouseName
-    ? `Available to promise at ${warehouseName}`
-    : "Available quantity is managed by Inventory";
+    ? t("catalog.products.atpAt").replace("{name}", warehouseName)
+    : t("catalog.products.atpManaged");
   return (
     <span
       data-testid="catalog-atp"
@@ -849,6 +858,7 @@ function ProductEditorDialog({
   brands: BrandDto[];
   categories: CategoryDto[];
 }) {
+  const t = useT();
   const isOpen = state.mode === "create" || state.mode === "edit";
   const product = state.mode === "edit" ? state.product : undefined;
   const queryClient = useQueryClient();
@@ -892,21 +902,21 @@ function ProductEditorDialog({
   const createMutation = useMutation({
     mutationFn: (input: CreateProductInput) => createProduct(input),
     onSuccess: () => {
-      toast.success("Product created");
+      toast.success(t("catalog.products.created"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "products"] });
       onClose();
     },
-    onError: (err) => toast.error("Create failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.createFailed"), { description: describe(err) }),
   });
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateProductInput) => updateProduct(input),
     onSuccess: () => {
-      toast.success("Product updated");
+      toast.success(t("catalog.products.updated"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "products"] });
       onClose();
     },
-    onError: (err) => toast.error("Update failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.updateFailed"), { description: describe(err) }),
   });
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -954,17 +964,17 @@ function ProductEditorDialog({
       <DialogContent className="!max-w-xl">
         <form onSubmit={onSubmit}>
           <DialogHeader>
-            <DialogTitle>{product ? "Edit product" : "Add a product"}</DialogTitle>
+            <DialogTitle>{product ? t("catalog.products.editTitle") : t("catalog.products.addTitle")}</DialogTitle>
             <DialogDescription>
               {product
-                ? `Update details for ${product.name}. Use the inline price chip on the row to change list price.`
-                : "Add a product to your catalog. List price can be adjusted inline after creation. Stock is received in Inventory."}
+                ? t("catalog.products.editDesc").replace("{name}", product.name)
+                : t("catalog.products.addDesc")}
             </DialogDescription>
           </DialogHeader>
 
           <DialogBody className="space-y-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field id="product-name" label="Name" required>
+              <Field id="product-name" label={t("catalog.name")} required>
                 <Input
                   id="product-name"
                   value={name}
@@ -975,7 +985,7 @@ function ProductEditorDialog({
                   maxLength={200}
                 />
               </Field>
-              <Field id="product-sku" label="SKU" required={!product} hint={product ? "SKU is fixed after creation." : "Stock-keeping unit. Becomes the canonical identifier."}>
+              <Field id="product-sku" label={t("catalog.products.sku")} required={!product} hint={product ? t("catalog.products.skuFixed") : t("catalog.products.skuHint")}>
                 <Input
                   id="product-sku"
                   value={sku}
@@ -990,11 +1000,11 @@ function ProductEditorDialog({
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field id="product-brand" label="Brand" required>
+              <Field id="product-brand" label={t("catalog.products.brand")} required>
                 <Combobox
                   id="product-brand"
-                  label="Brand"
-                  placeholder="Select a brand…"
+                  label={t("catalog.products.brand")}
+                  placeholder={t("catalog.products.selectBrand")}
                   value={brandId || null}
                   onChange={(v) => setBrandId(v ?? "")}
                   options={brands.map((b) => ({ value: b.id, label: b.name }))}
@@ -1002,11 +1012,11 @@ function ProductEditorDialog({
                   required
                 />
               </Field>
-              <Field id="product-category" label="Category" required>
+              <Field id="product-category" label={t("catalog.products.category")} required>
                 <Combobox
                   id="product-category"
-                  label="Category"
-                  placeholder="Select a category…"
+                  label={t("catalog.products.category")}
+                  placeholder={t("catalog.products.selectCategory")}
                   value={categoryId || null}
                   onChange={(v) => setCategoryId(v ?? "")}
                   options={categories.map((c) => ({ value: c.id, label: c.name }))}
@@ -1018,7 +1028,7 @@ function ProductEditorDialog({
 
             {!product && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field id="product-price" label="Price" required>
+                <Field id="product-price" label={t("catalog.products.colPrice")} required>
                   <Input
                     id="product-price"
                     type="number"
@@ -1031,7 +1041,7 @@ function ProductEditorDialog({
                     className="tabular-nums"
                   />
                 </Field>
-                <Field id="product-currency" label="Currency" required>
+                <Field id="product-currency" label={t("catalog.products.currency")} required>
                   <Input
                     id="product-currency"
                     value={priceCurrency}
@@ -1044,7 +1054,7 @@ function ProductEditorDialog({
               </div>
             )}
 
-            <Field id="product-description" label="Description" hint="Shown on listing and product detail pages.">
+            <Field id="product-description" label={t("catalog.description")} hint={t("catalog.descListingHint")}>
               <textarea
                 id="product-description"
                 value={description}
@@ -1064,13 +1074,13 @@ function ProductEditorDialog({
               <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-muted)] px-4 py-3">
                 <div>
                   <div className="text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                    Visibility
+                    {t("catalog.products.visibility")}
                   </div>
                   <div className="mt-0.5 text-[12.5px] text-[var(--color-muted-foreground)]">
-                    {isActive ? "Listed for customers." : "Hidden from listings."}
+                    {isActive ? t("catalog.products.listed") : t("catalog.products.unlisted")}
                   </div>
                 </div>
-                <Switch checked={isActive} onCheckedChange={setIsActive} aria-label="Active" />
+                <Switch checked={isActive} onCheckedChange={setIsActive} aria-label={t("catalog.products.active")} />
               </div>
             )}
           </DialogBody>
@@ -1078,11 +1088,11 @@ function ProductEditorDialog({
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={isPending}>
-                Cancel
+                {t("chrome.cancel")}
               </Button>
             </DialogClose>
             <Button type="submit" disabled={isPending || !valid}>
-              {isPending ? "Saving…" : product ? "Save changes" : "Add product"}
+              {isPending ? t("identity.saving") : product ? t("identity.saveChanges") : t("catalog.products.addProduct")}
             </Button>
           </DialogFooter>
         </form>
@@ -1102,6 +1112,7 @@ function PriceDialog({
   state: EditorState;
   onClose: () => void;
 }) {
+  const t = useT();
   const isOpen = state.mode === "price";
   const product = state.mode === "price" ? state.product : undefined;
   const queryClient = useQueryClient();
@@ -1119,11 +1130,11 @@ function PriceDialog({
   const mutation = useMutation({
     mutationFn: (input: ChangeProductPriceInput) => changeProductPrice(input),
     onSuccess: () => {
-      toast.success("Price updated");
+      toast.success(t("catalog.products.priceUpdated"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "products"] });
       onClose();
     },
-    onError: (err) => toast.error("Price change failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("catalog.products.priceFailed"), { description: describe(err) }),
   });
 
   const newAmount = Number.parseFloat(amount);
@@ -1144,17 +1155,17 @@ function PriceDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CircleDollarSign className="size-4 text-[var(--color-primary)]" />
-              Change price
+              {t("catalog.products.changePrice")}
             </DialogTitle>
             <DialogDescription>
-              Emits a <code className="font-mono text-[11px]">ProductPriceChanged</code> domain event for {product?.name}.
+              {t("catalog.products.priceEvent").replace("{name}", product?.name ?? "")}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
             <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] px-4 py-3">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                  Was
+                  {t("catalog.products.was")}
                 </div>
                 <div className="mt-1 font-display text-[18px] font-semibold tabular-nums">
                   {product && formatMoney(product.price.amount, product.price.currency)}
@@ -1163,7 +1174,7 @@ function PriceDialog({
               <ArrowDown className="size-4 -rotate-90 text-[var(--color-muted-foreground)]" />
               <div className="text-right">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-primary)]">
-                  Becomes
+                  {t("catalog.products.becomes")}
                 </div>
                 <div
                   className={cn(
@@ -1182,7 +1193,7 @@ function PriceDialog({
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] gap-3">
-              <Field id="price-amount" label="New amount" required>
+              <Field id="price-amount" label={t("catalog.products.newAmount")} required>
                 <Input
                   id="price-amount"
                   type="number"
@@ -1195,7 +1206,7 @@ function PriceDialog({
                   autoFocus
                 />
               </Field>
-              <Field id="price-currency" label="Currency" required>
+              <Field id="price-currency" label={t("catalog.products.currency")} required>
                 <Input
                   id="price-currency"
                   value={currency}
@@ -1210,11 +1221,11 @@ function PriceDialog({
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={mutation.isPending}>
-                Cancel
+                {t("chrome.cancel")}
               </Button>
             </DialogClose>
             <Button type="submit" disabled={mutation.isPending || !valid}>
-              {mutation.isPending ? "Saving…" : "Change price"}
+              {mutation.isPending ? t("identity.saving") : t("catalog.products.changePrice")}
             </Button>
           </DialogFooter>
         </form>
@@ -1234,6 +1245,7 @@ function DeleteProductDialog({
   state: EditorState;
   onClose: () => void;
 }) {
+  const t = useT();
   const isOpen = state.mode === "delete";
   const product = state.mode === "delete" ? state.product : undefined;
   const queryClient = useQueryClient();
@@ -1241,32 +1253,34 @@ function DeleteProductDialog({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteProduct(id),
     onSuccess: () => {
-      toast.success("Product deleted");
+      toast.success(t("catalog.products.deleted"));
       queryClient.invalidateQueries({ queryKey: ["catalog", "products"] });
       queryClient.invalidateQueries({ queryKey: ["trash", "products"] });
       onClose();
     },
-    onError: (err) => toast.error("Delete failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("identity.deleteFailed"), { description: describe(err) }),
   });
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => (!o ? onClose() : undefined)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-[var(--color-destructive)]">Delete product</DialogTitle>
+          <DialogTitle className="text-[var(--color-destructive)]">{t("catalog.products.deleteTitle")}</DialogTitle>
           <DialogDescription>
-            This permanently removes{" "}
-            <span className="font-medium text-[var(--color-foreground)]">{product?.name}</span>{" "}
-            <span className="opacity-70">
-              (created {product && formatDate(product.createdAtUtc)})
-            </span>
-            . The product will no longer appear in any listing or report.
+            {t("catalog.products.deleteBody")
+              .replace("{name}", product?.name ?? "")
+              .replace(
+                "{created}",
+                product
+                  ? t("catalog.createdAgo").replace("{date}", formatDate(product.createdAtUtc))
+                  : "",
+              )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={deleteMutation.isPending}>
-              Cancel
+              {t("chrome.cancel")}
             </Button>
           </DialogClose>
           <Button
@@ -1274,7 +1288,7 @@ function DeleteProductDialog({
             onClick={() => product && deleteMutation.mutate(product.id)}
             disabled={deleteMutation.isPending || !product}
           >
-            {deleteMutation.isPending ? "Deleting…" : "Delete product"}
+            {deleteMutation.isPending ? t("identity.deleting") : t("catalog.products.deleteProduct")}
           </Button>
         </DialogFooter>
       </DialogContent>
