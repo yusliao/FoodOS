@@ -11,6 +11,7 @@ import { EntityPageHeader, ErrorBand } from "@/components/list";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { CreateUserDialog } from "@/components/users/create-user-dialog";
+import { useT } from "@/i18n/locale-provider";
 
 const PAGE_SIZE = 12;
 
@@ -27,6 +28,7 @@ const DESKTOP_COLS =
   "grid-cols-[1fr_140px_24px] lg:grid-cols-[1.6fr_140px_180px_24px]";
 
 export function UsersListPage() {
+  const t = useT();
   const navigate = useNavigate();
 
   const [pageNumber, setPageNumber] = useState(1);
@@ -39,11 +41,11 @@ export function UsersListPage() {
 
   // Debounce the search input → searchTerm
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setSearchTerm(searchInput);
       setPageNumber(1);
     }, 250);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [searchInput]);
 
   // Reset page when filters change
@@ -81,9 +83,9 @@ export function UsersListPage() {
   const pageBadge = useMemo(() => {
     if (!data) return "—";
     const p = String(data.pageNumber).padStart(2, "0");
-    const t = String(Math.max(data.totalPages, 1)).padStart(2, "0");
-    return `Page ${p} of ${t}`;
-  }, [data]);
+    const tp = String(Math.max(data.totalPages, 1)).padStart(2, "0");
+    return t("users.pageOf").replace("{p}", p).replace("{t}", tp);
+  }, [data, t]);
 
   const filtersActive =
     activeFilter !== "any" || confirmedFilter !== "any" || roleId !== "";
@@ -100,18 +102,21 @@ export function UsersListPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Users}
-        title="Directory"
+        title={t("users.directory")}
         total={data?.totalCount ?? null}
-        unit="account"
+        unit={t("users.unit")}
         description={data
-          ? `${data.totalCount} ${data.totalCount === 1 ? "account" : "accounts"} on this tenant.`
-          : "Loading the roster…"}
+          ? t(data.totalCount === 1 ? "users.countOne" : "users.countMany").replace(
+              "{n}",
+              String(data.totalCount),
+            )
+          : t("users.loadingRoster")}
       >
         <Button
           onClick={() => setCreateOpen(true)}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
-          <Plus className="size-4" /> New user
+          <Plus className="size-4" /> {t("users.newUser")}
         </Button>
       </EntityPageHeader>
 
@@ -125,39 +130,39 @@ export function UsersListPage() {
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search name, username, email…"
-            aria-label="Search users"
+            placeholder={t("users.searchPlaceholder")}
+            aria-label={t("users.searchAria")}
             className="h-9 w-full rounded-md border border-[var(--color-input)] bg-transparent pl-9 pr-3 font-mono text-[12.5px] outline-none transition-colors placeholder:text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.7)] focus-visible:border-[var(--color-ring)] focus-visible:ring-[3px] focus-visible:ring-[oklch(from_var(--color-ring)_l_c_h_/_0.5)]"
           />
         </div>
 
         <Segmented
-          label="Status"
+          label={t("users.status")}
           value={activeFilter}
           onChange={setActiveFilter}
           options={[
-            { value: "any", label: "Any" },
-            { value: "yes", label: "Active" },
-            { value: "no", label: "Disabled" },
+            { value: "any", label: t("users.any") },
+            { value: "yes", label: t("users.active") },
+            { value: "no", label: t("users.disabled") },
           ]}
         />
         <Segmented
-          label="Email"
+          label={t("users.email")}
           value={confirmedFilter}
           onChange={setConfirmedFilter}
           options={[
-            { value: "any", label: "Any" },
-            { value: "yes", label: "Confirmed" },
-            { value: "no", label: "Pending" },
+            { value: "any", label: t("users.any") },
+            { value: "yes", label: t("users.confirmed") },
+            { value: "no", label: t("users.pending") },
           ]}
         />
 
         <Select
-          label="Role"
+          label={t("users.role")}
           value={roleId}
           onChange={(v) => setRoleId(v)}
           options={(rolesQuery.data ?? []).map((r) => ({ value: r.id ?? "", label: r.name ?? r.id ?? "" }))}
-          placeholder="Any role"
+          placeholder={t("users.anyRole")}
           minWidth="9rem"
         />
       </div>
@@ -167,7 +172,7 @@ export function UsersListPage() {
           message={
             usersQuery.error instanceof ApiRequestError
               ? usersQuery.error.problem?.detail ?? usersQuery.error.message
-              : "Failed to load users."
+              : t("users.loadFailed")
           }
         />
       )}
@@ -177,17 +182,15 @@ export function UsersListPage() {
           role="status"
           className="py-12 text-center font-mono text-sm uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]"
         >
-          Loading…
+          {t("users.loading")}
         </div>
       )}
 
       {!usersQuery.isLoading && items.length === 0 && !usersQuery.isError && (
         <div className="py-16 text-center">
-          <p className="font-display text-2xl text-[var(--color-foreground)]">No matches.</p>
+          <p className="font-display text-2xl text-[var(--color-foreground)]">{t("users.emptyTitle")}</p>
           <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-            {searchActive
-              ? "Adjust filters or invite a new user."
-              : "Register the first member to seed this tenant."}
+            {searchActive ? t("users.emptyFiltered") : t("users.emptyBody")}
           </p>
           {searchActive && (
             <Button
@@ -195,7 +198,7 @@ export function UsersListPage() {
               className="mt-4 h-9 rounded-lg px-4 text-[13px]"
               onClick={clearFilters}
             >
-              Clear filters
+              {t("users.clearFilters")}
             </Button>
           )}
         </div>
@@ -204,7 +207,10 @@ export function UsersListPage() {
       {items.length > 0 && (
         <div>
           <p className="mb-3 text-[12px] font-medium text-[var(--color-muted-foreground)]">
-            {data?.totalCount ?? 0} user{(data?.totalCount ?? 0) !== 1 ? "s" : ""} found
+            {t((data?.totalCount ?? 0) === 1 ? "users.foundOne" : "users.foundMany").replace(
+              "{n}",
+              String(data?.totalCount ?? 0),
+            )}
           </p>
 
           {/* Mobile card list */}
@@ -226,13 +232,13 @@ export function UsersListPage() {
               className={`grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-muted)]/40 px-4 py-2.5 ${DESKTOP_COLS}`}
             >
               <span className="text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Name
+                {t("users.colName")}
               </span>
               <span className="text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Username
+                {t("users.colUsername")}
               </span>
               <span className="hidden text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] lg:block">
-                Status
+                {t("users.colStatus")}
               </span>
               <span />
             </div>
@@ -265,7 +271,7 @@ export function UsersListPage() {
               onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
               className="h-9 rounded-lg px-3 text-[13px]"
             >
-              <ChevronLeft className="mr-1 h-3.5 w-3.5" /> Previous
+              <ChevronLeft className="mr-1 h-3.5 w-3.5" /> {t("common.previous")}
             </Button>
             <Button
               variant="outline"
@@ -274,7 +280,7 @@ export function UsersListPage() {
               onClick={() => setPageNumber((p) => p + 1)}
               className="h-9 rounded-lg px-3 text-[13px]"
             >
-              Next <ChevronRight className="ml-1 h-3.5 w-3.5" />
+              {t("common.next")} <ChevronRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
@@ -296,15 +302,16 @@ function UserMobileCard({
   index: number;
   onClick: () => void;
 }) {
+  const t = useT();
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
-  const display = fullName || user.userName || user.email || "Unnamed";
+  const display = fullName || user.userName || user.email || t("users.unnamed");
 
   return (
     <li className="list-none">
       <button
         type="button"
         onClick={onClick}
-        aria-label={`Open user ${display}`}
+        aria-label={t("users.openUser").replace("{name}", display)}
         className={cn(
           "group w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-left shadow-xs",
           "transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-accent)]",
@@ -326,7 +333,7 @@ function UserMobileCard({
                 {display}
               </p>
               <p className="mt-0.5 truncate text-[11px] text-[var(--color-muted-foreground)]">
-                {user.email ?? "no email"}
+                {user.email ?? t("users.noEmail")}
               </p>
             </div>
           </div>
@@ -341,7 +348,7 @@ function UserMobileCard({
                 : "bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
             )}
           >
-            {user.isActive ? "Active" : "Inactive"}
+            {user.isActive ? t("users.active") : t("users.inactive")}
           </span>
           <span
             className={cn(
@@ -351,7 +358,7 @@ function UserMobileCard({
                 : "bg-[oklch(from_var(--color-warning)_l_c_h_/_0.12)] text-[var(--color-warning)]",
             )}
           >
-            {user.emailConfirmed ? "Email confirmed" : "Email pending"}
+            {user.emailConfirmed ? t("users.emailConfirmed") : t("users.emailPending")}
           </span>
         </div>
       </button>
@@ -369,8 +376,9 @@ function UserDesktopRow({
   isLast?: boolean;
   onClick: () => void;
 }) {
+  const t = useT();
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
-  const display = fullName || user.userName || user.email || "Unnamed";
+  const display = fullName || user.userName || user.email || t("users.unnamed");
 
   return (
     <li className="list-none">
@@ -401,7 +409,7 @@ function UserDesktopRow({
                 !user.email && "italic opacity-60",
               )}
             >
-              {user.email ?? "no email on file"}
+              {user.email ?? t("users.noEmailOnFile")}
             </span>
           </div>
         </div>
@@ -424,7 +432,7 @@ function UserDesktopRow({
                 : "bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
             )}
           >
-            {user.isActive ? "Active" : "Inactive"}
+            {user.isActive ? t("users.active") : t("users.inactive")}
           </span>
           <span
             className={cn(
@@ -434,7 +442,7 @@ function UserDesktopRow({
                 : "bg-[oklch(from_var(--color-warning)_l_c_h_/_0.12)] text-[var(--color-warning)]",
             )}
           >
-            {user.emailConfirmed ? "Confirmed" : "Pending"}
+            {user.emailConfirmed ? t("users.confirmed") : t("users.pending")}
           </span>
         </div>
 

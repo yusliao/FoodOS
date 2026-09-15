@@ -22,8 +22,10 @@ import {
 } from "@/components/list";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 export function UserDetailPage() {
+  const t = useT();
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -43,11 +45,11 @@ export function UserDetailPage() {
   const toggleMutation = useMutation({
     mutationFn: (activate: boolean) => toggleUserStatus(id, activate),
     onSuccess: (_, activate) => {
-      toast.success(activate ? "User activated" : "User deactivated");
+      toast.success(activate ? t("users.activated") : t("users.deactivated"));
       queryClient.invalidateQueries({ queryKey: ["user", id] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (err) => toast.error("Status change failed", { description: describeErr(err) }),
+    onError: (err) => toast.error(t("users.statusFailed"), { description: describeErr(err) }),
   });
 
   const user = userQuery.data;
@@ -72,13 +74,13 @@ export function UserDetailPage() {
           onClick={() => navigate("/users")}
           className="h-9 gap-1.5 rounded-lg px-3 text-[13px]"
         >
-          <ArrowLeft className="size-3.5" /> Directory
+          <ArrowLeft className="size-3.5" /> {t("users.directory")}
         </Button>
       </EntityPageHeader>
 
       {userQuery.isError && <ErrorBand message={describeErr(userQuery.error)} />}
 
-      {userQuery.isLoading && !user && <LoadingRow label="Loading account" />}
+      {userQuery.isLoading && !user && <LoadingRow label={t("users.loadingAccount")} />}
 
       {user && (
         <>
@@ -110,14 +112,14 @@ export function UserDetailPage() {
                       variant={user.isActive ? "success" : "muted"}
                       className="font-mono text-[10px] uppercase tracking-[0.14em]"
                     >
-                      {user.isActive ? "Active" : "Disabled"}
+                      {user.isActive ? t("users.active") : t("users.disabled")}
                     </Badge>
                     <Badge
                       variant={user.emailConfirmed ? "info" : "warning"}
                       className="font-mono text-[10px] uppercase tracking-[0.14em]"
                     >
                       <Mail className="h-3 w-3" />
-                      {user.emailConfirmed ? "Email confirmed" : "Email pending"}
+                      {user.emailConfirmed ? t("users.emailConfirmed") : t("users.emailPending")}
                     </Badge>
                   </div>
                 </div>
@@ -130,10 +132,10 @@ export function UserDetailPage() {
                 className="shrink-0 h-9 rounded-lg px-4 text-[13px]"
               >
                 {toggleMutation.isPending
-                  ? "Updating…"
+                  ? t("users.updating")
                   : user.isActive
-                    ? "Deactivate account"
-                    : "Activate account"}
+                    ? t("users.deactivateAccount")
+                    : t("users.activateAccount")}
               </Button>
             </div>
           </div>
@@ -141,28 +143,28 @@ export function UserDetailPage() {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             {/* Identity details */}
             <SettingsSection
-              title="Identity card"
+              title={t("users.identityCard")}
               icon={UserIcon}
-              description="Account identifiers and contact details captured at registration."
+              description={t("users.identityCardDesc")}
             >
               <dl className="space-y-0 divide-y divide-[oklch(from_var(--color-border)_l_c_h_/_0.5)]">
-                <DetailRow label="User ID" mono>
+                <DetailRow label={t("users.userId")} mono>
                   {user.id ?? "—"}
                 </DetailRow>
-                <DetailRow label="Username" mono>
+                <DetailRow label={t("users.username")} mono>
                   {user.userName ?? "—"}
                 </DetailRow>
-                <DetailRow label="Email" mono>
+                <DetailRow label={t("users.email")} mono>
                   {user.email ?? "—"}
                 </DetailRow>
-                <DetailRow label="Phone" mono>
+                <DetailRow label={t("users.phone")} mono>
                   {user.phoneNumber ?? "—"}
                 </DetailRow>
-                <DetailRow label="Status">
-                  {user.isActive ? "Active" : "Disabled"}
+                <DetailRow label={t("users.status")}>
+                  {user.isActive ? t("users.active") : t("users.disabled")}
                 </DetailRow>
-                <DetailRow label="Email confirmed">
-                  {user.emailConfirmed ? "Yes" : "Pending confirmation"}
+                <DetailRow label={t("users.emailConfirmedLabel")}>
+                  {user.emailConfirmed ? t("users.yes") : t("users.pendingConfirmation")}
                 </DetailRow>
               </dl>
             </SettingsSection>
@@ -228,6 +230,7 @@ function RolesEditor({
   error: unknown;
   onSaved: () => void;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<string, boolean>>({});
 
@@ -251,11 +254,11 @@ function RolesEditor({
   const mutation = useMutation({
     mutationFn: (next: UserRoleDto[]) => assignUserRoles(userId, next),
     onSuccess: () => {
-      toast.success("Roles updated");
+      toast.success(t("users.rolesUpdated"));
       queryClient.invalidateQueries({ queryKey: ["user", userId, "roles"] });
       onSaved();
     },
-    onError: (err) => toast.error("Role update failed", { description: describeErr(err) }),
+    onError: (err) => toast.error(t("users.roleUpdateFailed"), { description: describeErr(err) }),
   });
 
   const onSave = () => {
@@ -266,12 +269,15 @@ function RolesEditor({
 
   return (
     <SettingsSection
-      title="Role assignment"
+      title={t("users.roleAssignment")}
       icon={ShieldCheck}
       description={
         dirtyCount > 0
-          ? `${dirtyCount} pending change${dirtyCount === 1 ? "" : "s"} — review and save when ready.`
-          : "Tap any role to toggle. Changes are batched — review and save when ready."
+          ? t(dirtyCount === 1 ? "users.pendingChangeOne" : "users.pendingChangeMany").replace(
+              "{n}",
+              String(dirtyCount),
+            )
+          : t("users.roleHint")
       }
       footer={
         !loading && roles.length > 0 ? (
@@ -282,7 +288,7 @@ function RolesEditor({
               className="h-9 rounded-lg px-4 text-[13px]"
             >
               <Check className="mr-1 h-3.5 w-3.5" />
-              {mutation.isPending ? "Saving…" : "Save changes"}
+              {mutation.isPending ? t("users.saving") : t("users.saveChanges")}
             </Button>
             <Button
               variant="outline"
@@ -290,7 +296,7 @@ function RolesEditor({
               disabled={dirtyCount === 0 || mutation.isPending}
               className="h-9 rounded-lg px-4 text-[13px]"
             >
-              Discard
+              {t("users.discard")}
             </Button>
           </div>
         ) : undefined
@@ -300,12 +306,12 @@ function RolesEditor({
         <ErrorBand message={describeErr(error)} />
       ) : loading ? (
         <p className="text-sm text-[var(--color-muted-foreground)]">
-          Loading
+          {t("users.loadingRoles")}
           <span className="caret text-[var(--color-accent-signal)]" />
         </p>
       ) : roles.length === 0 ? (
         <p className="text-sm text-[var(--color-muted-foreground)]">
-          No roles defined for this tenant.
+          {t("users.noRoles")}
         </p>
       ) : (
         <ul className="divide-y divide-[var(--color-border)]">
@@ -335,17 +341,18 @@ function RoleRow({
   changed: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
   return (
     <li className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-medium tracking-tight text-[var(--color-foreground)]">
-            {role.roleName ?? "Untitled role"}
+            {role.roleName ?? t("users.untitledRole")}
           </span>
           {changed && (
             <span
               className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-warning)]"
-              aria-label="modified"
+              aria-label={t("users.modified")}
             />
           )}
         </div>
@@ -359,7 +366,7 @@ function RoleRow({
         enabled={enabled}
         changed={changed}
         onToggle={onToggle}
-        label={role.roleName ?? "role"}
+        label={role.roleName ?? t("users.role")}
       />
     </li>
   );
@@ -376,11 +383,12 @@ function RoleChip({
   onToggle: () => void;
   label: string;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onToggle}
-      aria-label={`Toggle ${label}`}
+      aria-label={t("users.toggleRole").replace("{label}", label)}
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",
         enabled
@@ -391,7 +399,7 @@ function RoleChip({
       )}
     >
       <ShieldCheck className={cn("h-3 w-3", enabled ? "" : "opacity-40")} />
-      <span>{enabled ? "On" : "Off"}</span>
+      <span>{enabled ? t("users.on") : t("users.off")}</span>
     </button>
   );
 }
