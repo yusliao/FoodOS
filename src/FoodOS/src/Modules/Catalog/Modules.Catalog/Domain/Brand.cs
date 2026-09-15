@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Catalog.Domain;
 
-public sealed class Brand : AggregateRoot<Guid>, ISoftDeletable
+public sealed class Brand : AggregateRoot<Guid>, ISoftDeletable, IOperatorOwnedEntity
 {
     public string Name { get; private set; } = default!;
     public string Slug { get; private set; } = default!;

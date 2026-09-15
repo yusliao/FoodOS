@@ -5,11 +5,12 @@ using FSH.Modules.Ordering.Domain.Events;
 
 namespace FSH.Modules.Ordering.Domain;
 
-public sealed class SalesOrder : AggregateRoot<Guid>
+public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<SalesOrderLine> _lines = [];
 
     public string Number { get; private set; } = default!;
+    public string? CustomerTenantId { get; private set; }
     public Guid StoreId { get; private set; }
     public Guid CustomerOrgId { get; private set; }
     public Guid WarehouseId { get; private set; }
@@ -31,7 +32,8 @@ public sealed class SalesOrder : AggregateRoot<Guid>
         Guid warehouseId,
         DateOnly businessDate,
         DateTimeOffset cutoffAt,
-        IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines)
+        IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines,
+        string? customerTenantId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(number);
         ArgumentNullException.ThrowIfNull(lines);
@@ -63,6 +65,9 @@ public sealed class SalesOrder : AggregateRoot<Guid>
         {
             Id = Guid.CreateVersion7(),
             Number = number.Trim().ToUpperInvariant(),
+            CustomerTenantId = string.IsNullOrWhiteSpace(customerTenantId)
+                ? null
+                : customerTenantId.Trim().ToUpperInvariant(),
             StoreId = storeId,
             CustomerOrgId = customerOrgId,
             WarehouseId = warehouseId,

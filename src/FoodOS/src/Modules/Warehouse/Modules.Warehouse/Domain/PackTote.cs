@@ -4,7 +4,7 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class PackTote : AggregateRoot<Guid>
+public sealed class PackTote : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<Guid> _orderIds = [];
 

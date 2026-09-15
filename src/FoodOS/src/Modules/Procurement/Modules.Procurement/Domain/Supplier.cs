@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Procurement.Domain;
 
-public sealed class Supplier : AggregateRoot<Guid>
+public sealed class Supplier : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public string Code { get; private set; } = default!;
     public string Name { get; private set; } = default!;

@@ -21,7 +21,7 @@ public static class MultitenancyPermissions
         new("Create Tenants",             ActionConstants.Create,              Tenants.Resource, IsRoot: true),
         new("Update Tenants",             ActionConstants.Update,              Tenants.Resource, IsRoot: true),
         new("Upgrade Tenant Subscription",ActionConstants.UpgradeSubscription, Tenants.Resource, IsRoot: true),
-        new("View Tenant Theme",          "ViewTheme",                         Tenants.Resource, IsBasic: true),
+        new("View Tenant Theme",          "ViewTheme",                         Tenants.Resource, IsBasic: true, IsCustomer: true),
         new("Update Tenant Theme",        "UpdateTheme",                       Tenants.Resource),
     ];
 }

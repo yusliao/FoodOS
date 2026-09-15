@@ -14,4 +14,6 @@ public static class QueryFilters
     /// any other filters on the entity remain in force.
     /// </summary>
     public const string SoftDelete = nameof(SoftDelete);
+
+    public const string OperatorOwnership = nameof(OperatorOwnership);
 }

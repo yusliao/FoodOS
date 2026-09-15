@@ -10,6 +10,7 @@ export type JwtClaims = {
    */
   unique_name?: string;
   tenant?: string;
+  business_actor?: "operator" | "customer";
   permissions?: string[] | string;
   exp?: number;
   /**

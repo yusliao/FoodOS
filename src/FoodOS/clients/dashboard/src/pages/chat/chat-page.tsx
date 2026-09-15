@@ -36,6 +36,7 @@ import {
 import { TypingIndicator } from "@/pages/chat/typing-indicator";
 import { channelTitle } from "@/pages/chat/chat-utils";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 import { useUserDisplay } from "@/lib/use-user-display";
 import { useRealtime } from "@/realtime/realtime-context";
 
@@ -107,6 +108,7 @@ export function ChatPage() {
 }
 
 function EmptyState() {
+  const t = useT();
   return (
     <div className="flex h-full items-center justify-center px-6">
       <div className="flex flex-col items-center text-center">
@@ -114,17 +116,15 @@ function EmptyState() {
           <MessageCircle className="size-6 text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.5)]" />
         </div>
         <h3 className="mb-1.5 font-display text-[17px] font-semibold text-[var(--color-foreground)]">
-          Pick a conversation
+          {t("chat.pickConversation")}
         </h3>
         <p className="mb-6 max-w-[360px] text-[13px] text-[var(--color-muted-foreground)]">
-          Choose a channel on the left to jump in. Channels are public to your
-          tenant; DMs are private to the people in them. Mentions land in the
-          notification bell, top right.
+          {t("chat.pickConversationBody")}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <KeyHint label="Send" combo="↵" />
-          <KeyHint label="Newline" combo="⇧↵" />
-          <KeyHint label="Mention" combo="@" />
+          <KeyHint label={t("chat.hintSend")} combo="↵" />
+          <KeyHint label={t("chat.hintNewline")} combo="⇧↵" />
+          <KeyHint label={t("chat.hintMention")} combo="@" />
         </div>
       </div>
     </div>
@@ -149,6 +149,7 @@ function ActiveChannel({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const t = useT();
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
   const [searching, setSearching] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -221,7 +222,7 @@ function ActiveChannel({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <p className="text-sm text-[var(--color-muted-foreground)]">
-          That channel isn't reachable. It may have been archived or you're no longer a member.
+          {t("chat.channelUnreachable")}
         </p>
       </div>
     );
@@ -231,7 +232,7 @@ function ActiveChannel({
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-[12px] text-[var(--color-muted-foreground)]">
-          Loading channel…
+          {t("chat.loadingChannel")}
         </p>
       </div>
     );
@@ -240,7 +241,7 @@ function ActiveChannel({
   const title =
     channel.type === ChannelType.DirectMessage && otherDmMember
       ? dmPartner.name
-      : channelTitle(channel, selfUserId);
+      : channelTitle(channel, selfUserId, t);
   const Icon =
     channel.type === ChannelType.Channel ? (channel.isPrivate ? Lock : Hash) : Users2;
 
@@ -253,7 +254,7 @@ function ActiveChannel({
           onJump={(id) => {
             const ok = messageListRef.current?.jumpToMessage(id) ?? false;
             if (!ok) {
-              toast.info("That message is older than the loaded window.");
+              toast.info(t("chat.olderThanWindow"));
             }
           }}
         />
@@ -267,8 +268,8 @@ function ActiveChannel({
           <button
             type="button"
             onClick={() => navigate("/chat")}
-            aria-label="Back to channels"
-            title="Back to channels"
+            aria-label={t("chat.backToChannels")}
+            title={t("chat.backToChannels")}
             className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)] md:hidden"
           >
             <ArrowLeft className="size-4" />
@@ -291,13 +292,13 @@ function ActiveChannel({
           </div>
           <span className="hidden text-[11px] tabular-nums text-[var(--color-muted-foreground)] md:inline">
             {channel.members.length}{" "}
-            {channel.members.length === 1 ? "member" : "members"}
+            {channel.members.length === 1 ? t("chat.member") : t("chat.members")}
           </span>
           <button
             type="button"
             onClick={() => setSearching(true)}
-            aria-label="Search messages"
-            title="Search messages"
+            aria-label={t("chat.searchMessages")}
+            title={t("chat.searchMessages")}
             className="grid size-8 cursor-pointer place-items-center rounded-lg text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
           >
             <Search className="size-3.5" />
@@ -306,8 +307,8 @@ function ActiveChannel({
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              aria-label="Channel settings"
-              title="Channel settings"
+              aria-label={t("chat.channelSettings")}
+              title={t("chat.channelSettings")}
               className="grid size-8 cursor-pointer place-items-center rounded-lg text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
             >
               <Settings className="size-3.5" />
@@ -330,7 +331,7 @@ function ActiveChannel({
         onJump={(id) => {
           const ok = messageListRef.current?.jumpToMessage(id) ?? false;
           if (!ok) {
-            toast.info("That message is older than the loaded window.");
+            toast.info(t("chat.olderThanWindow"));
           }
         }}
       />

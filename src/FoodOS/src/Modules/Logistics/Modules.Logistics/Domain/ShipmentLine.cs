@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class ShipmentLine : BaseEntity<Guid>
+public sealed class ShipmentLine : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     private readonly List<ShipmentLineLot> _lots = [];
 

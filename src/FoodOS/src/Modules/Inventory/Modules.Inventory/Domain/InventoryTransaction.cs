@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Inventory.Domain;
 
-public sealed class InventoryTransaction : BaseEntity<Guid>
+public sealed class InventoryTransaction : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public InventoryTransactionType Type { get; private set; }
     public Guid ProductId { get; private set; }

@@ -3,7 +3,7 @@ using FSH.Modules.Inventory.Contracts;
 
 namespace FSH.Modules.Inventory.Domain;
 
-public sealed class Warehouse : AggregateRoot<Guid>
+public sealed class Warehouse : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<TemperatureZone> _zones = [];
 

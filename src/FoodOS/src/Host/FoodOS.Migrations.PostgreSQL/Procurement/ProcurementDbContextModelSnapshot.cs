@@ -42,7 +42,9 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("VehicleNo")
                         .HasMaxLength(32)
@@ -59,8 +61,6 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
                         .HasDatabaseName("IX_InboundAppointments_PurchaseOrderId");
 
                     b.ToTable("InboundAppointments", "procurement");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Procurement.Domain.PurchaseOrder", b =>
@@ -90,7 +90,9 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -106,8 +108,6 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
                         .HasDatabaseName("IX_PurchaseOrders_Number");
 
                     b.ToTable("PurchaseOrders", "procurement");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Procurement.Domain.PurchaseOrderLine", b =>
@@ -136,7 +136,9 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Zone")
                         .IsRequired()
@@ -148,8 +150,6 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
                     b.HasIndex("PurchaseOrderId");
 
                     b.ToTable("PurchaseOrderLines", "procurement");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Procurement.Domain.QualityCheck", b =>
@@ -202,7 +202,9 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -211,8 +213,6 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
                     b.HasIndex("PurchaseOrderId");
 
                     b.ToTable("QualityChecks", "procurement");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Procurement.Domain.ReceiveRecord", b =>
@@ -239,7 +239,9 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Zone")
                         .IsRequired()
@@ -253,8 +255,6 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
                     b.HasIndex("QualityCheckId");
 
                     b.ToTable("ReceiveRecords", "procurement");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Procurement.Domain.Supplier", b =>
@@ -290,7 +290,9 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -299,8 +301,6 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
                         .HasDatabaseName("IX_Suppliers_Code");
 
                     b.ToTable("Suppliers", "procurement");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Procurement.Domain.TraceEvent", b =>
@@ -362,7 +362,9 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Uom")
                         .IsRequired()
@@ -378,8 +380,6 @@ namespace FoodOS.Migrations.PostgreSQL.Procurement
                     b.HasIndex("ProductId");
 
                     b.ToTable("TraceEvents", "procurement");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Procurement.Domain.InboundAppointment", b =>

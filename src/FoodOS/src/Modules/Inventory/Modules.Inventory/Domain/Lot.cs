@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Inventory.Domain;
 
-public sealed class Lot : AggregateRoot<Guid>
+public sealed class Lot : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public string LotNo { get; private set; } = default!;
     public Guid ProductId { get; private set; }

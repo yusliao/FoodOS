@@ -45,7 +45,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -57,8 +59,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_DispatchReminderLogs_WarehouseId_LocalDate_Kind");
 
                     b.ToTable("DispatchReminderLogs", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.Driver", b =>
@@ -74,7 +74,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -86,8 +88,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_Drivers_UserId");
 
                     b.ToTable("Drivers", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.ProofOfDelivery", b =>
@@ -122,7 +122,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -135,8 +137,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_ProofOfDeliveries_StopId");
 
                     b.ToTable("ProofOfDeliveries", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.ReturnOnTruck", b =>
@@ -168,7 +168,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -177,8 +179,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                     b.HasIndex("ShipmentId");
 
                     b.ToTable("ReturnsOnTruck", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.Route", b =>
@@ -202,7 +202,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -214,8 +216,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_Routes_WarehouseId_Code");
 
                     b.ToTable("Routes", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.Shipment", b =>
@@ -248,7 +248,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("VehicleId")
                         .HasColumnType("uuid");
@@ -267,8 +269,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_Shipments_RouteId_BusinessDate");
 
                     b.ToTable("Shipments", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.ShipmentLine", b =>
@@ -288,7 +288,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid?>("ToteId")
                         .HasColumnType("uuid");
@@ -302,8 +304,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_ShipmentLines_OrderId");
 
                     b.ToTable("ShipmentLines", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.ShipmentLineLot", b =>
@@ -335,7 +335,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Zone")
                         .IsRequired()
@@ -347,8 +349,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                     b.HasIndex("ShipmentLineId");
 
                     b.ToTable("ShipmentLineLots", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.ShipmentStop", b =>
@@ -373,7 +373,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Window")
                         .HasMaxLength(32)
@@ -386,8 +388,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_ShipmentStops_ShipmentId_Sequence");
 
                     b.ToTable("ShipmentStops", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.TemperatureReading", b =>
@@ -413,7 +413,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("VehicleId")
                         .HasColumnType("uuid");
@@ -423,8 +425,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                     b.HasIndex("VehicleId", "RecordedAt");
 
                     b.ToTable("TemperatureReadings", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.TraceEvent", b =>
@@ -479,7 +479,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Uom")
                         .IsRequired()
@@ -493,8 +495,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                     b.HasIndex("OccurredAt");
 
                     b.ToTable("TraceEvents", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.Vehicle", b =>
@@ -519,7 +519,9 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -528,8 +530,6 @@ namespace FoodOS.Migrations.PostgreSQL.Logistics
                         .HasDatabaseName("IX_Vehicles_Plate");
 
                     b.ToTable("Vehicles", "logistics");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Logistics.Domain.ProofOfDelivery", b =>

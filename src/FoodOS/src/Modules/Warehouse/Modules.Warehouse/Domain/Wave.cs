@@ -4,7 +4,7 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class Wave : AggregateRoot<Guid>
+public sealed class Wave : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<PickTask> _tasks = [];
 

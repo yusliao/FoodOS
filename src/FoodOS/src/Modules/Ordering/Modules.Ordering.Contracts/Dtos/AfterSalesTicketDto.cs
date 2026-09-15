@@ -2,6 +2,7 @@ namespace FSH.Modules.Ordering.Contracts.Dtos;
 
 public sealed record AfterSalesTicketDto(
     Guid Id,
+    string? CustomerTenantId,
     Guid OrderId,
     Guid StoreId,
     Guid OrderLineId,

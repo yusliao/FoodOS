@@ -3,6 +3,8 @@ using FSH.Framework.Persistence;
 using FSH.Framework.Shared.Constants;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Ordering.Contracts.Authorization;
+using FSH.Modules.Ordering.Contracts.Access;
+using FSH.Modules.Ordering.Access;
 using FSH.Modules.Ordering.Data;
 using FSH.Modules.Ordering.Features.v1.Carts.GetCart;
 using FSH.Modules.Ordering.Features.v1.Carts.UpdateCart;
@@ -19,6 +21,8 @@ using FSH.Modules.Ordering.Features.v1.Orders.SearchOrders;
 using FSH.Modules.Ordering.Features.v1.Stores.CreateStore;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStoreById;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStores;
+using FSH.Modules.Ordering.Features.v1.StoreAccess.GetMyStoreAccess;
+using FSH.Modules.Ordering.Features.v1.StoreAccess.SetUserStoreAccess;
 using FSH.Modules.Ordering.Jobs;
 using Hangfire;
 using Hangfire.Common;
@@ -42,6 +46,7 @@ public sealed class OrderingModule : IModule
         PermissionConstants.Register(OrderingPermissions.All);
 
         builder.Services.AddHeroDbContext<OrderingDbContext>();
+        builder.Services.AddScoped<ICustomerAccessScopeResolver, CustomerAccessScopeResolver>();
         builder.Services.AddScoped<IDbInitializer, OrderingDbInitializer>();
         builder.Services.AddTransient<ReconcileReminderJob>();
 
@@ -76,6 +81,8 @@ public sealed class OrderingModule : IModule
         group.MapGetStoresEndpoint();
         group.MapCreateStoreEndpoint();
         group.MapGetStoreByIdEndpoint();
+        group.MapGetMyStoreAccessEndpoint();
+        group.MapSetUserStoreAccessEndpoint();
         group.MapGetCartEndpoint();
         group.MapUpdateCartEndpoint();
         group.MapSearchOrdersEndpoint();

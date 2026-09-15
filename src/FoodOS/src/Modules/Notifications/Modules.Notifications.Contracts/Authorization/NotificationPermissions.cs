@@ -17,7 +17,7 @@ public static class NotificationPermissions
 
     public static IReadOnlyList<FshPermission> All { get; } =
     [
-        new("View Notifications",     ActionConstants.View, Inbox.Resource, IsBasic: true),
-        new("Mark Notifications Read", "MarkRead",          Inbox.Resource, IsBasic: true),
+        new("View Notifications",     ActionConstants.View, Inbox.Resource, IsBasic: true, IsCustomer: true),
+        new("Mark Notifications Read", "MarkRead",          Inbox.Resource, IsBasic: true, IsCustomer: true),
     ];
 }

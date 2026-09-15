@@ -96,6 +96,11 @@ namespace FoodOS.Migrations.PostgreSQL.Identity
                     b.Property<string>("Id")
                         .HasColumnType("text");
 
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");

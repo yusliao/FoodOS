@@ -33,7 +33,6 @@ import {
 import {
   AuditEventType,
   AuditSeverity,
-  AUDIT_EVENT_TYPE_LABELS,
   severityRank,
   listAudits,
   type AuditSummaryDto,
@@ -641,7 +640,7 @@ function RecentAuditRow({ row }: { row: AuditSummaryDto }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12.5px] font-medium tracking-tight text-foreground">
-            {row.source ?? AUDIT_EVENT_TYPE_LABELS[row.eventType] ?? t("overview.event")}
+            {row.source ?? t(`system.audits.eventType.${row.eventType}`) ?? t("overview.event")}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="truncate">

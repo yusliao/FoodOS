@@ -128,9 +128,18 @@ internal sealed class UserRoleService(
 
         foreach (var userRole in userRoles)
         {
-            if (await roleManager.FindByNameAsync(userRole.RoleName!) is null)
+            var role = await roleManager.FindByNameAsync(userRole.RoleName!);
+            if (role is null)
             {
                 continue;
+            }
+
+            var expectedAudience = multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id
+                ? RoleAudiences.Operator
+                : RoleAudiences.Customer;
+            if (!string.Equals(role.Audience, expectedAudience, StringComparison.Ordinal))
+            {
+                throw new ForbiddenException("The selected role belongs to a different business identity domain.");
             }
 
             if (userRole.Enabled)

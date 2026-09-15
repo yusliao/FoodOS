@@ -318,7 +318,10 @@ internal sealed class DemoSeeder
             var role = await roleManager.FindByNameAsync(demoRole.Name).ConfigureAwait(false);
             if (role is null)
             {
-                role = new FshRole(demoRole.Name, demoRole.Description);
+                var audience = tenant.Id == MultitenancyConstants.Root.Id
+                    ? RoleAudiences.Operator
+                    : RoleAudiences.Customer;
+                role = new FshRole(demoRole.Name, demoRole.Description, audience);
                 await roleManager.CreateAsync(role).ConfigureAwait(false);
                 if (_logger.IsEnabled(LogLevel.Information))
                 {
@@ -327,7 +330,11 @@ internal sealed class DemoSeeder
             }
 
             var existingClaims = await roleManager.GetClaimsAsync(role).ConfigureAwait(false);
-            foreach (var permission in demoRole.Permissions)
+            var allowedCustomerPermissions = PermissionConstants.CustomerAdmin
+                .Select(permission => permission.Name)
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var permission in demoRole.Permissions.Where(permission =>
+                         tenant.Id == MultitenancyConstants.Root.Id || allowedCustomerPermissions.Contains(permission)))
             {
                 if (existingClaims.Any(c => c.Type == ClaimConstants.Permission && c.Value == permission))
                 {

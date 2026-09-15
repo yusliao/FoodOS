@@ -40,6 +40,7 @@ import { useAuth } from "@/auth/use-auth";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { describe, formatRelative } from "@/lib/list-helpers";
+import { useT } from "@/i18n/locale-provider";
 
 const PAGE_SIZE = 50;
 const DESKTOP_COLS = "grid-cols-[1.4fr_1.4fr_140px_140px_120px]";
@@ -49,6 +50,7 @@ const DESKTOP_COLS = "grid-cols-[1.4fr_1.4fr_140px_140px_120px]";
 // ───────────────────────────────────────────────────────────────────────
 
 export function SessionsPage() {
+  const t = useT();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -99,14 +101,14 @@ export function SessionsPage() {
     mutationFn: (s: UserSessionDto) =>
       adminRevokeUserSessionById(s.userId ?? "", s.id),
     onSuccess: () => {
-      toast.success("Session revoked");
+      toast.success(t("system.sessions.revoked"));
       void queryClient.invalidateQueries({ queryKey: ["identity", "sessions"] });
     },
     onError: (err) => {
       toast.error(
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.message
-          : "Could not revoke session.",
+          : t("system.sessions.revokeFailed"),
       );
     },
   });
@@ -115,7 +117,9 @@ export function SessionsPage() {
     mutationFn: (userId: string) => adminRevokeAllUserSessions(userId),
     onSuccess: (data) => {
       toast.success(
-        `Revoked ${data.revokedCount} ${data.revokedCount === 1 ? "session" : "sessions"}`,
+        data.revokedCount === 1
+          ? t("system.sessions.revokedCountOne").replace("{n}", String(data.revokedCount))
+          : t("system.sessions.revokedCount").replace("{n}", String(data.revokedCount)),
       );
       void queryClient.invalidateQueries({ queryKey: ["identity", "sessions"] });
     },
@@ -123,7 +127,7 @@ export function SessionsPage() {
       toast.error(
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.message
-          : "Could not revoke sessions.",
+          : t("system.sessions.revokeAllFailed"),
       );
     },
   });
@@ -135,10 +139,13 @@ export function SessionsPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={UserCog}
-        title="Active sessions"
+        title={t("system.sessions.title")}
         total={data?.totalCount ?? null}
-        unit="session"
-        description={`Every browser and device currently signed in to ${user?.tenant ?? "this tenant"}. Refreshes every 30 seconds.`}
+        unit={t("system.sessions.unit")}
+        description={t("system.sessions.pageDesc").replace(
+          "{tenant}",
+          user?.tenant ?? t("system.sessions.thisTenant"),
+        )}
       >
         <Button
           variant="outline"
@@ -147,34 +154,34 @@ export function SessionsPage() {
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <RefreshCw className={cn("size-4", query.isFetching && "animate-spin")} />
-          Refresh
+          {t("system.sessions.refresh")}
         </Button>
       </EntityPageHeader>
 
       <EntitySearch
         value={search}
         onChange={setSearch}
-        placeholder="Find by user, email, or IP…"
+        placeholder={t("system.sessions.searchPlaceholder")}
       />
 
       {/* Filter row */}
       <div className="flex flex-wrap items-center gap-2">
         <EntityFilterPill<boolean>
-          label="Visibility"
+          label={t("system.sessions.visibility")}
           value={includeInactive}
           onChange={setIncludeInactive}
           options={[
-            { value: false, label: "Live only" },
-            { value: true, label: "Include inactive" },
+            { value: false, label: t("system.sessions.liveOnly") },
+            { value: true, label: t("system.sessions.includeInactive") },
           ]}
         />
         {items.length > 0 && (
           <div className="ml-auto hidden items-center gap-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] sm:flex">
-            <span>{stats.active} active</span>
+            <span>{t("system.sessions.statActive").replace("{n}", String(stats.active))}</span>
             <span aria-hidden className="opacity-50">·</span>
-            <span>{stats.distinctUsers} users</span>
+            <span>{t("system.sessions.statUsers").replace("{n}", String(stats.distinctUsers))}</span>
             <span aria-hidden className="opacity-50">·</span>
-            <span>{stats.mobile} mobile</span>
+            <span>{t("system.sessions.statMobile").replace("{n}", String(stats.mobile))}</span>
           </div>
         )}
       </div>
@@ -185,22 +192,22 @@ export function SessionsPage() {
       ) : items.length === 0 ? (
         <EntityEmpty
           icon={ShieldCheck}
-          title={searchActive ? "No sessions found" : "No active sessions"}
+          title={searchActive ? t("system.sessions.emptySearch") : t("system.sessions.emptyTitle")}
           body={
             debouncedSearch
-              ? `Nothing matches "${debouncedSearch}". Try a different term, or toggle Include inactive to see expired sessions.`
-              : "Sessions appear when users sign in. Toggle Include inactive to see expired and revoked sessions."
+              ? t("system.sessions.emptySearchBody").replace("{q}", debouncedSearch)
+              : t("system.sessions.emptyBody")
           }
           action={
             <div className="flex items-center gap-2">
               {debouncedSearch && (
                 <Button variant="outline" onClick={() => setSearch("")} className="h-9 rounded-lg px-4 text-[13px]">
-                  Clear search
+                  {t("system.sessions.clearSearch")}
                 </Button>
               )}
               <Button onClick={() => void query.refetch()} className="h-9 rounded-lg px-4 text-[13px]">
                 <RefreshCw className="mr-1.5 size-4" />
-                Refresh
+                {t("system.sessions.refresh")}
               </Button>
             </div>
           }
@@ -209,7 +216,9 @@ export function SessionsPage() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {data?.totalCount ?? 0} session{(data?.totalCount ?? 0) !== 1 ? "s" : ""} found
+              {(data?.totalCount ?? 0) === 1
+                ? t("system.sessions.foundOne").replace("{n}", String(data?.totalCount ?? 0))
+                : t("system.sessions.found").replace("{n}", String(data?.totalCount ?? 0))}
             </p>
           </div>
 
@@ -235,11 +244,11 @@ export function SessionsPage() {
           {/* Desktop list */}
           <EntityListCard className="hidden md:block">
             <EntityListHeader className={DESKTOP_COLS}>
-              <span>User</span>
-              <span>Device</span>
-              <span>IP</span>
-              <span>Last activity</span>
-              <span className="text-right">Actions</span>
+              <span>{t("system.sessions.colUser")}</span>
+              <span>{t("system.sessions.colDevice")}</span>
+              <span>{t("system.sessions.colIp")}</span>
+              <span>{t("system.sessions.colLast")}</span>
+              <span className="text-right">{t("system.sessions.colActions")}</span>
             </EntityListHeader>
             {items.map((session, i) => (
               <SessionDesktopRow
@@ -301,11 +310,12 @@ function SessionMobileCard({
   onRevokeAllForUser: () => void;
   isRevokingAllForUser: boolean;
 }) {
+  const t = useT();
   const isMobile = (session.deviceType ?? "").toLowerCase().includes("mobile");
   const DeviceIcon = isMobile ? Smartphone : MonitorSmartphone;
-  const displayName = session.userName ?? session.userEmail ?? "Unknown user";
+  const displayName = session.userName ?? session.userEmail ?? t("identity.unknownUser");
   const browser =
-    [session.browser, session.browserVersion].filter(Boolean).join(" ") || "Unknown browser";
+    [session.browser, session.browserVersion].filter(Boolean).join(" ") || t("system.sessions.unknownBrowser");
 
   return (
     <div
@@ -324,10 +334,10 @@ function SessionMobileCard({
                 {displayName}
               </p>
               {session.isCurrentSession && (
-                <EntityStatusBadge tone="info">You</EntityStatusBadge>
+                <EntityStatusBadge tone="info">{t("system.sessions.you")}</EntityStatusBadge>
               )}
               {!session.isActive && (
-                <EntityStatusBadge tone="danger">Inactive</EntityStatusBadge>
+                <EntityStatusBadge tone="danger">{t("system.sessions.inactive")}</EntityStatusBadge>
               )}
             </div>
             {session.userEmail && session.userName && (
@@ -362,7 +372,7 @@ function SessionMobileCard({
               className="gap-1.5"
             >
               <ShieldCheck className="size-3.5" />
-              All devices
+              {t("system.sessions.allDevices")}
             </Button>
           )}
           <Button
@@ -373,7 +383,7 @@ function SessionMobileCard({
             className="gap-1.5"
           >
             <LogOut className="size-3.5" />
-            {isRevoking ? "Revoking…" : "Revoke"}
+            {isRevoking ? t("system.sessions.revoking") : t("system.sessions.revoke")}
           </Button>
         </div>
       )}
@@ -400,11 +410,12 @@ function SessionDesktopRow({
   onRevokeAllForUser: () => void;
   isRevokingAllForUser: boolean;
 }) {
+  const t = useT();
   const isMobile = (session.deviceType ?? "").toLowerCase().includes("mobile");
   const DeviceIcon = isMobile ? Smartphone : MonitorSmartphone;
-  const displayName = session.userName ?? session.userEmail ?? "Unknown user";
+  const displayName = session.userName ?? session.userEmail ?? t("identity.unknownUser");
   const browser =
-    [session.browser, session.browserVersion].filter(Boolean).join(" ") || "Unknown browser";
+    [session.browser, session.browserVersion].filter(Boolean).join(" ") || t("system.sessions.unknownBrowser");
   const os = [session.operatingSystem, session.osVersion].filter(Boolean).join(" ");
 
   return (
@@ -418,10 +429,10 @@ function SessionDesktopRow({
               {displayName}
             </span>
             {session.isCurrentSession && (
-              <EntityStatusBadge tone="info">You</EntityStatusBadge>
+              <EntityStatusBadge tone="info">{t("system.sessions.you")}</EntityStatusBadge>
             )}
             {!session.isActive && (
-              <EntityStatusBadge tone="danger">Inactive</EntityStatusBadge>
+              <EntityStatusBadge tone="danger">{t("system.sessions.inactive")}</EntityStatusBadge>
             )}
           </div>
           {session.userEmail && session.userName && (
@@ -462,10 +473,10 @@ function SessionDesktopRow({
                 disabled={isRevokingAllForUser}
                 onClick={onRevokeAllForUser}
                 className="gap-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-                title="Sign this user out of all devices"
+                title={t("system.sessions.revokeAllTitle")}
               >
                 <ShieldCheck className="size-3.5" />
-                <span className="hidden lg:inline">All</span>
+                <span className="hidden lg:inline">{t("system.sessions.all")}</span>
               </Button>
             )}
             <Button
@@ -476,7 +487,7 @@ function SessionDesktopRow({
               className="gap-1.5"
             >
               <LogOut className="size-3.5" />
-              {isRevoking ? "Revoking…" : "Revoke"}
+              {isRevoking ? t("system.sessions.revoking") : t("system.sessions.revoke")}
             </Button>
           </>
         ) : (

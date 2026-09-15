@@ -11,6 +11,8 @@ public sealed class CustomerOrgConfiguration : IEntityTypeConfiguration<Customer
         ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("CustomerOrgs");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.CustomerTenantId).HasMaxLength(64);
+        builder.HasIndex(x => x.CustomerTenantId).IsUnique();
         builder.Property(x => x.Code).IsRequired().HasMaxLength(16);
         builder.HasIndex(x => x.Code).IsUnique();
         builder.Property(x => x.Name).IsRequired().HasMaxLength(128);

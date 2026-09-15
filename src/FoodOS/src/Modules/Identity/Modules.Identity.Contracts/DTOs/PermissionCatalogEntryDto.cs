@@ -13,4 +13,5 @@ public sealed record PermissionCatalogEntryDto(
     string Resource,
     string Action,
     bool IsBasic,
-    bool IsRoot);
+    bool IsRoot,
+    bool IsCustomer);

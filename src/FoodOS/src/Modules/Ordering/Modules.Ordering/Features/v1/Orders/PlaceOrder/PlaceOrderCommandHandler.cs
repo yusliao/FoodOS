@@ -99,7 +99,8 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
             warehouse.Id,
             businessDate,
             cutoffAt,
-            draftLines);
+            draftLines,
+            store.CustomerTenantId);
         dbContext.SalesOrders.Add(order);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

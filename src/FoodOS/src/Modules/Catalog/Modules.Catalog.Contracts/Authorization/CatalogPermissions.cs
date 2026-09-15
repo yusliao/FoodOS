@@ -45,19 +45,19 @@ public static class CatalogPermissions
 
     public static IReadOnlyList<FshPermission> All { get; } =
     [
-        new("View Brands",    ActionConstants.View,   Brands.Resource, IsBasic: true),
+        new("View Brands",    ActionConstants.View,   Brands.Resource, IsBasic: true, IsCustomer: true),
         new("Create Brands",  ActionConstants.Create, Brands.Resource),
         new("Update Brands",  ActionConstants.Update, Brands.Resource),
         new("Delete Brands",  ActionConstants.Delete, Brands.Resource),
         new("Restore Brands", "Restore",              Brands.Resource),
 
-        new("View Categories",    ActionConstants.View,   Categories.Resource, IsBasic: true),
+        new("View Categories",    ActionConstants.View,   Categories.Resource, IsBasic: true, IsCustomer: true),
         new("Create Categories",  ActionConstants.Create, Categories.Resource),
         new("Update Categories",  ActionConstants.Update, Categories.Resource),
         new("Delete Categories",  ActionConstants.Delete, Categories.Resource),
         new("Restore Categories", "Restore",              Categories.Resource),
 
-        new("View Products",        ActionConstants.View,   Products.Resource, IsBasic: true),
+        new("View Products",        ActionConstants.View,   Products.Resource, IsBasic: true, IsCustomer: true),
         new("Create Products",      ActionConstants.Create, Products.Resource),
         new("Update Products",      ActionConstants.Update, Products.Resource),
         new("Delete Products",      ActionConstants.Delete, Products.Resource),

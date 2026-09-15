@@ -4,6 +4,7 @@ import { ArrowLeft, Search, X } from "lucide-react";
 import { searchMessages, type MessageDto } from "@/api/chat";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
+import { useLocale, useT } from "@/i18n/locale-provider";
 import { useUserDisplay } from "@/lib/use-user-display";
 import { shortDateTime } from "@/pages/chat/chat-utils";
 
@@ -25,6 +26,7 @@ export function ChatSearchOverlay({
 }) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+  const t = useT();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Auto-focus the input on mount.
@@ -67,8 +69,8 @@ export function ChatSearchOverlay({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close search"
-          title="Close search"
+          aria-label={t("chat.closeSearch")}
+          title={t("chat.closeSearch")}
           className={cn(
             "grid h-8 w-8 cursor-pointer place-items-center rounded-md",
             "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]",
@@ -89,7 +91,7 @@ export function ChatSearchOverlay({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Search messages in this channel"
+            placeholder={t("chat.searchPlaceholder")}
             spellCheck={false}
             autoComplete="off"
             className={cn(
@@ -108,7 +110,7 @@ export function ChatSearchOverlay({
                 setQuery("");
                 inputRef.current?.focus();
               }}
-              aria-label="Clear search"
+              aria-label={t("chat.clearSearch")}
               className={cn(
                 "absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 cursor-pointer place-items-center rounded",
                 "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]",
@@ -132,9 +134,9 @@ export function ChatSearchOverlay({
           )}
         >
           {resultsQuery.isLoading ? (
-            <ResultPlaceholder label="Searching…" />
+            <ResultPlaceholder label={t("chat.searching")} />
           ) : results.length === 0 ? (
-            <ResultPlaceholder label={`No matches for "${debounced}".`} />
+            <ResultPlaceholder label={t("chat.noMatchesFor").replace("{q}", debounced)} />
           ) : (
             <ul className="divide-y divide-[var(--color-border)]">
               {results.map((m) => (
@@ -153,8 +155,10 @@ export function ChatSearchOverlay({
           <div className="border-t border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-1.5">
             <span className="text-[11px] text-[var(--color-muted-foreground)]">
               {results.length > 0
-                ? `${results.length} match${results.length === 1 ? "" : "es"} · click to jump · Esc to close`
-                : "Esc to close"}
+                ? results.length === 1
+                  ? t("chat.matchHintOne")
+                  : t("chat.matchesHint").replace("{n}", String(results.length))
+                : t("chat.escToClose")}
             </span>
           </div>
         </div>
@@ -173,6 +177,8 @@ function SearchResultRow({
   onPick: () => void;
 }) {
   const author = useUserDisplay(message.authorUserId);
+  const { culture } = useLocale();
+  const t = useT();
   const snippet = highlight((message.body ?? "").trim(), query);
   return (
     <li>
@@ -198,7 +204,7 @@ function SearchResultRow({
               {author.name}
             </span>
             <span className="text-[10px] tabular-nums text-[var(--color-muted-foreground)]">
-              {shortDateTime(message.createdAtUtc)}
+              {shortDateTime(message.createdAtUtc, culture, t)}
             </span>
           </div>
           <p className="line-clamp-2 text-[12.5px] leading-relaxed text-[var(--color-foreground)]">

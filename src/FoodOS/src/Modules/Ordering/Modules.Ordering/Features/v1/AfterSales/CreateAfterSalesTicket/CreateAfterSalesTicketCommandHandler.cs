@@ -40,7 +40,8 @@ public sealed class CreateAfterSalesTicketCommandHandler(OrderingDbContext dbCon
             type,
             command.Quantity,
             command.Reason,
-            currentUser.GetUserId());
+            currentUser.GetUserId(),
+            order.CustomerTenantId);
         dbContext.AfterSalesTickets.Add(ticket);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return ticket.ToDto();

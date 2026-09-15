@@ -319,6 +319,11 @@ public sealed class IdentityService : IIdentityService
             new(ClaimConstants.Fullname, fullName),
             new(ClaimTypes.Surname, user.LastName ?? string.Empty),
             new(ClaimConstants.Tenant, tenantId),
+            new(
+                ClaimConstants.BusinessActor,
+                string.Equals(tenantId, MultitenancyConstants.Root.Id, StringComparison.OrdinalIgnoreCase)
+                    ? ClaimConstants.OperatorActor
+                    : ClaimConstants.CustomerActor),
             new(ClaimConstants.ImageUrl, user.ImageUrl?.ToString() ?? string.Empty)
         ];
     }

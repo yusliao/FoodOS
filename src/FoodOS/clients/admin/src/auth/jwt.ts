@@ -3,6 +3,7 @@ export type JwtClaims = {
   email?: string;
   name?: string;
   tenant?: string;
+  business_actor?: "operator" | "customer";
   permissions?: string[] | string;
   exp?: number;
   [key: string]: unknown;

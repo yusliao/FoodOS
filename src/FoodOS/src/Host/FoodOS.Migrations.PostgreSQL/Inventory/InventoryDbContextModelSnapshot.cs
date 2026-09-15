@@ -42,7 +42,9 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -54,8 +56,6 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
                         .HasDatabaseName("IX_DailyPlans_WarehouseId_BusinessDate");
 
                     b.ToTable("DailyPlans", "inventory");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Inventory.Domain.InventoryTransaction", b =>
@@ -95,7 +95,9 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("ToBucket")
                         .HasMaxLength(16)
@@ -121,8 +123,6 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
                     b.HasIndex("RefType", "RefId");
 
                     b.ToTable("InventoryTransactions", "inventory");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Inventory.Domain.Lot", b =>
@@ -162,7 +162,9 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -173,8 +175,6 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
                         .HasDatabaseName("IX_Lots_LotNo_ProductId");
 
                     b.ToTable("Lots", "inventory");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Inventory.Domain.LotBalance", b =>
@@ -215,7 +215,9 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
@@ -236,8 +238,6 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
                         .HasDatabaseName("IX_LotBalances_WarehouseId_ZoneId_LotId");
 
                     b.ToTable("LotBalances", "inventory");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Inventory.Domain.Reservation", b =>
@@ -270,7 +270,9 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -285,8 +287,6 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
                     b.HasIndex("WarehouseId", "ProductId", "ZoneId", "Released");
 
                     b.ToTable("Reservations", "inventory");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Inventory.Domain.TemperatureZone", b =>
@@ -307,7 +307,9 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -319,8 +321,6 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
                         .HasDatabaseName("IX_TemperatureZones_WarehouseId_Kind");
 
                     b.ToTable("TemperatureZones", "inventory");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Inventory.Domain.Warehouse", b =>
@@ -349,7 +349,9 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("TimeZoneId")
                         .IsRequired()
@@ -363,8 +365,6 @@ namespace FoodOS.Migrations.PostgreSQL.Inventory
                         .HasDatabaseName("IX_Warehouses_Code");
 
                     b.ToTable("Warehouses", "inventory");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Inventory.Domain.TemperatureZone", b =>

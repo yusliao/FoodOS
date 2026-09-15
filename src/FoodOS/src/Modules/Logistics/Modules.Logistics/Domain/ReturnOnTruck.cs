@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class ReturnOnTruck : BaseEntity<Guid>
+public sealed class ReturnOnTruck : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid ShipmentId { get; private set; }
     public Guid OrderId { get; private set; }

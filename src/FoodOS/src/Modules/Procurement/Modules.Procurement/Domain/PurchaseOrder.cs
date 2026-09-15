@@ -4,7 +4,7 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Procurement.Domain;
 
-public sealed class PurchaseOrder : AggregateRoot<Guid>
+public sealed class PurchaseOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<PurchaseOrderLine> _lines = [];
     private readonly List<QualityCheck> _qualityChecks = [];

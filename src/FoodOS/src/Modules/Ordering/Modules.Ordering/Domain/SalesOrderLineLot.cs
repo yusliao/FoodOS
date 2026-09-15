@@ -5,7 +5,7 @@ namespace FSH.Modules.Ordering.Domain;
 /// <summary>
 /// Lot snapshot bound at dispatch so Shop can scan the same batch after POD.
 /// </summary>
-public sealed class SalesOrderLineLot : BaseEntity<Guid>
+public sealed class SalesOrderLineLot : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid SalesOrderLineId { get; private set; }
     public Guid LotId { get; private set; }

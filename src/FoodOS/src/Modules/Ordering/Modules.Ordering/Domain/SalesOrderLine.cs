@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Ordering.Domain;
 
-public sealed class SalesOrderLine : BaseEntity<Guid>
+public sealed class SalesOrderLine : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     private readonly List<SalesOrderLineLot> _lots = [];
 

@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Ordering.Domain;
 
-public sealed class CartLine : BaseEntity<Guid>
+public sealed class CartLine : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid CartId { get; private set; }
     public Guid ProductId { get; private set; }

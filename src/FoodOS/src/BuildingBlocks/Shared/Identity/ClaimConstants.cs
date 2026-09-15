@@ -11,4 +11,8 @@ public static class ClaimConstants
 
     public const string ActorSubject = "act_sub";
     public const string ActorTenant = "act_tenant";
+    public const string BusinessActor = "business_actor";
+
+    public const string OperatorActor = "operator";
+    public const string CustomerActor = "customer";
 }

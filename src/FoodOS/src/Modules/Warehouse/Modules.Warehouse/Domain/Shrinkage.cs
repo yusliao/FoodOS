@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class Shrinkage : AggregateRoot<Guid>
+public sealed class Shrinkage : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public string Zone { get; private set; } = default!;

@@ -4,7 +4,7 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class PickTask : BaseEntity<Guid>
+public sealed class PickTask : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid WaveId { get; private set; }
     public Guid OrderId { get; private set; }

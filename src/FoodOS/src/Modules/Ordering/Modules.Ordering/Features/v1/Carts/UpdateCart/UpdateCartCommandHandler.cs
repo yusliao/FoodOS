@@ -14,10 +14,11 @@ public sealed class UpdateCartCommandHandler(OrderingDbContext dbContext, IMedia
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        bool storeExists = await dbContext.Stores
-            .AnyAsync(s => s.Id == command.StoreId, cancellationToken)
+        var store = await dbContext.Stores
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == command.StoreId, cancellationToken)
             .ConfigureAwait(false);
-        if (!storeExists)
+        if (store is null)
         {
             throw new NotFoundException($"Store {command.StoreId} not found.");
         }
@@ -36,7 +37,7 @@ public sealed class UpdateCartCommandHandler(OrderingDbContext dbContext, IMedia
 
         if (cart is null)
         {
-            cart = Cart.Create(command.StoreId);
+            cart = Cart.Create(command.StoreId, store.CustomerTenantId);
             dbContext.Carts.Add(cart);
         }
         else

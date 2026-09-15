@@ -33,16 +33,25 @@ public static class OrderingPermissions
         public const string Reconcile = $"Permissions.{Resource}.Reconcile";
     }
 
+    public static class StoreAccess
+    {
+        public const string Resource = "Ordering.StoreAccess";
+        public const string View = $"Permissions.{Resource}.View";
+        public const string Manage = $"Permissions.{Resource}.Manage";
+    }
+
     public static IReadOnlyList<FshPermission> All { get; } =
     [
-        new("View Shop", ActionConstants.View, Shop.Resource, IsBasic: true),
-        new("Place Shop Orders", "Order", Shop.Resource, IsBasic: true),
-        new("View Customers", ActionConstants.View, Customers.Resource, IsBasic: true),
+        new("View Shop", ActionConstants.View, Shop.Resource, IsBasic: true, IsCustomer: true),
+        new("Place Shop Orders", "Order", Shop.Resource, IsBasic: true, IsCustomer: true),
+        new("View Customers", ActionConstants.View, Customers.Resource, IsBasic: true, IsCustomer: true),
         new("Create Customers", ActionConstants.Create, Customers.Resource),
         new("Update Customers", ActionConstants.Update, Customers.Resource),
-        new("View Stores", ActionConstants.View, Stores.Resource, IsBasic: true),
+        new("View Stores", ActionConstants.View, Stores.Resource, IsBasic: true, IsCustomer: true),
         new("Create Stores", ActionConstants.Create, Stores.Resource),
         new("Update Stores", ActionConstants.Update, Stores.Resource),
+        new("View Own Store Access", ActionConstants.View, StoreAccess.Resource, IsBasic: true, IsCustomer: true),
+        new("Manage Customer Store Access", "Manage", StoreAccess.Resource, IsCustomer: true),
         new("Reconcile Orders", "Reconcile", Orders.Resource),
     ];
 }

@@ -16,10 +16,11 @@ public sealed class CreateStoreCommandHandler(OrderingDbContext dbContext, IMedi
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        bool orgExists = await dbContext.CustomerOrgs
-            .AnyAsync(o => o.Id == command.CustomerOrgId, cancellationToken)
+        var org = await dbContext.CustomerOrgs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == command.CustomerOrgId, cancellationToken)
             .ConfigureAwait(false);
-        if (!orgExists)
+        if (org is null)
         {
             throw new NotFoundException($"Customer organization {command.CustomerOrgId} not found.");
         }
@@ -34,7 +35,8 @@ public sealed class CreateStoreCommandHandler(OrderingDbContext dbContext, IMedi
             command.Address,
             command.DefaultWarehouseId,
             command.DefaultRouteId,
-            command.DeliveryWindow);
+            command.DeliveryWindow,
+            org.CustomerTenantId);
 
         bool taken = await dbContext.Stores
             .AnyAsync(s => s.Code == store.Code, cancellationToken)

@@ -11,6 +11,8 @@ public sealed class AfterSalesTicketConfiguration : IEntityTypeConfiguration<Aft
         ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("AfterSalesTickets");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.CustomerTenantId).HasMaxLength(64);
+        builder.HasIndex(x => new { x.CustomerTenantId, x.StoreId });
         builder.Property(x => x.Type).HasConversion<string>().HasMaxLength(16);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(x => x.Quantity).HasPrecision(18, 4);

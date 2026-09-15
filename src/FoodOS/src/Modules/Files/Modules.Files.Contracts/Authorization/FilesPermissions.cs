@@ -19,8 +19,8 @@ public static class FilesPermissions
 
     public static IReadOnlyList<FshPermission> All { get; } =
     [
-        new("Upload Files",      "Upload",    Resource, IsBasic: true),
-        new("Delete Own Files",  "DeleteOwn", Resource, IsBasic: true),
+        new("Upload Files",      "Upload",    Resource, IsBasic: true, IsCustomer: true),
+        new("Delete Own Files",  "DeleteOwn", Resource, IsBasic: true, IsCustomer: true),
         new("Delete Any File",   "DeleteAny", Resource),
         new("View Files Trash",  "ViewTrash", Resource),
         new("Restore Files",     "Restore",   Resource),

@@ -19,6 +19,7 @@ import {
 import { useRealtimeEvent } from "@/realtime/realtime-context";
 import { canMerge, dayKey, dayRuleLabel } from "@/pages/chat/chat-utils";
 import { Message } from "@/pages/chat/message";
+import { useLocale, useT } from "@/i18n/locale-provider";
 
 export type MessageListHandle = {
   /** Scroll the feed to a message id in the loaded window and flash it.
@@ -68,6 +69,8 @@ export const MessageList = forwardRef<
   ref,
 ) {
   const queryClient = useQueryClient();
+  const t = useT();
+  const { culture } = useLocale();
   const queryKey = useMemo(() => ["chat", "messages", channelId] as const, [channelId]);
 
   const messagesQuery = useQuery({
@@ -394,7 +397,7 @@ export const MessageList = forwardRef<
       const m = chronological[i];
       const k = dayKey(m.createdAtUtc);
       if (k !== lastDay) {
-        out.push({ kind: "day", key: `day-${k}`, label: dayRuleLabel(m.createdAtUtc) });
+        out.push({ kind: "day", key: `day-${k}`, label: dayRuleLabel(m.createdAtUtc, culture, t) });
         lastDay = k;
         prevMessage = null;
       }
@@ -408,7 +411,7 @@ export const MessageList = forwardRef<
       }
     }
     return out;
-  }, [chronological, watermark]);
+  }, [chronological, watermark, culture, t]);
 
   const parentRef = useRef<HTMLDivElement | null>(null);
   const virtualizer = useVirtualizer({
@@ -537,7 +540,7 @@ export const MessageList = forwardRef<
     return (
       <div className="flex h-full items-center justify-center px-6">
         <p className="text-[12px] text-[var(--color-muted-foreground)]">
-          Loading messages…
+          {t("chat.loadingMessages")}
         </p>
       </div>
     );
@@ -547,10 +550,10 @@ export const MessageList = forwardRef<
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="font-display text-[17px] font-semibold tracking-tight text-[var(--color-foreground)]">
-          No messages yet
+          {t("chat.noMessagesYet")}
         </p>
         <p className="max-w-sm text-[13px] text-[var(--color-muted-foreground)]">
-          This is the very beginning of the conversation. Send the first message to break the silence.
+          {t("chat.noMessagesBody")}
         </p>
       </div>
     );
@@ -565,7 +568,7 @@ export const MessageList = forwardRef<
         role="log"
         aria-live="polite"
         aria-relevant="additions"
-        aria-label="Channel messages"
+        aria-label={t("chat.channelMessages")}
       >
         {/* aria-hidden so these status rows aren't announced as new messages
             by the role="log" live region (it only relays additions). */}
@@ -574,7 +577,7 @@ export const MessageList = forwardRef<
             aria-hidden
             className="flex h-9 items-center justify-center text-[11px] text-[var(--color-muted-foreground)]"
           >
-            Loading older…
+            {t("chat.loadingOlder")}
           </div>
         )}
         {!hasMoreOlder && messages.length >= 100 && (
@@ -582,7 +585,7 @@ export const MessageList = forwardRef<
             aria-hidden
             className="flex h-9 items-center justify-center text-[11px] text-[var(--color-muted-foreground)]"
           >
-            Beginning of the conversation
+            {t("chat.beginning")}
           </div>
         )}
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -611,7 +614,7 @@ export const MessageList = forwardRef<
                 ) : row.kind === "unread" ? (
                   <div className="px-4">
                     <div className="chat-unread-divider">
-                      <span>New</span>
+                      <span>{t("chat.new")}</span>
                     </div>
                   </div>
                 ) : (
@@ -638,12 +641,16 @@ export const MessageList = forwardRef<
             type="button"
             onClick={jumpToBottom}
             className="chat-jump-pill pointer-events-auto"
-            aria-label={`Jump to latest, ${unseenCount} unseen ${unseenCount === 1 ? "message" : "messages"}`}
+            aria-label={
+              unseenCount === 1
+                ? t("chat.jumpLatestOne")
+                : t("chat.jumpLatest").replace("{n}", String(unseenCount))
+            }
           >
             <span className="chat-jump-pill-count" aria-hidden>
               {unseenCount > 99 ? "99+" : unseenCount}
             </span>
-            <span>{unseenCount === 1 ? "new message" : "new messages"}</span>
+            <span>{unseenCount === 1 ? t("chat.newMessage") : t("chat.newMessages")}</span>
             <ChevronDown className="h-3.5 w-3.5" aria-hidden />
           </button>
         </div>

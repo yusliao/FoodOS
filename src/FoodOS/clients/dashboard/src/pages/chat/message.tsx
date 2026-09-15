@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/cn";
+import { useLocale, useT } from "@/i18n/locale-provider";
 import { describe } from "@/lib/list-helpers";
 import { useUserByUsername, useUserDisplay } from "@/lib/use-user-display";
 import { usePresence } from "@/realtime/use-presence";
@@ -85,6 +86,8 @@ export function Message({
   const isPending = message.id.startsWith("temp:");
   const reactions = groupReactions(message, selfUserId);
   const author = useUserDisplay(message.authorUserId);
+  const t = useT();
+  const { culture } = useLocale();
   // Only call usePresence for the other-side branch — own messages don't
   // need a presence dot on their own avatar (and we hide it anyway).
   const authorOnline = usePresence(!isOwn ? message.authorUserId : null);
@@ -152,7 +155,7 @@ export function Message({
             isOwn ? "left-4" : "right-4",
           )}
         >
-          {shortTime(message.createdAtUtc)}
+          {shortTime(message.createdAtUtc, culture)}
         </span>
       )}
 
@@ -191,11 +194,11 @@ export function Message({
               </>
             )}
             <span className="text-[10px] tabular-nums text-[var(--color-muted-foreground)]">
-              {shortTime(message.createdAtUtc)}
+              {shortTime(message.createdAtUtc, culture)}
             </span>
             {message.editedAtUtc && (
               <span className="text-[10px] text-[var(--color-muted-foreground)]">
-                · edited
+                · {t("chat.edited")}
               </span>
             )}
           </div>
@@ -209,10 +212,10 @@ export function Message({
               "text-[10px] font-semibold uppercase tracking-wider",
               "text-[var(--color-primary)]",
             )}
-            aria-label="Pinned"
+            aria-label={t("chat.pinned")}
           >
             <Pin className="h-2.5 w-2.5" aria-hidden />
-            Pinned
+            {t("chat.pinned")}
           </span>
         )}
 
@@ -248,7 +251,7 @@ export function Message({
 
           {isDeleted ? (
             <span className="text-sm italic text-[var(--color-muted-foreground)]">
-              [message deleted]
+              {t("chat.messageDeleted")}
             </span>
           ) : (
             <>
@@ -317,8 +320,9 @@ function ReplyContextPreview({
   onClick?: () => void;
 }) {
   const author = useUserDisplay(parent?.authorUserId);
+  const t = useT();
   const body = parent ? (parent.body ?? "").trim() : "";
-  const preview = body || "(no text — attachment or empty)";
+  const preview = body || t("chat.noTextAttachment");
 
   const className = cn(
     "mb-1.5 -mt-0.5 block w-full border-l-2 pl-2 text-left",
@@ -333,10 +337,10 @@ function ReplyContextPreview({
     <>
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-          Replying to
+          {t("chat.replyingTo")}
         </span>
         <span className="truncate text-[11px] font-semibold tracking-tight text-[var(--color-foreground)]">
-          {parent ? author.name : "a message"}
+          {parent ? author.name : t("chat.aMessage")}
         </span>
       </div>
       <p
@@ -382,6 +386,7 @@ function ReadReceipt({
   members: ChannelMemberDto[];
   selfUserId?: string;
 }) {
+  const t = useT();
   const readers = useMemo(
     () =>
       members.filter(
@@ -396,10 +401,10 @@ function ReadReceipt({
   const totalOthers = members.filter((m) => m.userId !== selfUserId).length;
   const label =
     totalOthers === 1
-      ? "Seen"
+      ? t("chat.seen")
       : readers.length === totalOthers
-        ? "Seen by everyone"
-        : `Seen by ${readers.length}`;
+        ? t("chat.seenEveryone")
+        : t("chat.seenBy").replace("{n}", String(readers.length));
   return (
     <span
       className={cn(
@@ -543,6 +548,7 @@ function MessageBody({ body }: { body: string }) {
 }
 
 function MentionPill({ username }: { username: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
   const { resolved, loading, error } = useUserByUsername(username, open);
@@ -555,8 +561,8 @@ function MentionPill({ username }: { username: string }) {
     const text = `@${username}`;
     void navigator.clipboard
       ?.writeText(text)
-      .then(() => toast.success(`Copied ${text}`))
-      .catch(() => toast.error("Couldn't copy to clipboard"));
+      .then(() => toast.success(t("chat.copied").replace("{text}", text)))
+      .catch(() => toast.error(t("chat.copyFailed")));
   };
 
   const dmMutation = useMutation({
@@ -569,7 +575,7 @@ function MentionPill({ username }: { username: string }) {
       setOpen(false);
       navigate(`/chat/${channelId}`);
     },
-    onError: (err) => toast.error("Couldn't open DM", { description: describe(err) }),
+    onError: (err) => toast.error(t("chat.openDmFailed"), { description: describe(err) }),
   });
 
   const displayName =
@@ -584,8 +590,8 @@ function MentionPill({ username }: { username: string }) {
         <button
           type="button"
           className="chat-mention"
-          title={`Mention of ${username}`}
-          aria-label={`Mention of ${username}, click to open profile`}
+          title={t("chat.mentionOf").replace("{name}", username)}
+          aria-label={t("chat.mentionOfAria").replace("{name}", username)}
         >
           @{username}
         </button>
@@ -605,7 +611,7 @@ function MentionPill({ username }: { username: string }) {
               </span>
               {isSelf && (
                 <span className="rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                  you
+                  {t("chat.youLower")}
                 </span>
               )}
             </div>
@@ -619,17 +625,17 @@ function MentionPill({ username }: { username: string }) {
             )}
             {loading && (
               <div className="mt-1 text-[11px] text-[var(--color-muted-foreground)]">
-                Looking up…
+                {t("chat.lookingUp")}
               </div>
             )}
             {!loading && !resolved && !error && (
               <div className="mt-1 text-xs italic text-[var(--color-muted-foreground)]">
-                User not found.
+                {t("chat.userNotFound")}
               </div>
             )}
             {error && (
               <div className="mt-1 text-xs italic text-[var(--color-destructive)]">
-                Couldn&apos;t load this user.
+                {t("chat.loadUserFailed")}
               </div>
             )}
           </div>
@@ -641,15 +647,15 @@ function MentionPill({ username }: { username: string }) {
             onClick={copy}
             disabled={dmMutation.isPending}
           >
-            Copy @{resolved?.userName ?? username}
+            {t("chat.copyAt").replace("{name}", resolved?.userName ?? username)}
           </Button>
           <Button
             size="sm"
             disabled={!resolved?.id || isSelf || dmMutation.isPending}
             onClick={() => dmMutation.mutate()}
-            title={isSelf ? "That's you" : undefined}
+            title={isSelf ? t("chat.thatsYou") : undefined}
           >
-            {dmMutation.isPending ? "Opening…" : "Open DM"}
+            {dmMutation.isPending ? t("chat.opening") : t("chat.openDm")}
           </Button>
         </div>
       </DropdownMenuContent>
@@ -668,6 +674,7 @@ function ReactionChip({
   count: number;
   mine: boolean;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => (mine ? removeReaction(messageId, emoji) : addReaction(messageId, emoji)),
@@ -682,7 +689,9 @@ function ReactionChip({
       onClick={() => mutation.mutate()}
       disabled={mutation.isPending}
       aria-pressed={mine}
-      aria-label={`${mine ? "Remove your" : "Add"} ${emoji} reaction, ${count} so far`}
+      aria-label={(mine ? t("chat.removeReaction") : t("chat.addReaction"))
+        .replace("{emoji}", emoji)
+        .replace("{n}", String(count))}
       className="chat-reaction-chip"
     >
       <span aria-hidden>{emoji}</span>
@@ -704,6 +713,7 @@ function MessageActions({
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const queryClient = useQueryClient();
+  const t = useT();
   const isDeleted = message.deletedAtUtc !== null && message.deletedAtUtc !== undefined;
 
   const reactMutation = useMutation({
@@ -718,9 +728,9 @@ function MessageActions({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["chat", "messages"] });
       setConfirmingDelete(false);
-      toast.success("Message deleted");
+      toast.success(t("chat.deletedToast"));
     },
-    onError: (err) => toast.error("Couldn't delete the message", { description: describe(err) }),
+    onError: (err) => toast.error(t("chat.deleteFailed"), { description: describe(err) }),
   });
 
   const pinMutation = useMutation({
@@ -732,9 +742,9 @@ function MessageActions({
       // pinned-panel cache.
       void queryClient.invalidateQueries({ queryKey: ["chat", "messages"] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "pinned", message.channelId] });
-      toast.success(message.isPinned ? "Unpinned" : "Pinned");
+      toast.success(message.isPinned ? t("chat.unpinned") : t("chat.pinned"));
     },
-    onError: (err) => toast.error("Couldn't update the pin", { description: describe(err) }),
+    onError: (err) => toast.error(t("chat.pinFailed"), { description: describe(err) }),
   });
 
   if (isDeleted) return null;
@@ -760,7 +770,7 @@ function MessageActions({
             below stole the clicks). */}
         <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
           <DropdownMenuTrigger asChild>
-            <ActionButton title="React">
+            <ActionButton title={t("chat.react")}>
               <SmilePlus className="h-3.5 w-3.5" />
             </ActionButton>
           </DropdownMenuTrigger>
@@ -773,7 +783,7 @@ function MessageActions({
               <button
                 key={emoji}
                 type="button"
-                aria-label={`React with ${emoji}`}
+                aria-label={t("chat.reactWith").replace("{emoji}", emoji)}
                 onClick={() => {
                   reactMutation.mutate(emoji);
                   setPickerOpen(false);
@@ -790,12 +800,12 @@ function MessageActions({
           </DropdownMenuContent>
         </DropdownMenu>
         {!message.parentMessageId && onReply && (
-          <ActionButton title="Reply" onClick={() => onReply(message)}>
+          <ActionButton title={t("chat.reply")} onClick={() => onReply(message)}>
             <span className="text-[12px] font-semibold leading-none">↪</span>
           </ActionButton>
         )}
         <ActionButton
-          title={message.isPinned ? "Unpin" : "Pin"}
+          title={message.isPinned ? t("chat.unpin") : t("chat.pin")}
           onClick={() => pinMutation.mutate()}
         >
           {message.isPinned ? (
@@ -805,13 +815,13 @@ function MessageActions({
           )}
         </ActionButton>
         {isOwn && (
-          <ActionButton title="Edit" onClick={() => setEditing(true)}>
+          <ActionButton title={t("chat.edit")} onClick={() => setEditing(true)}>
             <Pencil className="h-3.5 w-3.5" />
           </ActionButton>
         )}
         {isOwn && (
           <ActionButton
-            title="Delete"
+            title={t("chat.delete")}
             onClick={() => setConfirmingDelete(true)}
             destructive
           >
@@ -856,15 +866,15 @@ function DeleteMessageDialog({
   pending: boolean;
 }) {
   const preview = (message.body ?? "").trim();
+  const t = useT();
   const display = preview.length > 140 ? `${preview.slice(0, 140)}…` : preview;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete this message?</DialogTitle>
+          <DialogTitle>{t("chat.deleteTitle")}</DialogTitle>
           <DialogDescription>
-            This can&apos;t be undone. Everyone in the channel will see the
-            message disappear in real time.
+            {t("chat.deleteDesc")}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -879,16 +889,16 @@ function DeleteMessageDialog({
             </blockquote>
           ) : (
             <p className="text-[12px] italic text-[var(--color-muted-foreground)]">
-              No text preview — attachments or empty body.
+              {t("chat.noTextPreview")}
             </p>
           )}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>
-            Cancel
+            {t("chrome.cancel")}
           </Button>
           <Button variant="destructive" size="sm" onClick={onConfirm} disabled={pending}>
-            {pending ? "Deleting…" : "Delete message"}
+            {pending ? t("chat.deleting") : t("chat.deleteMessage")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -934,6 +944,7 @@ function EditMessageInline({
   onSaved: () => void;
 }) {
   const [body, setBody] = useState(message.body ?? "");
+  const t = useT();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mutation = useMutation({
     mutationFn: () => editMessage(message.id, body.trim()),
@@ -987,7 +998,7 @@ function EditMessageInline({
           onKeyDown={onKeyDown}
           autoFocus
           rows={1}
-          aria-label="Edit message"
+          aria-label={t("chat.editMessage")}
           className={cn(
             "block w-full resize-none border-0 bg-transparent px-3 py-2 text-sm",
             "leading-relaxed text-[var(--color-foreground)] focus:outline-none",
@@ -996,18 +1007,18 @@ function EditMessageInline({
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-[var(--color-muted-foreground)]">
-          Enter to save · Shift+Enter for newline · Esc to cancel
+          {t("chat.editHint")}
         </span>
         <div className="flex items-center gap-1.5">
           <Button size="sm" variant="ghost" onClick={onClose} disabled={mutation.isPending}>
-            Cancel
+            {t("chrome.cancel")}
           </Button>
           <Button
             size="sm"
             disabled={!body.trim() || mutation.isPending}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? "Saving…" : "Save"}
+            {mutation.isPending ? t("identity.saving") : t("chat.save")}
           </Button>
         </div>
       </div>

@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class ShipmentLineLot : BaseEntity<Guid>
+public sealed class ShipmentLineLot : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid ShipmentLineId { get; private set; }
     public Guid OrderLineId { get; private set; }

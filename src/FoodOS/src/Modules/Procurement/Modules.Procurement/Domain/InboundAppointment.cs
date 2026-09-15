@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Procurement.Domain;
 
-public sealed class InboundAppointment : BaseEntity<Guid>
+public sealed class InboundAppointment : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid PurchaseOrderId { get; private set; }
     public string DockSlot { get; private set; } = default!;

@@ -9,6 +9,7 @@ import { useRealtimeEvent } from "@/realtime/realtime-context";
 import { useUserDisplay } from "@/lib/use-user-display";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 /**
  * Background listener mounted in AppShell — subscribes to ChatMessageCreated
@@ -84,6 +85,7 @@ function ChatToast({
   onDismiss: () => void;
 }) {
   const queryClient = useQueryClient();
+  const t = useT();
   const author = useUserDisplay(payload.authorUserId);
   // Read the channel from cache rather than firing a fresh fetch — the
   // my-channels query was just invalidated by the notifier, so by the time
@@ -92,12 +94,12 @@ function ChatToast({
   const channel = channels?.find((c) => c.id === payload.channelId);
 
   const channelLabel = !channel
-    ? "a channel"
+    ? t("chat.aChannel")
     : channel.type === ChannelType.Channel
-      ? `#${channel.name ?? "channel"}`
+      ? `#${channel.name ?? t("chat.hashChannel")}`
       : channel.type === ChannelType.DirectMessage
-        ? "direct message"
-        : "group chat";
+        ? t("chat.directMessageLower")
+        : t("chat.groupChat");
   const ChannelIcon = !channel
     ? MessageCircle
     : channel.type === ChannelType.Channel
@@ -141,7 +143,7 @@ function ChatToast({
       <button
         type="button"
         onClick={onView}
-        title="Open conversation"
+        title={t("chat.openConversation")}
         className={cn(
           "relative flex w-full items-start gap-3 p-3 pr-9 text-left",
           "cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-cubic)]",
@@ -167,7 +169,7 @@ function ChatToast({
               className="h-1 w-1 shrink-0 rounded-full bg-[var(--color-primary)] opacity-70"
             />
             <span className="truncate text-[11px] text-[var(--color-muted-foreground)]">
-              just now
+              {t("chat.justNow")}
             </span>
           </div>
 
@@ -193,7 +195,7 @@ function ChatToast({
             </p>
           ) : (
             <p className="mt-2 text-[12px] italic text-[var(--color-muted-foreground)]">
-              (attachment or empty body)
+              {t("chat.attachmentOrEmpty")}
             </p>
           )}
         </div>
@@ -207,8 +209,8 @@ function ChatToast({
           e.stopPropagation();
           onDismiss();
         }}
-        aria-label="Dismiss notification"
-        title="Dismiss"
+        aria-label={t("chat.dismissNotification")}
+        title={t("chat.dismiss")}
         className={cn(
           "absolute right-2 top-2 grid h-6 w-6 cursor-pointer place-items-center rounded-md",
           "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]",

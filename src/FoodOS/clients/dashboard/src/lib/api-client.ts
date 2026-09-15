@@ -118,6 +118,7 @@ export async function refreshAccessToken() {
     headers: {
       "Content-Type": "application/json",
       "Accept-Language": getCulture(),
+      "X-FSH-App": "dashboard",
       ...(tenant ? { tenant } : {}),
     },
     body: JSON.stringify({ token: accessToken, refreshToken }),

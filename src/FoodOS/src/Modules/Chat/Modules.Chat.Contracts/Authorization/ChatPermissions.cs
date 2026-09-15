@@ -27,12 +27,12 @@ public static class ChatPermissions
 
     public static IReadOnlyList<FshPermission> All { get; } =
     [
-        new("View Chat Channels",   ActionConstants.View,   Channels.Resource, IsBasic: true),
-        new("Create Chat Channels", ActionConstants.Create, Channels.Resource, IsBasic: true),
-        new("Manage All Channels",  "ManageAll",            Channels.Resource),
-        new("Send Messages",        "Send",                 Messages.Resource, IsBasic: true),
-        new("Edit Own Messages",    "EditOwn",              Messages.Resource, IsBasic: true),
-        new("Delete Own Messages",  "DeleteOwn",            Messages.Resource, IsBasic: true),
-        new("Delete Any Message",   "DeleteAny",            Messages.Resource),
+        new("View Chat Channels",   ActionConstants.View,   Channels.Resource, IsBasic: true, IsCustomer: true),
+        new("Create Chat Channels", ActionConstants.Create, Channels.Resource, IsBasic: true, IsCustomer: true),
+        new("Manage All Channels",  "ManageAll",            Channels.Resource, IsCustomer: true),
+        new("Send Messages",        "Send",                 Messages.Resource, IsBasic: true, IsCustomer: true),
+        new("Edit Own Messages",    "EditOwn",              Messages.Resource, IsBasic: true, IsCustomer: true),
+        new("Delete Own Messages",  "DeleteOwn",            Messages.Resource, IsBasic: true, IsCustomer: true),
+        new("Delete Any Message",   "DeleteAny",            Messages.Resource, IsCustomer: true),
     ];
 }

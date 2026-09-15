@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, CloudUpload, Loader2, X } from "lucide-react
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 import { useFileUpload, formatBytes, type UploadOptions } from "@/hooks/use-file-upload";
 import type { FileAssetDto } from "@/api/files";
 
@@ -25,6 +26,7 @@ type Props = {
  * the user can keep dropping files without leaving the surface.
  */
 export function FileDropzone({ options, onUploaded, disabled, accept, className }: Props) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const { upload, progress, isUploading, reset, cancel } = useFileUpload(options);
@@ -46,7 +48,7 @@ export function FileDropzone({ options, onUploaded, disabled, accept, className 
         // then reset so the surface is immediately ready for the next file.
         // The user explicitly chose this continuous-flow over the "Upload
         // another" success card — they were finding the extra click friction.
-        toast.success("File uploaded", {
+        toast.success(t("files.uploaded"), {
           description: `${asset.originalFileName} · ${formatBytes(asset.sizeBytes)}`,
         });
         reset();
@@ -57,7 +59,7 @@ export function FileDropzone({ options, onUploaded, disabled, accept, className 
         if (inputRef.current) inputRef.current.value = "";
       }
     },
-    [upload, onUploaded, reset],
+    [upload, onUploaded, reset, t],
   );
 
   const onDrop = useCallback(
@@ -121,10 +123,10 @@ export function FileDropzone({ options, onUploaded, disabled, accept, className 
 
         <div className="space-y-1">
           <p className="text-sm font-medium tracking-tight text-[var(--color-foreground)]">
-            {captionFor(status, progress?.fileName)}
+            {captionFor(status, progress?.fileName, t)}
           </p>
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            {detailFor(status, progress, options)}
+            {detailFor(status, progress, options, t)}
           </p>
         </div>
 
@@ -143,7 +145,7 @@ export function FileDropzone({ options, onUploaded, disabled, accept, className 
               }}
             >
               <X className="h-3.5 w-3.5" />
-              Dismiss
+              {t("files.dismiss")}
             </Button>
           </div>
         )}
@@ -159,7 +161,7 @@ export function FileDropzone({ options, onUploaded, disabled, accept, className 
               reset();
             }}
           >
-            Cancel
+            {t("chrome.cancel")}
           </Button>
         )}
       </div>
@@ -196,20 +198,26 @@ function DropzoneIcon({ status }: { status: string | undefined }) {
   );
 }
 
-function captionFor(status: string | undefined, fileName?: string): string {
+function captionFor(
+  status: string | undefined,
+  fileName: string | undefined,
+  t: (key: string, fallback?: string) => string,
+): string {
   switch (status) {
     case "preparing":
-      return "Preparing upload…";
+      return t("files.preparing");
     case "uploading":
-      return `Uploading ${fileName ?? "…"}`;
+      return t("files.uploadingNamed").replace("{name}", fileName ?? "…");
     case "finalizing":
-      return "Finalizing…";
+      return t("files.finalizing");
     case "done":
-      return `Uploaded ${fileName ?? "file"}`;
+      return fileName
+        ? t("files.uploadedNamed").replace("{name}", fileName)
+        : t("files.uploadedFile");
     case "error":
-      return "Upload failed";
+      return t("files.uploadFailed");
     default:
-      return "Drop a file or click to browse";
+      return t("files.dropOrBrowse");
   }
 }
 
@@ -217,28 +225,32 @@ function detailFor(
   status: string | undefined,
   progress: ReturnType<typeof useFileUpload>["progress"],
   options: UploadOptions,
+  t: (key: string, fallback?: string) => string,
 ): string {
   if (status === "error" && progress?.error) return progress.error;
   if (status === "done" && progress?.fileAsset) {
     return `${progress.fileAsset.contentType} · ${formatBytes(progress.fileAsset.sizeBytes)}`;
   }
   if (status === "uploading" && progress) {
-    return `${formatBytes(progress.loaded)} of ${formatBytes(progress.totalBytes)}`;
+    return t("files.bytesOf")
+      .replace("{loaded}", formatBytes(progress.loaded))
+      .replace("{total}", formatBytes(progress.totalBytes));
   }
   if (options.allowedExtensions && options.allowedExtensions.length > 0) {
     const ext = options.allowedExtensions.join(", ");
-    const cap = options.maxBytes ? ` · up to ${formatBytes(options.maxBytes)}` : "";
-    return `Allowed: ${ext}${cap}`;
+    const cap = options.maxBytes ? t("files.upTo").replace("{size}", formatBytes(options.maxBytes)) : "";
+    return `${t("files.allowed").replace("{ext}", ext)}${cap}`;
   }
-  return typeof options.category === "string" ? options.category : "Drop a file";
+  return typeof options.category === "string" ? options.category : t("files.dropAFile");
 }
 
 function ProgressBar({ percent, loaded, total }: { percent: number; loaded: number; total: number }) {
+  const t = useT();
   return (
     <div className="w-full max-w-sm space-y-1.5">
       <div
         role="progressbar"
-        aria-label="Upload progress"
+        aria-label={t("files.uploadProgress")}
         aria-valuenow={percent}
         aria-valuemin={0}
         aria-valuemax={100}

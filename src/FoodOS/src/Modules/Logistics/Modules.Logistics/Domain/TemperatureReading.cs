@@ -5,7 +5,7 @@ namespace FSH.Modules.Logistics.Domain;
 /// <summary>
 /// P1 MQTT placeholder. P0 creates the table only; no ingest endpoints.
 /// </summary>
-public sealed class TemperatureReading : BaseEntity<Guid>
+public sealed class TemperatureReading : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid VehicleId { get; private set; }
     public string Compartment { get; private set; } = default!;

@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 import { useUserDisplay } from "@/lib/use-user-display";
 
 /**
@@ -50,6 +51,7 @@ export function ChannelSettingsDialog({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const t = useT();
 
   const selfMember = channel.members.find((m) => m.userId === selfUserId);
   const isAdmin = selfMember?.role === ChannelMemberRole.Admin;
@@ -83,48 +85,48 @@ export function ChannelSettingsDialog({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["chat", "channel", channel.id] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "my-channels"] });
-      toast.success("Channel updated.");
+      toast.success(t("chat.updated"));
     },
-    onError: () => toast.error("Couldn't save channel changes."),
+    onError: () => toast.error(t("chat.saveFailed")),
   });
 
   const archiveMutation = useMutation({
     mutationFn: () => archiveChannel(channel.id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["chat", "my-channels"] });
-      toast.success("Channel archived.");
+      toast.success(t("chat.archived"));
       onOpenChange(false);
       navigate("/chat");
     },
-    onError: () => toast.error("Couldn't archive the channel."),
+    onError: () => toast.error(t("chat.archiveFailed")),
   });
 
   const leaveMutation = useMutation({
     mutationFn: () => removeChannelMember(channel.id, selfUserId!),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["chat", "my-channels"] });
-      toast.success("You left the channel.");
+      toast.success(t("chat.left"));
       onOpenChange(false);
       navigate("/chat");
     },
-    onError: () => toast.error("Couldn't leave the channel."),
+    onError: () => toast.error(t("chat.leaveFailed")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Channel settings</DialogTitle>
+          <DialogTitle>{t("chat.channelSettings")}</DialogTitle>
           <DialogDescription>
-            Manage the channel name, members, and lifecycle.
+            {t("chat.settingsDesc")}
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="max-h-[60vh] space-y-6 overflow-y-auto">
           {/* ── General ─────────────────────────────────────────────── */}
           <section className="space-y-3">
-            <SectionTitle>General</SectionTitle>
+            <SectionTitle>{t("chat.general")}</SectionTitle>
             <div className="space-y-1.5">
-              <Label htmlFor="channel-settings-name">Name</Label>
+              <Label htmlFor="channel-settings-name">{t("chat.name")}</Label>
               <Input
                 id="channel-settings-name"
                 value={name}
@@ -134,13 +136,13 @@ export function ChannelSettingsDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="channel-settings-description">Description</Label>
+              <Label htmlFor="channel-settings-description">{t("chat.description")}</Label>
               <Input
                 id="channel-settings-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 disabled={!isAdmin}
-                placeholder="What's this channel about?"
+                placeholder={t("chat.descriptionPlaceholder")}
                 maxLength={200}
               />
             </div>
@@ -161,9 +163,9 @@ export function ChannelSettingsDialog({
                 disabled={!isAdmin}
               />
               <div className="flex-1">
-                <div className="text-sm font-medium">Private</div>
+                <div className="text-sm font-medium">{t("chat.private")}</div>
                 <div className="text-xs text-[var(--color-muted-foreground)]">
-                  Only invited members can find or join this channel.
+                  {t("chat.privateHint")}
                 </div>
               </div>
             </label>
@@ -172,7 +174,7 @@ export function ChannelSettingsDialog({
           {/* ── Members ─────────────────────────────────────────────── */}
           <section className="space-y-3">
             <SectionTitle>
-              Members
+              {t("chat.membersTitle")}
               <span className="ml-2 text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
                 {channel.members.length}
               </span>
@@ -187,54 +189,50 @@ export function ChannelSettingsDialog({
 
           {/* ── Danger zone ─────────────────────────────────────────── */}
           <section className="space-y-2">
-            <SectionTitle>Danger zone</SectionTitle>
+            <SectionTitle>{t("chat.dangerZone")}</SectionTitle>
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-muted)] p-3">
               {isAdmin ? (
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium">Archive channel</div>
+                    <div className="text-sm font-medium">{t("chat.archiveChannel")}</div>
                     <div className="text-xs text-[var(--color-muted-foreground)]">
-                      Hides the channel for everyone. Restore from the admin
-                      panel if you change your mind.
+                      {t("chat.archiveHint")}
                     </div>
                   </div>
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={() => {
-                      if (
-                        window.confirm("Archive this channel for everyone?")
-                      ) {
+                      if (window.confirm(t("chat.confirmArchive"))) {
                         archiveMutation.mutate();
                       }
                     }}
                     disabled={archiveMutation.isPending}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden />
-                    {archiveMutation.isPending ? "Archiving…" : "Archive"}
+                    {archiveMutation.isPending ? t("chat.archiving") : t("chat.archive")}
                   </Button>
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium">Leave channel</div>
+                    <div className="text-sm font-medium">{t("chat.leaveChannel")}</div>
                     <div className="text-xs text-[var(--color-muted-foreground)]">
-                      You&apos;ll stop receiving messages. Rejoin via channel
-                      discovery if it&apos;s public.
+                      {t("chat.leaveHint")}
                     </div>
                   </div>
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={() => {
-                      if (window.confirm("Leave this channel?")) {
+                      if (window.confirm(t("chat.confirmLeave"))) {
                         leaveMutation.mutate();
                       }
                     }}
                     disabled={leaveMutation.isPending}
                   >
                     <UserMinus className="mr-1 h-3.5 w-3.5" aria-hidden />
-                    {leaveMutation.isPending ? "Leaving…" : "Leave"}
+                    {leaveMutation.isPending ? t("chat.leaving") : t("chat.leave")}
                   </Button>
                 </div>
               )}
@@ -243,7 +241,7 @@ export function ChannelSettingsDialog({
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            Close
+            {t("chat.close")}
           </Button>
           {isAdmin && (
             <Button
@@ -251,7 +249,7 @@ export function ChannelSettingsDialog({
               disabled={!dirty || !name.trim() || saveMutation.isPending}
               onClick={() => saveMutation.mutate()}
             >
-              {saveMutation.isPending ? "Saving…" : "Save changes"}
+              {saveMutation.isPending ? t("identity.saving") : t("chat.saveChanges")}
             </Button>
           )}
         </DialogFooter>
@@ -307,15 +305,16 @@ function MemberRow({
   canRemove: boolean;
 }) {
   const display = useUserDisplay(userId);
+  const t = useT();
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => removeChannelMember(channelId, userId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["chat", "channel", channelId] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "my-channels"] });
-      toast.success("Member removed.");
+      toast.success(t("chat.memberRemoved"));
     },
-    onError: () => toast.error("Couldn't remove the member."),
+    onError: () => toast.error(t("chat.removeFailed")),
   });
 
   return (
@@ -332,13 +331,13 @@ function MemberRow({
             {display.name}
             {isSelf && (
               <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                you
+                {t("chat.youLower")}
               </span>
             )}
           </span>
           {memberIsAdmin && (
             <span className="inline-flex items-center gap-0.5 rounded-md bg-[var(--color-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-primary)]">
-              <ShieldCheck className="h-2.5 w-2.5" aria-hidden /> admin
+              <ShieldCheck className="h-2.5 w-2.5" aria-hidden /> {t("chat.admin")}
             </span>
           )}
         </div>
@@ -352,12 +351,12 @@ function MemberRow({
         <button
           type="button"
           onClick={() => {
-            if (window.confirm(`Remove ${display.name} from the channel?`)) {
+            if (window.confirm(t("chat.confirmRemoveMember").replace("{name}", display.name))) {
               mutation.mutate();
             }
           }}
           disabled={mutation.isPending}
-          aria-label={`Remove ${display.name}`}
+          aria-label={t("chat.removeNamed").replace("{name}", display.name)}
           className={cn(
             "grid h-8 w-8 cursor-pointer place-items-center rounded-md",
             "text-[var(--color-muted-foreground)] hover:bg-[var(--color-destructive)] hover:text-[var(--color-destructive-foreground)]",
@@ -375,6 +374,7 @@ function MemberRow({
 function AddMembersRow({ channel }: { channel: ChannelDto }) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+  const t = useT();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -405,31 +405,31 @@ function AddMembersRow({ channel }: { channel: ChannelDto }) {
       void queryClient.invalidateQueries({ queryKey: ["chat", "my-channels"] });
       setQuery("");
       setDebounced("");
-      toast.success("Member added.");
+      toast.success(t("chat.memberAdded"));
     },
-    onError: () => toast.error("Couldn't add the member."),
+    onError: () => toast.error(t("chat.addFailed")),
   });
 
   return (
     <div className="space-y-2">
       <Label htmlFor="channel-settings-add" className="text-[11px] font-semibold uppercase tracking-wider">
-        Add member
+        {t("chat.addMember")}
       </Label>
       <Input
         id="channel-settings-add"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Name, username, or email…"
+        placeholder={t("chat.peoplePlaceholder")}
       />
       {debounced.length >= 2 && (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)]">
           {usersQuery.isLoading ? (
             <div className="px-3 py-3 text-[12px] text-[var(--color-muted-foreground)]">
-              Searching…
+              {t("chat.searching")}
             </div>
           ) : candidates.length === 0 ? (
             <div className="px-3 py-3 text-xs italic text-[var(--color-muted-foreground)]">
-              No matches outside the current member list.
+              {t("chat.noMatchesOutside")}
             </div>
           ) : (
             <ul className="divide-y divide-[var(--color-border)]">
@@ -438,7 +438,7 @@ function AddMembersRow({ channel }: { channel: ChannelDto }) {
                   [u.firstName, u.lastName].filter(Boolean).join(" ").trim() ||
                   u.userName ||
                   u.email ||
-                  "(unnamed)";
+                  t("chat.unnamed");
                 return (
                   <li key={u.id}>
                     <button

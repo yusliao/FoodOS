@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class Vehicle : AggregateRoot<Guid>
+public sealed class Vehicle : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public string Plate { get; private set; } = default!;
     public string CompartmentZones { get; private set; } = default!;

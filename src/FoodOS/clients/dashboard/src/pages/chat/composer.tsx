@@ -8,6 +8,7 @@ import { searchUsers, type UserDto } from "@/api/identity";
 import { useRealtime } from "@/realtime/realtime-context";
 import { formatBytes, useFileUpload } from "@/hooks/use-file-upload";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 import { useUserDisplay } from "@/lib/use-user-display";
 import { MentionPicker } from "@/pages/chat/mention-picker";
 
@@ -52,6 +53,7 @@ export function Composer({
   onClearReply?: () => void;
 }) {
   const parentMessageId = replyTo?.id;
+  const t = useT();
   const [body, setBody] = useState("");
   const [focused, setFocused] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
@@ -78,7 +80,7 @@ export function Composer({
     e.target.value = ""; // allow re-picking the same file
     if (!file) return;
     if (pendingAttachment) {
-      toast.info("Replace the existing attachment first.");
+      toast.info(t("chat.replaceAttachment"));
       return;
     }
     try {
@@ -108,7 +110,7 @@ export function Composer({
     } catch {
       // useFileUpload already reflects the error in `progress.status`;
       // surface a toast so the user notices when scrolled away.
-      toast.error("Couldn't attach that file.");
+      toast.error(t("chat.attachFailed"));
     }
   };
 
@@ -242,7 +244,7 @@ export function Composer({
       // Restore the text + attachment so the user can retry.
       setBody(text);
       if (attachment) setPendingAttachment(attachment);
-      toast.error("Message failed to send — try again.");
+      toast.error(t("chat.sendFailed"));
     },
   });
 
@@ -405,17 +407,17 @@ export function Composer({
           onKeyDown={onKeyDown}
           placeholder={
             replyTo
-              ? "Type your reply…"
+              ? t("chat.placeholderReply")
               : channelType === ChannelType.Channel
-                ? `Message #${channelTitle}`
-                : `Message ${channelTitle}`
+                ? t("chat.placeholderHash").replace("{name}", channelTitle)
+                : t("chat.placeholderMessage").replace("{name}", channelTitle)
           }
           aria-label={
             replyTo
-              ? "Type your reply"
+              ? t("chat.ariaReply")
               : channelType === ChannelType.Channel
-                ? `Message channel ${channelTitle}`
-                : `Message ${channelTitle}`
+                ? t("chat.ariaChannel").replace("{name}", channelTitle)
+                : t("chat.placeholderMessage").replace("{name}", channelTitle)
           }
           rows={1}
           className={cn(
@@ -439,8 +441,8 @@ export function Composer({
         {/* Paperclip — bottom-left of the plinth, mirrors the send button on the right. */}
         <button
           type="button"
-          aria-label="Attach a file"
-          title="Attach a file"
+          aria-label={t("chat.attachFile")}
+          title={t("chat.attachFile")}
           disabled={fileUpload.isUploading || mutation.isPending}
           onClick={() => fileInputRef.current?.click()}
           className={cn(
@@ -457,7 +459,7 @@ export function Composer({
 
         <button
           type="button"
-          aria-label="Send message"
+          aria-label={t("chat.sendMessage")}
           disabled={(!body.trim() && !pendingAttachment) || mutation.isPending}
           onClick={send}
           className={cn(
@@ -475,13 +477,11 @@ export function Composer({
 
       <div className="mt-1.5 flex items-center justify-between px-1">
         <span className="text-[11px] text-[var(--color-muted-foreground)]">
-          {replyTo
-            ? "Enter to send · Shift+Enter for newline · Esc to clear"
-            : "Enter to send · Shift+Enter for newline · @ + 2 chars to mention"}
+          {replyTo ? t("chat.hintReply") : t("chat.hintCompose")}
         </span>
         {mutation.isError && (
           <span className="text-[11px] font-medium text-[var(--color-destructive)]">
-            Send failed — retry?
+            {t("chat.sendFailedRetry")}
           </span>
         )}
       </div>
@@ -503,7 +503,8 @@ function ReplyQuote({
   onClear: () => void;
 }) {
   const author = useUserDisplay(replyTo.authorUserId);
-  const body = (replyTo.body ?? "").trim() || "(no text — attachment or empty)";
+  const t = useT();
+  const body = (replyTo.body ?? "").trim() || t("chat.noTextAttachment");
 
   return (
     <div
@@ -515,7 +516,7 @@ function ReplyQuote({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-            Replying to
+            {t("chat.replyingTo")}
           </span>
           <span className="truncate text-[11px] font-semibold tracking-tight text-[var(--color-foreground)]">
             {author.name}
@@ -531,8 +532,8 @@ function ReplyQuote({
       <button
         type="button"
         onClick={onClear}
-        aria-label="Clear reply context"
-        title="Clear reply"
+        aria-label={t("chat.clearReplyContext")}
+        title={t("chat.clearReply")}
         className={cn(
           "grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded",
           "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]",
@@ -564,17 +565,18 @@ function UploadingChip({
   error?: string;
   onCancel: () => void;
 }) {
+  const t = useT();
   const isError = status === "error";
   const label =
     status === "preparing"
-      ? "Preparing…"
+      ? t("chat.preparing")
       : status === "uploading"
-        ? `Uploading… ${percent}%`
+        ? t("chat.uploading").replace("{n}", String(percent))
         : status === "finalizing"
-          ? "Finalizing…"
+          ? t("chat.finalizing")
           : isError
-            ? error ?? "Upload failed"
-            : "Done";
+            ? error ?? t("chat.uploadFailed")
+            : t("chat.done");
   return (
     <div
       className={cn(
@@ -609,7 +611,7 @@ function UploadingChip({
       {!isError && (
         <div
           role="progressbar"
-          aria-label="Upload progress"
+          aria-label={t("chat.uploadProgress")}
           aria-valuenow={percent}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -626,8 +628,8 @@ function UploadingChip({
       <button
         type="button"
         onClick={onCancel}
-        aria-label="Cancel upload"
-        title="Cancel"
+        aria-label={t("chat.cancelUpload")}
+        title={t("chrome.cancel")}
         className={cn(
           "grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]",
           "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]",
@@ -651,6 +653,7 @@ function PendingAttachmentChip({
   attachment: PendingAttachment;
   onClear: () => void;
 }) {
+  const t = useT();
   const isImage = attachment.contentType.startsWith("image/");
   return (
     <div
@@ -688,14 +691,14 @@ function PendingAttachmentChip({
           {attachment.fileName}
         </p>
         <p className="text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
-          {formatBytes(attachment.sizeBytes)} · ready to send
+          {formatBytes(attachment.sizeBytes)} · {t("chat.readyToSend")}
         </p>
       </div>
       <button
         type="button"
         onClick={onClear}
-        aria-label="Remove attachment"
-        title="Remove attachment"
+        aria-label={t("chat.removeAttachment")}
+        title={t("chat.removeAttachment")}
         className={cn(
           "grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]",
           "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]",

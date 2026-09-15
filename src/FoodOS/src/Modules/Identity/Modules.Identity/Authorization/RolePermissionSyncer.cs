@@ -13,9 +13,10 @@ using Microsoft.Extensions.Logging;
 namespace FSH.Modules.Identity.Authorization;
 
 /// <summary>
-/// Adds missing permission claims to the built-in roles (<see cref="RoleConstants.Admin"/>,
-/// <see cref="RoleConstants.Basic"/>) for the current Finbuckle tenant context. Idempotent —
-/// only inserts claims that don't already exist, so it can run on every startup safely.
+/// Reconciles permission claims on the built-in roles (<see cref="RoleConstants.Admin"/>,
+/// <see cref="RoleConstants.Basic"/>) for the current Finbuckle tenant context. For restaurant
+/// tenants it also removes operator-only claims from every role, closing stale grants left by
+/// older releases. The operation is idempotent and safe to run on every startup.
 /// </summary>
 public sealed class RolePermissionSyncer(
     IdentityDbContext context,
@@ -32,18 +33,54 @@ public sealed class RolePermissionSyncer(
 
         int basicAdded = await SyncRoleAsync(RoleConstants.Basic, PermissionConstants.Basic, cancellationToken).ConfigureAwait(false);
 
-        // Admin gets all non-root permissions; the root tenant's Admin additionally gets Root permissions.
+        // The root Admin is the operator role. A restaurant tenant Admin receives only the
+        // explicitly customer-facing catalog, never procurement/warehouse/platform permissions.
         var adminPermissions = isRoot
             ? PermissionConstants.Admin.Concat(PermissionConstants.Root).Distinct().ToList()
-            : PermissionConstants.Admin.ToList();
+            : PermissionConstants.CustomerAdmin.ToList();
         int adminAdded = await SyncRoleAsync(RoleConstants.Admin, adminPermissions, cancellationToken).ConfigureAwait(false);
+
+        int removed = isRoot
+            ? 0
+            : await RemoveUnavailableTenantPermissionsAsync(cancellationToken).ConfigureAwait(false);
 
         // If we wrote anything, drop the per-user permission cache so already-logged-in
         // sessions see the new perms on their next request rather than waiting for TTL.
-        if (basicAdded + adminAdded > 0)
+        if (basicAdded + adminAdded + removed > 0)
         {
             await cache.RemoveByTagAsync(CacheKeys.Tags.Permissions, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task<int> RemoveUnavailableTenantPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var allowed = PermissionConstants.CustomerAdmin
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var claims = await context.RoleClaims
+            .Where(rc => rc.ClaimType == ClaimConstants.Permission)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var toRemove = claims
+            .Where(rc => rc.ClaimValue is not null && !allowed.Contains(rc.ClaimValue))
+            .ToList();
+
+        if (toRemove.Count == 0)
+        {
+            return 0;
+        }
+
+        context.RoleClaims.RemoveRange(toRemove);
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Removed {Count} operator-only permission claim(s) from restaurant tenant '{Tenant}'",
+                toRemove.Count,
+                tenantAccessor.MultiTenantContext.TenantInfo?.Id);
+        }
+        return toRemove.Count;
     }
 
     private async Task<int> SyncRoleAsync(string roleName, IReadOnlyList<FshPermission> targetPermissions, CancellationToken cancellationToken)

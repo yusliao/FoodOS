@@ -4,7 +4,7 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class PutawayTask : AggregateRoot<Guid>
+public sealed class PutawayTask : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public Guid ZoneId { get; private set; }

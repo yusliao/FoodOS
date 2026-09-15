@@ -5,7 +5,7 @@ namespace FSH.Modules.Inventory.Domain;
 /// <summary>
 /// SKU-level hold at warehouse × zone. Lots are not locked until wave allocation (FEFO).
 /// </summary>
-public sealed class Reservation : AggregateRoot<Guid>
+public sealed class Reservation : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public Guid ZoneId { get; private set; }

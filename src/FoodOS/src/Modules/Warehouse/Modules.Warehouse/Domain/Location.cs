@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class Location : AggregateRoot<Guid>
+public sealed class Location : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public Guid ZoneId { get; private set; }

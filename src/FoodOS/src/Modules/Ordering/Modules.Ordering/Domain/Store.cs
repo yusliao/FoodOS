@@ -2,8 +2,9 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Ordering.Domain;
 
-public sealed class Store : AggregateRoot<Guid>
+public sealed class Store : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
+    public string? CustomerTenantId { get; private set; }
     public Guid CustomerOrgId { get; private set; }
     public string Code { get; private set; } = default!;
     public string Name { get; private set; } = default!;
@@ -22,7 +23,8 @@ public sealed class Store : AggregateRoot<Guid>
         string address,
         Guid defaultWarehouseId,
         Guid? defaultRouteId = null,
-        string? deliveryWindow = null)
+        string? deliveryWindow = null,
+        string? customerTenantId = null)
     {
         if (customerOrgId == Guid.Empty)
         {
@@ -41,6 +43,9 @@ public sealed class Store : AggregateRoot<Guid>
         return new Store
         {
             Id = Guid.CreateVersion7(),
+            CustomerTenantId = string.IsNullOrWhiteSpace(customerTenantId)
+                ? null
+                : customerTenantId.Trim().ToUpperInvariant(),
             CustomerOrgId = customerOrgId,
             Code = code.Trim().ToUpperInvariant(),
             Name = name.Trim(),

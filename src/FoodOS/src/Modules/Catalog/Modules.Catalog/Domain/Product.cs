@@ -3,7 +3,7 @@ using FSH.Modules.Catalog.Domain.Events;
 
 namespace FSH.Modules.Catalog.Domain;
 
-public sealed class Product : AggregateRoot<Guid>, ISoftDeletable
+public sealed class Product : AggregateRoot<Guid>, ISoftDeletable, IOperatorOwnedEntity
 {
     public string Sku { get; private set; } = default!;
     public string Name { get; private set; } = default!;

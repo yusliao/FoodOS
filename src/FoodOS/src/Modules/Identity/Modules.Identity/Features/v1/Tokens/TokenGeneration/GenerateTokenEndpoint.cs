@@ -37,12 +37,13 @@ public static class GenerateTokenEndpoint
             [FromServices] IMediator mediator,
             CancellationToken ct) =>
             {
-                if (IsRootViaDashboard(tenant, app))
+                var boundaryError = GetAppBoundaryError(tenant, app);
+                if (boundaryError is not null)
                 {
                     return TypedResults.Problem(
                         statusCode: StatusCodes.Status403Forbidden,
                         title: "App boundary",
-                        detail: "SuperAdmin accounts must use the admin app. Sign in there instead of the tenant dashboard.");
+                        detail: boundaryError);
                 }
 
                 var token = await mediator.Send(command, ct);
@@ -60,9 +61,19 @@ public static class GenerateTokenEndpoint
             .Produces(StatusCodes.Status500InternalServerError);
     }
 
-    private static bool IsRootViaDashboard(string tenant, string? app)
+    public static string? GetAppBoundaryError(string tenant, string? app)
     {
-        return string.Equals(tenant, MultitenancyConstants.Root.Id, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(app, AppDashboard, StringComparison.OrdinalIgnoreCase);
+        bool isRoot = string.Equals(tenant, MultitenancyConstants.Root.Id, StringComparison.OrdinalIgnoreCase);
+        if (isRoot && string.Equals(app, AppDashboard, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Operator accounts must use the admin app. Sign in there instead of the restaurant dashboard.";
+        }
+
+        if (!isRoot && string.Equals(app, AppAdmin, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Restaurant tenant accounts must use the dashboard app.";
+        }
+
+        return null;
     }
 }

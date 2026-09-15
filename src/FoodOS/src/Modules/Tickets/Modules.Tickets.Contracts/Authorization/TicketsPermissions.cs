@@ -21,15 +21,15 @@ public static class TicketsPermissions
 
     public static IReadOnlyList<FshPermission> All { get; } =
     [
-        new("View Tickets",    ActionConstants.View,   Tickets.Resource, IsBasic: true),
-        new("Create Tickets",  ActionConstants.Create, Tickets.Resource),
-        new("Update Tickets",  ActionConstants.Update, Tickets.Resource),
-        new("Delete Tickets",  ActionConstants.Delete, Tickets.Resource),
-        new("Restore Tickets", "Restore", Tickets.Resource),
+        new("View Tickets",    ActionConstants.View,   Tickets.Resource, IsBasic: true, IsCustomer: true),
+        new("Create Tickets",  ActionConstants.Create, Tickets.Resource, IsCustomer: true),
+        new("Update Tickets",  ActionConstants.Update, Tickets.Resource, IsCustomer: true),
+        new("Delete Tickets",  ActionConstants.Delete, Tickets.Resource, IsCustomer: true),
+        new("Restore Tickets", "Restore", Tickets.Resource, IsCustomer: true),
         new("Assign Tickets",  "Assign",  Tickets.Resource),
         new("Resolve Tickets", "Resolve", Tickets.Resource),
-        new("Reopen Tickets",  "Reopen",  Tickets.Resource),
-        new("Close Tickets",   "Close",   Tickets.Resource),
-        new("Comment on Tickets", "Comment", Tickets.Resource),
+        new("Reopen Tickets",  "Reopen",  Tickets.Resource, IsCustomer: true),
+        new("Close Tickets",   "Close",   Tickets.Resource, IsCustomer: true),
+        new("Comment on Tickets", "Comment", Tickets.Resource, IsCustomer: true),
     ];
 }

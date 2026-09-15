@@ -31,3 +31,17 @@ export const PRIORITY_TONE: Record<TicketPriority, EntityStatusTone> = {
   High: "warning",
   Critical: "danger",
 };
+
+export function ticketStatusLabel(
+  t: (key: string) => string,
+  status: TicketStatus,
+): string {
+  return t(`tickets.status.${status}`);
+}
+
+export function ticketPriorityLabel(
+  t: (key: string) => string,
+  priority: TicketPriority,
+): string {
+  return t(`tickets.priority.${priority}`);
+}

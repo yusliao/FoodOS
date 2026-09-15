@@ -2,18 +2,19 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Ordering.Domain;
 
-public sealed class Cart : AggregateRoot<Guid>
+public sealed class Cart : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<CartLine> _lines = [];
 
     public Guid StoreId { get; private set; }
+    public string? CustomerTenantId { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public IReadOnlyList<CartLine> Lines => _lines;
 
     private Cart() { }
 
-    public static Cart Create(Guid storeId)
+    public static Cart Create(Guid storeId, string? customerTenantId = null)
     {
         if (storeId == Guid.Empty)
         {
@@ -24,6 +25,9 @@ public sealed class Cart : AggregateRoot<Guid>
         {
             Id = Guid.CreateVersion7(),
             StoreId = storeId,
+            CustomerTenantId = string.IsNullOrWhiteSpace(customerTenantId)
+                ? null
+                : customerTenantId.Trim().ToUpperInvariant(),
             UpdatedAt = DateTimeOffset.UtcNow
         };
     }

@@ -5,7 +5,7 @@ namespace FSH.Modules.Catalog.Domain;
 /// <summary>
 /// Customer contract or catalog-wide (null <see cref="CustomerOrgId"/>) price list with quantity tiers.
 /// </summary>
-public sealed class PriceList : AggregateRoot<Guid>
+public sealed class PriceList : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<PriceListLine> _lines = [];
 

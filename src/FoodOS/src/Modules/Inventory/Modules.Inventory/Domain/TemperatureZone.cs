@@ -3,7 +3,7 @@ using FSH.Modules.Inventory.Contracts;
 
 namespace FSH.Modules.Inventory.Domain;
 
-public sealed class TemperatureZone : BaseEntity<Guid>
+public sealed class TemperatureZone : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public string Code { get; private set; } = default!;

@@ -110,4 +110,22 @@ public sealed class TokenGenerationTests
 
         response.IsSuccessStatusCode.ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task GenerateToken_Should_Return403_When_RootUsesDashboardApp()
+    {
+        using var client = _factory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{TestConstants.IdentityBasePath}/token/issue");
+        request.Headers.Add("tenant", TestConstants.RootTenantId);
+        request.Headers.Add("X-FSH-App", "dashboard");
+        request.Content = JsonContent.Create(new
+        {
+            email = TestConstants.RootAdminEmail,
+            password = TestConstants.DefaultPassword
+        });
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
 }

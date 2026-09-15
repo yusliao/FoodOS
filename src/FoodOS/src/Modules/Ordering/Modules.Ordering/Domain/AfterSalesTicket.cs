@@ -2,8 +2,9 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Ordering.Domain;
 
-public sealed class AfterSalesTicket : AggregateRoot<Guid>
+public sealed class AfterSalesTicket : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
+    public string? CustomerTenantId { get; private set; }
     public Guid OrderId { get; private set; }
     public Guid StoreId { get; private set; }
     public Guid OrderLineId { get; private set; }
@@ -23,7 +24,8 @@ public sealed class AfterSalesTicket : AggregateRoot<Guid>
         AfterSalesTicketType type,
         decimal quantity,
         string reason,
-        Guid createdByUserId)
+        Guid createdByUserId,
+        string? customerTenantId = null)
     {
         if (orderId == Guid.Empty)
         {
@@ -55,6 +57,9 @@ public sealed class AfterSalesTicket : AggregateRoot<Guid>
         return new AfterSalesTicket
         {
             Id = Guid.CreateVersion7(),
+            CustomerTenantId = string.IsNullOrWhiteSpace(customerTenantId)
+                ? null
+                : customerTenantId.Trim().ToUpperInvariant(),
             OrderId = orderId,
             StoreId = storeId,
             OrderLineId = orderLineId,

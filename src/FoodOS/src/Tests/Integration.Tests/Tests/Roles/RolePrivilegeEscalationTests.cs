@@ -17,12 +17,15 @@ public sealed class RolePrivilegeEscalationTests
 {
     // A real IsRoot permission (MultitenancyPermissions.Tenants.Update — flagged IsRoot: true).
     private const string RootPermission = "Permissions.Tenants.Update";
+    private const string OperatorPermission = "Permissions.Procurement.Suppliers.View";
     private const string AllowedPermission = IdentityPermissions.Groups.View;
 
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public RolePrivilegeEscalationTests(FshWebApplicationFactory factory)
     {
+        _factory = factory;
         _auth = new AuthHelper(factory);
     }
 
@@ -35,6 +38,7 @@ public sealed class RolePrivilegeEscalationTests
         var adminEmail = $"esc-admin-{unique}@tenant.com";
         await CreateTenantAsync(rootClient, tenantId, adminEmail);
         await WaitForProvisioningAsync(rootClient, tenantId);
+        await AssertAdminAppRejectsTenantCredentialsAsync(adminEmail, tenantId);
 
         using var tenantAdmin = await CreateTenantAdminClientWithRetryAsync(
             adminEmail, TestConstants.DefaultPassword, tenantId);
@@ -42,11 +46,13 @@ public sealed class RolePrivilegeEscalationTests
         // The tenant admin creates a role and attempts to grant it a ROOT-only permission alongside a
         // legitimate non-root one.
         var roleId = await CreateRoleAsync(tenantAdmin, $"EscRole-{unique}");
-        await SetRolePermissionsAsync(tenantAdmin, roleId, RootPermission, AllowedPermission);
+        await SetRolePermissionsAsync(tenantAdmin, roleId, RootPermission, OperatorPermission, AllowedPermission);
 
         var persisted = await GetRolePermissionsBodyAsync(tenantAdmin, roleId);
         persisted.Contains(RootPermission, StringComparison.Ordinal).ShouldBeFalse(
             "a non-root tenant admin must not be able to grant a root-only permission to a role");
+        persisted.Contains(OperatorPermission, StringComparison.Ordinal).ShouldBeFalse(
+            "a restaurant tenant admin must not be able to grant an operator-only permission to a role");
         persisted.Contains(AllowedPermission, StringComparison.Ordinal).ShouldBeTrue(
             "non-root permissions in the same request must still be applied");
     }
@@ -107,6 +113,18 @@ public sealed class RolePrivilegeEscalationTests
             }
         }
         return await _auth.CreateAuthenticatedClientAsync(email, password, tenant);
+    }
+
+    private async Task AssertAdminAppRejectsTenantCredentialsAsync(string email, string tenantId)
+    {
+        using var client = _factory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{TestConstants.IdentityBasePath}/token/issue");
+        request.Headers.Add("tenant", tenantId);
+        request.Headers.Add("X-FSH-App", "admin");
+        request.Content = JsonContent.Create(new { email, password = TestConstants.DefaultPassword });
+
+        var response = await client.SendAsync(request);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     private static async Task CreateTenantAsync(HttpClient rootClient, string tenantId, string adminEmail)

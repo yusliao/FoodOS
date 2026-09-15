@@ -11,16 +11,15 @@ import {
   EntityStatusBadge,
   type EntityStatusTone,
 } from "@/components/list";
+import { useLocale, useT } from "@/i18n/locale-provider";
 
-const timeFmt = new Intl.DateTimeFormat("en-US", {
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
-function formatTime(ts: number) {
-  return timeFmt.format(new Date(ts));
+function formatTime(ts: number, culture: string) {
+  return new Intl.DateTimeFormat(culture, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(ts));
 }
 
 function payloadSummary(data: unknown, raw: string): string {
@@ -67,25 +66,28 @@ function entityLabel(data: unknown): string {
 const DESKTOP_GRID = "grid-cols-[1fr_240px_120px]";
 
 export function ActivityPage() {
+  const t = useT();
+  const { culture } = useLocale();
   const { status, eventCount } = useSseStatus();
   const { events } = useSseEvents();
 
   const items = useMemo(() => events.slice(0, 200), [events]);
   const isLive = status === "connected";
+  const shownKey = items.length === 1 ? "system.activity.shownOne" : "system.activity.shown";
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Activity}
-        title="Live activity"
+        title={t("system.activity.title")}
         total={eventCount}
-        unit="event"
-        description="Full event log streamed from the API over Server-Sent Events."
+        unit={t("system.activity.unit")}
+        description={t("system.activity.pageDesc")}
       >
         {isLive ? (
-          <Badge variant="success">streaming</Badge>
+          <Badge variant="success">{t("system.activity.streaming")}</Badge>
         ) : status === "error" ? (
-          <Badge variant="danger">offline</Badge>
+          <Badge variant="danger">{t("system.activity.offline")}</Badge>
         ) : (
           <Badge variant="default">{status}</Badge>
         )}
@@ -94,20 +96,23 @@ export function ActivityPage() {
       {items.length === 0 ? (
         <EntityEmpty
           icon={Inbox}
-          title={isLive ? "Listening for activity" : "No events yet"}
+          title={isLive ? t("system.activity.listening") : t("system.activity.emptyTitle")}
           body={
             isLive
-              ? "The stream is open. Events will appear here as the backend publishes them."
-              : "The activity stream is not connected. Events will queue once the connection comes online."
+              ? t("system.activity.listeningBody")
+              : t("system.activity.emptyBody")
           }
         />
       ) : (
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {items.length} event{items.length === 1 ? "" : "s"} shown
+              {t(shownKey).replace("{n}", String(items.length))}
               <span className="ml-2 opacity-60">
-                · {new Intl.NumberFormat("en-US").format(eventCount)} total
+                {t("system.activity.total").replace(
+                  "{n}",
+                  new Intl.NumberFormat(culture).format(eventCount),
+                )}
               </span>
             </p>
           </div>
@@ -118,7 +123,7 @@ export function ActivityPage() {
             role="log"
             aria-live="polite"
             aria-relevant="additions"
-            aria-label="Activity events"
+            aria-label={t("system.activity.aria")}
           >
             {items.map((ev) => (
               <MobileCard key={ev.id} ev={ev} />
@@ -131,12 +136,12 @@ export function ActivityPage() {
             role="log"
             aria-live="polite"
             aria-relevant="additions"
-            aria-label="Activity events"
+            aria-label={t("system.activity.aria")}
           >
             <EntityListHeader className={DESKTOP_GRID}>
-              <span>Action</span>
-              <span>Entity</span>
-              <span className="text-right">Time</span>
+              <span>{t("system.activity.colAction")}</span>
+              <span>{t("system.activity.colEntity")}</span>
+              <span className="text-right">{t("system.activity.colTime")}</span>
             </EntityListHeader>
             {items.map((ev, i) => (
               <DesktopRow
@@ -155,12 +160,13 @@ export function ActivityPage() {
 // Mobile uses a static div (no navigation target — the activity feed is
 // a stream of events, not a list of routable entities).
 function MobileCard({ ev }: { ev: SseEvent }) {
+  const { culture } = useLocale();
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-xs">
       <div className="flex items-center justify-between gap-2">
         <EntityStatusBadge tone={eventTone(ev.type)}>{ev.type}</EntityStatusBadge>
         <span className="font-mono text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
-          {formatTime(ev.receivedAt)}
+          {formatTime(ev.receivedAt, culture)}
         </span>
       </div>
       <p className="mt-2 line-clamp-2 break-words font-mono text-[11.5px] leading-relaxed text-[var(--color-muted-foreground)]">
@@ -171,6 +177,7 @@ function MobileCard({ ev }: { ev: SseEvent }) {
 }
 
 function DesktopRow({ ev, isLast }: { ev: SseEvent; isLast: boolean }) {
+  const { culture } = useLocale();
   return (
     <EntityListRow className={DESKTOP_GRID} isLast={isLast}>
       <div className="flex min-w-0 items-center gap-2">
@@ -186,7 +193,7 @@ function DesktopRow({ ev, isLast }: { ev: SseEvent; isLast: boolean }) {
         {entityLabel(ev.data)}
       </code>
       <span className="text-right font-mono text-[11.5px] tabular-nums text-[var(--color-muted-foreground)]">
-        {formatTime(ev.receivedAt)}
+        {formatTime(ev.receivedAt, culture)}
       </span>
     </EntityListRow>
   );

@@ -11,6 +11,8 @@ public sealed class StoreConfiguration : IEntityTypeConfiguration<Store>
         ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("Stores");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.CustomerTenantId).HasMaxLength(64);
+        builder.HasIndex(x => new { x.CustomerTenantId, x.CustomerOrgId });
         builder.Property(x => x.Code).IsRequired().HasMaxLength(32);
         builder.HasIndex(x => x.Code).IsUnique();
         builder.Property(x => x.Name).IsRequired().HasMaxLength(128);

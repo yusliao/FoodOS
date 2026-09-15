@@ -33,6 +33,10 @@ public class BaseDbContext(IMultiTenantContextAccessor<AppTenantInfo> multiTenan
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         modelBuilder.AppendGlobalQueryFilter<ISoftDeletable>(QueryFilters.SoftDelete, s => !s.IsDeleted);
+        modelBuilder.ConfigureOperatorOwnership();
+        modelBuilder.AppendGlobalQueryFilter<IOperatorOwnedEntity>(
+            QueryFilters.OperatorOwnership,
+            entity => EF.Property<string>(entity, "TenantId") == MultitenancyConstants.Root.Id);
         base.OnModelCreating(modelBuilder);
         // Default-on tenant isolation: entities not marked IGlobalEntity get IsMultiTenant().
         // Subclasses must call base.OnModelCreating AFTER ApplyConfigurationsFromAssembly so per-entity configs are in place.

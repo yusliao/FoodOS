@@ -79,7 +79,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
             .OrderBy(r => r.Name)
             .Skip((page - 1) * size)
             .Take(size)
-            .Select(r => new RoleDto { Id = r.Id, Name = r.Name!, Description = r.Description })
+            .Select(r => new RoleDto { Id = r.Id, Name = r.Name!, Description = r.Description, Audience = r.Audience })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -99,7 +99,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
 
         _ = role ?? throw new NotFoundException("role not found");
 
-        return new RoleDto { Id = role.Id, Name = role.Name!, Description = role.Description };
+        return new RoleDto { Id = role.Id, Name = role.Name!, Description = role.Description, Audience = role.Audience };
     }
 
     public async Task<RoleDto> CreateOrUpdateRoleAsync(string roleId, string name, string description, CancellationToken cancellationToken = default)
@@ -124,11 +124,14 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
             // No new role can be created using a system role's name.
             EnsureNotSystemRole(name, "Cannot create a role using a system role's name.");
 
-            role = new FshRole(name, description);
+            var audience = multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id
+                ? RoleAudiences.Operator
+                : RoleAudiences.Customer;
+            role = new FshRole(name, description, audience);
             await roleManager.CreateAsync(role);
         }
 
-        return new RoleDto { Id = role.Id, Name = role.Name!, Description = role.Description };
+        return new RoleDto { Id = role.Id, Name = role.Name!, Description = role.Description, Audience = role.Audience };
     }
 
     public async Task DeleteRoleAsync(string id, CancellationToken cancellationToken = default)
@@ -168,7 +171,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
             ?? throw new NotFoundException("role not found");
 
         EnsureNotSystemRole(role.Name, "System role permissions are managed by the framework and cannot be modified.");
-        FilterRootPermissions(permissions);
+        FilterUnavailablePermissions(permissions);
 
         var currentClaims = await roleManager.GetClaimsAsync(role);
         await RemoveRevokedPermissionsAsync(role, currentClaims, permissions, cancellationToken);
@@ -189,7 +192,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
         }
     }
 
-    private void FilterRootPermissions(List<string> permissions)
+    private void FilterUnavailablePermissions(List<string> permissions)
     {
         if (multiTenantContextAccessor?.MultiTenantContext?.TenantInfo?.Id == MultitenancyConstants.Root.Id)
         {
@@ -197,10 +200,10 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
             return;
         }
 
-        // Strip every permission flagged IsRoot in the registry. (A prior prefix check on "Permissions.Root."
-        // was a no-op — no root perm uses that prefix — letting a tenant admin grant themselves root perms.)
-        var rootOnly = PermissionConstants.Root.Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
-        permissions.RemoveAll(rootOnly.Contains);
+        var customerPermissions = PermissionConstants.CustomerAdmin
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        permissions.RemoveAll(permission => !customerPermissions.Contains(permission));
     }
 
     private async Task RemoveRevokedPermissionsAsync(FshRole role, IList<System.Security.Claims.Claim> currentClaims, List<string> permissions, CancellationToken cancellationToken = default)

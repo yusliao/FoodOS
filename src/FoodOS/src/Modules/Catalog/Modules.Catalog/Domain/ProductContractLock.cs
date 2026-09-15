@@ -5,7 +5,7 @@ namespace FSH.Modules.Catalog.Domain;
 /// <summary>
 /// Highest-priority price for one customer × SKU until <see cref="Until"/>.
 /// </summary>
-public sealed class ProductContractLock : AggregateRoot<Guid>
+public sealed class ProductContractLock : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public Guid CustomerOrgId { get; private set; }
     public Guid ProductId { get; private set; }

@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Catalog.Domain;
 
-public sealed class PriceListLine : BaseEntity<Guid>
+public sealed class PriceListLine : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid PriceListId { get; private set; }
     public Guid ProductId { get; private set; }

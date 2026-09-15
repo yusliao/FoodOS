@@ -7,6 +7,8 @@
 - [项目指令](AGENTS.md)
 - [Codex 开发指南与迁移清单](doc/Codex-开发指南.md)
 - [源码导读与演进入口](doc/ai/project-tour.md)
+- [运营方与饭店租户改造实施清单](doc/FoodOS-运营方与饭店租户改造实施清单.md)
+- [运营方与饭店租户目标架构](doc/FoodOS-运营方与饭店租户目标架构.md)
 
 在 Codex 中打开本仓库根目录。工程位于 `src/FoodOS`，实际解决方案位于 `src/FoodOS/src/FoodOS.slnx`。先阅读开发指南，再按需启动服务；Aspire 启动会执行迁移流程。
 

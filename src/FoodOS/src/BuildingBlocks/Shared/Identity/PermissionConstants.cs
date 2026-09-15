@@ -25,10 +25,17 @@ public static class PermissionConstants
     public static IReadOnlyList<FshPermission> All => _all.AsReadOnly();
     public static IReadOnlyList<FshPermission> Root => [.. _all.Where(p => p.IsRoot)];
     public static IReadOnlyList<FshPermission> Admin => [.. _all.Where(p => !p.IsRoot)];
-    public static IReadOnlyList<FshPermission> Basic => [.. _all.Where(p => p.IsBasic)];
+    public static IReadOnlyList<FshPermission> CustomerAdmin => [.. _all.Where(p => p.IsCustomer && !p.IsRoot)];
+    public static IReadOnlyList<FshPermission> Basic => [.. _all.Where(p => p.IsCustomer && p.IsBasic && !p.IsRoot)];
 }
 
-public record FshPermission(string Description, string Action, string Resource, bool IsBasic = false, bool IsRoot = false)
+public record FshPermission(
+    string Description,
+    string Action,
+    string Resource,
+    bool IsBasic = false,
+    bool IsRoot = false,
+    bool IsCustomer = false)
 {
     public string Name => NameFor(Action, Resource);
     public static string NameFor(string action, string resource)

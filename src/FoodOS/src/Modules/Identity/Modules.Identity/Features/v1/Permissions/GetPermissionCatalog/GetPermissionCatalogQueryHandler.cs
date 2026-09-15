@@ -23,7 +23,7 @@ public sealed class GetPermissionCatalogQueryHandler(
         // SPA edits agrees with the set the syncer would push into a tenant's role claims.
         var source = isRoot
             ? PermissionConstants.Admin.Concat(PermissionConstants.Root).DistinctBy(p => p.Name)
-            : PermissionConstants.Admin;
+            : PermissionConstants.CustomerAdmin;
 
         IReadOnlyList<PermissionCatalogEntryDto> result =
         [
@@ -33,7 +33,8 @@ public sealed class GetPermissionCatalogQueryHandler(
                 p.Resource,
                 p.Action,
                 p.IsBasic,
-                p.IsRoot))
+                p.IsRoot,
+                p.IsCustomer))
         ];
 
         return ValueTask.FromResult(result);

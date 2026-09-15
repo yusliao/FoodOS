@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Procurement.Domain;
 
-public sealed class QualityCheck : BaseEntity<Guid>
+public sealed class QualityCheck : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid PurchaseOrderId { get; private set; }
     public Guid LineId { get; private set; }

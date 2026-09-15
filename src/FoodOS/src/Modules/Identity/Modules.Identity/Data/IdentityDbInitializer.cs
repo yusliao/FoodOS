@@ -47,7 +47,13 @@ internal sealed class IdentityDbInitializer(
                 is not FshRole role)
             {
                 // create role
-                role = new FshRole(roleName, $"{roleName} Role for {multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id} Tenant");
+                var audience = multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id
+                    ? RoleAudiences.Operator
+                    : RoleAudiences.Customer;
+                role = new FshRole(
+                    roleName,
+                    $"{roleName} Role for {multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id} Tenant",
+                    audience);
                 await roleManager.CreateAsync(role);
             }
 
@@ -58,12 +64,11 @@ internal sealed class IdentityDbInitializer(
             }
             else if (roleName == RoleConstants.Admin)
             {
-                await AssignPermissionsToRoleAsync(context, PermissionConstants.Admin, role, cancellationToken);
-
-                if (multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id)
-                {
-                    await AssignPermissionsToRoleAsync(context, PermissionConstants.Root, role, cancellationToken);
-                }
+                var isRoot = multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id;
+                var permissions = isRoot
+                    ? PermissionConstants.Admin.Concat(PermissionConstants.Root).DistinctBy(p => p.Name).ToList()
+                    : PermissionConstants.CustomerAdmin.ToList();
+                await AssignPermissionsToRoleAsync(context, permissions, role, cancellationToken);
             }
         }
     }

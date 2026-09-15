@@ -203,6 +203,7 @@ export type PermissionCatalogEntryDto = {
   action: string;
   isBasic: boolean;
   isRoot: boolean;
+  isCustomer: boolean;
 };
 
 export async function getPermissionsCatalog(): Promise<PermissionCatalogEntryDto[]> {

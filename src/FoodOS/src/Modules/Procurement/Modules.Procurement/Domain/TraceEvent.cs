@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Procurement.Domain;
 
-public sealed class TraceEvent : BaseEntity<Guid>
+public sealed class TraceEvent : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid? LotId { get; private set; }
     public Guid ProductId { get; private set; }

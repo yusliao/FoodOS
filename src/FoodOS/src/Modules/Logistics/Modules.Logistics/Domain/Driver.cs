@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class Driver : AggregateRoot<Guid>
+public sealed class Driver : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public Guid UserId { get; private set; }
     public string Phone { get; private set; } = default!;

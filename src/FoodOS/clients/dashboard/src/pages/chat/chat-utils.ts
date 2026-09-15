@@ -1,18 +1,27 @@
 import { ChannelType, type ChannelDto, type MessageDto } from "@/api/chat";
 
+export type TranslateFn = (key: string, fallback?: string) => string;
+
 /** Stable display name for a channel — falls back through type-appropriate paths. */
-export function channelTitle(channel: ChannelDto, selfUserId?: string): string {
-  if (channel.type === ChannelType.Channel) return channel.name?.trim() || "(unnamed channel)";
+export function channelTitle(
+  channel: ChannelDto,
+  selfUserId?: string,
+  t?: TranslateFn,
+): string {
+  const unnamedChannel = t?.("chat.unnamedChannel") ?? "(unnamed channel)";
+  const directMessage = t?.("chat.directMessage") ?? "Direct message";
+  const emptyGroup = t?.("chat.emptyGroup") ?? "Empty group";
+  if (channel.type === ChannelType.Channel) return channel.name?.trim() || unnamedChannel;
   if (channel.type === ChannelType.DirectMessage) {
     // DM — show the other member's user id (richer name resolution would
     // require an Identity lookup; users can be wired in later via a
     // useUserDisplay hook).
     const other = channel.members.find((m) => m.userId !== selfUserId);
-    return other ? `@${shortenUserId(other.userId)}` : "Direct message";
+    return other ? `@${shortenUserId(other.userId)}` : directMessage;
   }
   // Group DM — list the other members up to 3, "+N more" beyond that.
   const others = channel.members.filter((m) => m.userId !== selfUserId);
-  if (others.length === 0) return "Empty group";
+  if (others.length === 0) return emptyGroup;
   const first = others.slice(0, 3).map((m) => `@${shortenUserId(m.userId)}`);
   const extra = others.length - first.length;
   return extra > 0 ? `${first.join(", ")} +${extra}` : first.join(", ");
@@ -32,18 +41,18 @@ export function dayKey(iso: string): string {
 }
 
 /** Human-readable day rule label — "TODAY" / "YESTERDAY" / "TUESDAY · MAR 5". */
-export function dayRuleLabel(iso: string): string {
+export function dayRuleLabel(iso: string, culture = "en-US", t?: TranslateFn): string {
   const d = new Date(iso);
   const today = new Date();
   const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
   const diffMs = startOfDay(today).getTime() - startOfDay(d).getTime();
   const days = Math.round(diffMs / (24 * 60 * 60 * 1000));
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
+  if (days === 0) return t?.("chat.today") ?? "Today";
+  if (days === 1) return t?.("chat.yesterday") ?? "Yesterday";
   if (days < 7) {
-    return d.toLocaleDateString("en-US", { weekday: "long" });
+    return d.toLocaleDateString(culture, { weekday: "long" });
   }
-  return d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString(culture, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -51,15 +60,15 @@ export function dayRuleLabel(iso: string): string {
 }
 
 /** "HH:MM" / "h:MM AM" — sender-time chip next to the author's name. */
-export function shortTime(iso: string): string {
+export function shortTime(iso: string, culture = "en-US"): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString(culture, { hour: "numeric", minute: "2-digit" });
 }
 
 /** "Today 10:42" / "Yesterday 4:18 PM" / "Mar 3 9:01 AM" — for search results
  *  and other contexts where the date matters alongside the time. */
-export function shortDateTime(iso: string): string {
-  return `${dayRuleLabel(iso)} ${shortTime(iso)}`;
+export function shortDateTime(iso: string, culture = "en-US", t?: TranslateFn): string {
+  return `${dayRuleLabel(iso, culture, t)} ${shortTime(iso, culture)}`;
 }
 
 /** Returns true when two messages can be visually merged (same author, < 5min apart, same thread). */

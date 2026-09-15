@@ -11,7 +11,7 @@ public enum DailyPlanStatus
 /// Snapshot created when a warehouse cutoff is triggered. Existence of a row
 /// for (warehouse, business date) means that date is locked.
 /// </summary>
-public sealed class DailyPlan : AggregateRoot<Guid>
+public sealed class DailyPlan : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public DateOnly BusinessDate { get; private set; }

@@ -19,7 +19,7 @@ namespace FSH.Modules.Catalog.Domain;
 /// "cover" image. <see cref="Product.SetThumbnail"/> enforces uniqueness within the aggregate.
 /// </para>
 /// </summary>
-public sealed class ProductImage : BaseEntity<Guid>
+public sealed class ProductImage : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid ProductId { get; private set; }
     public Guid? FileAssetId { get; private set; }

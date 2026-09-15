@@ -5,7 +5,7 @@ namespace FSH.Modules.Inventory.Domain;
 /// <summary>
 /// Quantity buckets for one lot in one warehouse zone. Every mutation must also write an <see cref="InventoryTransaction"/>.
 /// </summary>
-public sealed class LotBalance : BaseEntity<Guid>
+public sealed class LotBalance : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public Guid ZoneId { get; private set; }

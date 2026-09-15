@@ -3,7 +3,7 @@ using FSH.Framework.Core.Domain;
 namespace FSH.Modules.Logistics.Domain;
 
 /// <summary>One row per warehouse local date and kind so load/POD reminder jobs do not re-notify.</summary>
-public sealed class DispatchReminderLog : BaseEntity<Guid>
+public sealed class DispatchReminderLog : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public const string LoadKind = "Load";
     public const string PodKind = "Pod";

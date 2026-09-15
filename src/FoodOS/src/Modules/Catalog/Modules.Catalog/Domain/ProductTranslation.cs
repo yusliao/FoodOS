@@ -5,7 +5,7 @@ namespace FSH.Modules.Catalog.Domain;
 /// <summary>
 /// Localized name/description for a product. Canonical (default-culture) copy lives on <see cref="Product"/>.
 /// </summary>
-public sealed class ProductTranslation : BaseEntity<Guid>
+public sealed class ProductTranslation : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid ProductId { get; private set; }
     public string Culture { get; private set; } = default!;

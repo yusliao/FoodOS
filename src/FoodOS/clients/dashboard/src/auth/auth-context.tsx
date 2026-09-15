@@ -105,7 +105,14 @@ function pickFirstNonEmpty(...candidates: Array<string | undefined>): string | u
 // renders protected surfaces that 401 in a loop instead of refreshing.
 function readStoredSession(): { claims: JwtClaims | null; usable: boolean } {
   const claims = decodeJwt(tokenStore.getAccessToken());
-  return { claims, usable: claims !== null && !isTokenExpired(claims) };
+  return {
+    claims,
+    usable:
+      claims !== null &&
+      claims.tenant !== "root" &&
+      claims.business_actor !== "operator" &&
+      !isTokenExpired(claims),
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -229,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // so a future API regression can't quietly drop a root token into
       // a tenant-dashboard session.
       const claims = decodeJwt(tokens.accessToken);
-      if (claims?.tenant === "root") {
+      if (claims?.tenant === "root" || claims?.business_actor === "operator") {
         tokenStore.clear();
         throw new Error(
           "SuperAdmin accounts must use the admin app. Sign in there instead.",

@@ -3,7 +3,7 @@ using FSH.Framework.Core.Domain;
 namespace FSH.Modules.Ordering.Domain;
 
 /// <summary>One row per warehouse local date so the reconcile reminder job does not re-notify.</summary>
-public sealed class ReconcileReminderLog : BaseEntity<Guid>
+public sealed class ReconcileReminderLog : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid WarehouseId { get; private set; }
     public DateOnly LocalDate { get; private set; }

@@ -36,7 +36,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -56,8 +58,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                         .HasDatabaseName("IX_Locations_WarehouseId_Code");
 
                     b.ToTable("Locations", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.PackTote", b =>
@@ -84,7 +84,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WaveId")
                         .HasColumnType("uuid");
@@ -96,8 +98,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                         .HasDatabaseName("IX_PackTotes_Sscc");
 
                     b.ToTable("PackTotes", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.PackToteOrder", b =>
@@ -114,7 +114,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -127,8 +129,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                         .HasDatabaseName("IX_PackToteOrders_PackToteId_OrderId");
 
                     b.ToTable("PackToteOrders", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.PickTask", b =>
@@ -177,7 +177,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WaveId")
                         .HasColumnType("uuid");
@@ -194,8 +196,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                     b.HasIndex("WaveId");
 
                     b.ToTable("PickTasks", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.PutawayTask", b =>
@@ -238,7 +238,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -256,8 +258,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                     b.HasIndex("LotId", "Status");
 
                     b.ToTable("PutawayTasks", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.Shrinkage", b =>
@@ -294,7 +294,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -309,8 +311,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                     b.HasIndex("LotId");
 
                     b.ToTable("Shrinkages", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.StockPlacement", b =>
@@ -331,7 +331,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -340,8 +342,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                         .HasDatabaseName("IX_StockPlacements_LotId_LocationId");
 
                     b.ToTable("StockPlacements", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.TraceEvent", b =>
@@ -396,7 +396,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Uom")
                         .IsRequired()
@@ -410,8 +412,6 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                     b.HasIndex("OccurredAt");
 
                     b.ToTable("TraceEvents", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.Wave", b =>
@@ -444,7 +444,9 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -463,19 +465,15 @@ namespace FoodOS.Migrations.PostgreSQL.Warehouse
                         .IsUnique()
                         .HasDatabaseName("IX_Waves_Number");
 
-                    b.HasIndex("DailyPlanId", "ZoneId", "RouteId", "TenantId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_RouteId")
-                        .HasFilter("\"RouteId\" IS NOT NULL");
-
                     b.HasIndex("DailyPlanId", "ZoneId", "TenantId")
                         .IsUnique()
-                        .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_Unrouted")
-                        .HasFilter("\"RouteId\" IS NULL");
+                        .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_Unrouted");
+
+                    b.HasIndex("DailyPlanId", "ZoneId", "RouteId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_RouteId");
 
                     b.ToTable("Waves", "warehouse");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Warehouse.Domain.PickTask", b =>

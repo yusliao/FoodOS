@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRealtimeEvent } from "@/realtime/realtime-context";
 import { useUserDisplay } from "@/lib/use-user-display";
+import { useT } from "@/i18n/locale-provider";
 
 /** Auto-clear typing markers after 4s — slightly longer than the hub's 3s throttle. */
 const TYPING_TTL_MS = 4_000;
@@ -20,6 +21,7 @@ export function TypingIndicator({
   selfUserId?: string;
 }) {
   const [markers, setMarkers] = useState<Marker[]>([]);
+  const t = useT();
 
   useRealtimeEvent<{ channelId: string; userId: string }>(
     "ChatTypingStarted",
@@ -68,16 +70,17 @@ export function TypingIndicator({
       <span>
         {markers.length === 1 ? (
           <>
-            <UserName userId={markers[0].userId} /> is typing…
+            <UserName userId={markers[0].userId} /> {t("chat.typingOne")}
           </>
         ) : markers.length === 2 ? (
           <>
-            <UserName userId={markers[0].userId} /> and <UserName userId={markers[1].userId} /> are
-            typing…
+            <UserName userId={markers[0].userId} /> {t("chat.typingAnd")}{" "}
+            <UserName userId={markers[1].userId} /> {t("chat.typingTwo")}
           </>
         ) : (
           <>
-            <UserName userId={markers[0].userId} /> and {markers.length - 1} others are typing…
+            <UserName userId={markers[0].userId} />{" "}
+            {t("chat.typingOthers").replace("{n}", String(markers.length - 1))}
           </>
         )}
       </span>

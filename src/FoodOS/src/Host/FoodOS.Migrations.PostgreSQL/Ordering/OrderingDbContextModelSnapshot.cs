@@ -35,6 +35,10 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CustomerTenantId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
@@ -60,7 +64,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -73,9 +79,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.HasIndex("StoreId");
 
-                    b.ToTable("AfterSalesTickets", "ordering");
+                    b.HasIndex("CustomerTenantId", "StoreId");
 
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                    b.ToTable("AfterSalesTickets", "ordering");
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.Cart", b =>
@@ -84,25 +90,31 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CustomerTenantId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid>("StoreId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CustomerTenantId", "StoreId");
+
                     b.HasIndex("StoreId", "TenantId")
                         .IsUnique()
                         .HasDatabaseName("IX_Carts_StoreId");
 
                     b.ToTable("Carts", "ordering");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.CartLine", b =>
@@ -123,7 +135,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Zone")
                         .IsRequired()
@@ -135,8 +149,6 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.HasIndex("CartId");
 
                     b.ToTable("CartLines", "ordering");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.CustomerOrg", b =>
@@ -156,6 +168,10 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.Property<bool>("CreditHold")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("CustomerTenantId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -163,7 +179,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -171,9 +189,58 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .IsUnique()
                         .HasDatabaseName("IX_CustomerOrgs_Code");
 
-                    b.ToTable("CustomerOrgs", "ordering");
+                    b.HasIndex("CustomerTenantId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CustomerOrgs_CustomerTenantId");
 
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                    b.ToTable("CustomerOrgs", "ordering");
+                });
+
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.CustomerUserStoreAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerOrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerTenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerOrgId");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("CustomerTenantId", "CustomerOrgId", "IsActive");
+
+                    b.HasIndex("CustomerTenantId", "UserId", "StoreId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CustomerUserStoreAccesses_CustomerTenantId_UserId_StoreId");
+
+                    b.ToTable("CustomerUserStoreAccesses", "ordering");
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.ReconcileReminderLog", b =>
@@ -193,7 +260,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -205,8 +274,6 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .HasDatabaseName("IX_ReconcileReminderLogs_WarehouseId_LocalDate");
 
                     b.ToTable("ReconcileReminderLogs", "ordering");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrder", b =>
@@ -223,6 +290,10 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<Guid>("CustomerOrgId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerTenantId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTimeOffset>("CutoffAt")
                         .HasColumnType("timestamp with time zone");
@@ -248,7 +319,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<Guid>("WarehouseId")
                         .HasColumnType("uuid");
@@ -263,9 +336,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .IsUnique()
                         .HasDatabaseName("IX_SalesOrders_Number");
 
-                    b.ToTable("SalesOrders", "ordering");
+                    b.HasIndex("CustomerTenantId", "StoreId", "Status");
 
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                    b.ToTable("SalesOrders", "ordering");
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrderLine", b =>
@@ -314,7 +387,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(18, 4)
@@ -334,8 +409,6 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.HasIndex("SalesOrderId");
 
                     b.ToTable("SalesOrderLines", "ordering");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrderLineLot", b =>
@@ -369,7 +442,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -378,8 +453,6 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.HasIndex("SalesOrderLineId");
 
                     b.ToTable("SalesOrderLineLots", "ordering");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.Store", b =>
@@ -404,6 +477,10 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.Property<Guid>("CustomerOrgId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CustomerTenantId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid?>("DefaultRouteId")
                         .HasColumnType("uuid");
 
@@ -421,7 +498,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -431,9 +510,9 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .IsUnique()
                         .HasDatabaseName("IX_Stores_Code");
 
-                    b.ToTable("Stores", "ordering");
+                    b.HasIndex("CustomerTenantId", "CustomerOrgId");
 
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                    b.ToTable("Stores", "ordering");
                 });
 
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.CartLine", b =>
@@ -441,6 +520,21 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.HasOne("FSH.Modules.Ordering.Domain.Cart", null)
                         .WithMany("Lines")
                         .HasForeignKey("CartId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.CustomerUserStoreAccess", b =>
+                {
+                    b.HasOne("FSH.Modules.Ordering.Domain.CustomerOrg", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerOrgId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FSH.Modules.Ordering.Domain.Store", null)
+                        .WithMany()
+                        .HasForeignKey("StoreId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

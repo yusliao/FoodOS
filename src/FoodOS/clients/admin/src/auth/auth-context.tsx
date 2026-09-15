@@ -57,7 +57,14 @@ function claimsToUser(claims: JwtClaims | null, permissions: string[]): AuthUser
 // renders protected surfaces that 401 in a loop instead of refreshing.
 function readStoredSession(): { claims: JwtClaims | null; usable: boolean } {
   const claims = decodeJwt(tokenStore.getAccessToken());
-  return { claims, usable: claims !== null && !isTokenExpired(claims) };
+  return {
+    claims,
+    usable:
+      claims !== null &&
+      claims.tenant === "root" &&
+      claims.business_actor !== "customer" &&
+      !isTokenExpired(claims),
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -170,6 +177,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.setPermissions([]);
       setPermissionsHydrated(false);
       const tokens = await issueToken(input);
+      const claims = decodeJwt(tokens.accessToken);
+      if (claims?.tenant !== "root" || claims.business_actor === "customer") {
+        tokenStore.clear();
+        throw new Error("Restaurant tenant accounts must use the dashboard app.");
+      }
       tokenStore.setTokens(tokens.accessToken, tokens.refreshToken);
     },
     [],

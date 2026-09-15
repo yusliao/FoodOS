@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class PackToteOrder : BaseEntity<Guid>
+public sealed class PackToteOrder : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid PackToteId { get; private set; }
     public Guid OrderId { get; private set; }

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MessageCircle } from "lucide-react";
 import { listMyChannels } from "@/api/chat";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 /**
  * Topbar pill that exposes the sum of unread chat messages across every
@@ -19,6 +20,7 @@ import { cn } from "@/lib/cn";
  */
 export function ChatUnreadBadge() {
   const navigate = useNavigate();
+  const t = useT();
   const { data: channels } = useQuery({
     queryKey: ["chat", "my-channels"],
     queryFn: () => listMyChannels({ pageSize: 100 }),
@@ -33,8 +35,22 @@ export function ChatUnreadBadge() {
   return (
     <button
       type="button"
-      aria-label={`Chat${unread > 0 ? `, ${unread} unread message${unread === 1 ? "" : "s"}` : ""}`}
-      title={unread > 0 ? `${unread} unread chat message${unread === 1 ? "" : "s"}` : "Chat"}
+      aria-label={
+        unread > 0
+          ? (unread === 1 ? t("chat.unreadAriaOne") : t("chat.unreadAria")).replace(
+              "{n}",
+              String(unread),
+            )
+          : t("chat.title")
+      }
+      title={
+        unread > 0
+          ? (unread === 1 ? t("chat.unreadTitleOne") : t("chat.unreadTitle")).replace(
+              "{n}",
+              String(unread),
+            )
+          : t("chat.title")
+      }
       onClick={() => navigate("/chat")}
       className={cn(
         "relative grid h-9 w-9 cursor-pointer place-items-center rounded-md",

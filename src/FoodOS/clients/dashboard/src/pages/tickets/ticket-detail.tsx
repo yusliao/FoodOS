@@ -39,10 +39,10 @@ import {
   type TicketDto,
 } from "@/api/tickets";
 import {
-  PRIORITY_LABEL,
   PRIORITY_TONE,
-  STATUS_LABEL,
   STATUS_TONE,
+  ticketPriorityLabel,
+  ticketStatusLabel,
 } from "@/lib/ticket-enums";
 import { UserPicker } from "@/components/identity/user-picker";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,7 @@ import {
   formatDate,
   formatRelative,
 } from "@/lib/list-helpers";
+import { useT } from "@/i18n/locale-provider";
 
 type DialogState =
   | { mode: "closed" }
@@ -87,6 +88,7 @@ type DialogState =
 // ───────────────────────────────────────────────────────────────────────
 
 export function TicketDetailPage() {
+  const t = useT();
   const { ticketId = "" } = useParams<{ ticketId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -108,7 +110,7 @@ export function TicketDetailPage() {
 
   return (
     <div className="space-y-5 pb-12">
-      <EntityDetailBack to="/tickets" label="Back to tickets" />
+      <EntityDetailBack to="/tickets" label={t("tickets.back")} />
 
       {ticketQuery.isError && <ErrorBand message={describe(ticketQuery.error)} />}
 
@@ -126,7 +128,7 @@ export function TicketDetailPage() {
               void (async () => {
                 try {
                   await reopenTicket(ticket.id);
-                  toast.success("Ticket reopened");
+                  toast.success(t("tickets.reopened"));
                   await queryClient.invalidateQueries({ queryKey: ["tickets"] });
                 } catch (e) {
                   toast.error(describe(e));
@@ -192,6 +194,7 @@ function Hero({
   onReopen: () => void;
   onAssign: () => void;
 }) {
+  const t = useT();
   const canResolve = ticket.status !== "Resolved" && ticket.status !== "Closed";
   const canReopen = ticket.status === "Resolved" || ticket.status === "Closed";
 
@@ -205,7 +208,7 @@ function Hero({
       badges={
         <>
           <EntityStatusBadge tone={STATUS_TONE[ticket.status]}>
-            {STATUS_LABEL[ticket.status]}
+            {ticketStatusLabel(t, ticket.status)}
           </EntityStatusBadge>
           <EntityStatusBadge tone={PRIORITY_TONE[ticket.priority]}>
             {ticket.priority === "Critical" && (
@@ -214,7 +217,7 @@ function Hero({
             {ticket.priority === "High" && (
               <AlertTriangle className="mr-1 size-2.5" />
             )}
-            {PRIORITY_LABEL[ticket.priority]}
+            {ticketPriorityLabel(t, ticket.priority)}
           </EntityStatusBadge>
         </>
       }
@@ -222,7 +225,9 @@ function Hero({
         <>
           <span className="font-mono tabular-nums">{ticket.number}</span>
           <span className="mx-1.5 text-[var(--color-border)]">·</span>
-          opened {formatRelative(ticket.createdAtUtc)} by {reporter.name}
+          {t("tickets.openedBy")
+            .replace("{rel}", formatRelative(ticket.createdAtUtc))
+            .replace("{name}", reporter.name)}
         </>
       }
       actions={
@@ -235,7 +240,7 @@ function Hero({
             className="gap-1.5"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-            <span className="hidden sm:inline">Refresh</span>
+            <span className="hidden sm:inline">{t("tickets.refresh")}</span>
           </Button>
           <Button variant="outline" size="sm" onClick={onAssign} className="gap-1.5">
             {ticket.assignedToUserId ? (
@@ -244,19 +249,19 @@ function Hero({
               <UserX className="h-3.5 w-3.5" />
             )}
             <span className="hidden sm:inline">
-              {ticket.assignedToUserId ? "Reassign" : "Assign"}
+              {ticket.assignedToUserId ? t("tickets.reassign") : t("tickets.assign")}
             </span>
           </Button>
           {canResolve && (
             <Button onClick={onResolve} size="sm" className="gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Resolve
+              {t("tickets.resolve")}
             </Button>
           )}
           {canReopen && (
             <Button onClick={onReopen} size="sm" variant="outline" className="gap-1.5">
               <RotateCcw className="h-3.5 w-3.5" />
-              Reopen
+              {t("tickets.reopen")}
             </Button>
           )}
         </>
@@ -267,14 +272,14 @@ function Hero({
             icon={MessageCircle}
             tone="primary"
             value={commentCount}
-            label={commentCount === 1 ? "comment" : "comments"}
+            label={commentCount === 1 ? t("tickets.comment") : t("tickets.comments")}
           />
           {ticket.updatedAtUtc && (
             <EntityDetailStat
               icon={Clock}
               tone="default"
               value={formatRelative(ticket.updatedAtUtc)}
-              label="updated"
+              label={t("tickets.updated")}
             />
           )}
           {ticket.resolvedAtUtc && (
@@ -282,7 +287,7 @@ function Hero({
               icon={CheckCircle2}
               tone="success"
               value={formatRelative(ticket.resolvedAtUtc)}
-              label="resolved"
+              label={t("tickets.resolved")}
             />
           )}
         </>
@@ -290,19 +295,19 @@ function Hero({
       meta={
         <>
           <EntityDetailMeta icon={User}>
-            Assignee:&nbsp;
+            {t("tickets.assigneeMeta")}&nbsp;
             <span className="font-medium text-[var(--color-foreground)]">
-              {ticket.assignedToUserId ? assignee.name : "Unassigned"}
+              {ticket.assignedToUserId ? assignee.name : t("tickets.unassigned")}
             </span>
           </EntityDetailMeta>
           <EntityDetailMeta icon={UserCheck}>
-            Reporter:&nbsp;
+            {t("tickets.reporterMeta")}&nbsp;
             <span className="font-medium text-[var(--color-foreground)]">
               {reporter.name}
             </span>
           </EntityDetailMeta>
           <EntityDetailMeta icon={CalendarDays}>
-            Created:&nbsp;
+            {t("tickets.createdMeta")}&nbsp;
             <span className="font-medium text-[var(--color-foreground)]">
               {formatDate(ticket.createdAtUtc)}
             </span>
@@ -318,15 +323,16 @@ function Hero({
 // ───────────────────────────────────────────────────────────────────────
 
 function DescriptionSection({ ticket }: { ticket: TicketDto }) {
+  const t = useT();
   return (
-    <EntityDetailSection title="Description" icon={Info}>
+    <EntityDetailSection title={t("tickets.description")} icon={Info}>
       {ticket.description ? (
         <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-[var(--color-foreground)]/90">
           {ticket.description}
         </p>
       ) : (
         <p className="italic text-[13px] leading-relaxed text-[var(--color-muted-foreground)]">
-          No description on file. Comments below carry the conversation.
+          {t("tickets.noDescription")}
         </p>
       )}
 
@@ -340,7 +346,7 @@ function DescriptionSection({ ticket }: { ticket: TicketDto }) {
         >
           <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-success)]">
             <CheckCircle2 className="h-3 w-3" />
-            Resolution
+            {t("tickets.resolution")}
           </div>
           <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-[var(--color-foreground)]/90">
             {ticket.resolutionNote}
@@ -368,6 +374,7 @@ function CommentsSection({
   onPosted: () => void;
   disabled: boolean;
 }) {
+  const t = useT();
   const { user } = useAuth();
   const [body, setBody] = useState("");
 
@@ -376,7 +383,7 @@ function CommentsSection({
     mutationFn: (text: string) => addTicketComment(ticketId, text),
     onSuccess: () => {
       setBody("");
-      toast.success("Comment posted");
+      toast.success(t("tickets.posted"));
       onPosted();
     },
     onError: (e) => toast.error(describe(e)),
@@ -384,11 +391,11 @@ function CommentsSection({
 
   const countLabel =
     comments.length === 0
-      ? "No comments yet"
-      : `${comments.length} ${comments.length === 1 ? "comment" : "comments"}`;
+      ? t("tickets.noCommentsYet")
+      : `${comments.length} ${comments.length === 1 ? t("tickets.comment") : t("tickets.comments")}`;
 
   return (
-    <EntityDetailSection title="Conversation" icon={MessageCircle} description={countLabel}>
+    <EntityDetailSection title={t("tickets.conversation")} icon={MessageCircle} description={countLabel}>
       <div className="space-y-4">
         {isLoading ? (
           <div className="space-y-3">
@@ -397,7 +404,7 @@ function CommentsSection({
           </div>
         ) : comments.length === 0 ? (
           <p className="italic text-[13px] leading-relaxed text-[var(--color-muted-foreground)]">
-            No comments yet. Add the first note below — visible to anyone with View access.
+            {t("tickets.noCommentsBody")}
           </p>
         ) : (
           <ul className="space-y-3">
@@ -428,11 +435,11 @@ function CommentsSection({
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          aria-label="Add a comment"
+          aria-label={t("tickets.addCommentAria")}
           placeholder={
             disabled
-              ? "Reopen the ticket to add a new comment."
-              : "Add a comment to the thread…"
+              ? t("tickets.commentDisabled")
+              : t("tickets.commentPlaceholder")
           }
           disabled={disabled}
           rows={3}
@@ -454,7 +461,7 @@ function CommentsSection({
             className="gap-1.5"
           >
             <Send className="h-3.5 w-3.5" />
-            {mutation.isPending ? "Posting…" : "Post comment"}
+            {mutation.isPending ? t("tickets.posting") : t("tickets.postComment")}
           </Button>
         </div>
       </form>
@@ -469,6 +476,7 @@ function CommentItem({
   comment: { authorUserId: string; body: string; createdAtUtc: string };
   isSelf: boolean;
 }) {
+  const t = useT();
   const initial =
     comment.authorUserId.replace(/[^a-z0-9]/gi, "").charAt(0).toUpperCase() || "?";
 
@@ -500,7 +508,7 @@ function CommentItem({
               title={comment.authorUserId}
               className="text-[11.5px] font-semibold text-[var(--color-foreground)]"
             >
-              {isSelf ? "You" : `${comment.authorUserId.slice(0, 8)}…`}
+              {isSelf ? t("tickets.you") : `${comment.authorUserId.slice(0, 8)}…`}
             </span>
             <span className="text-[10.5px] text-[var(--color-muted-foreground)]">
               {formatRelative(comment.createdAtUtc)}
@@ -520,12 +528,13 @@ function CommentItem({
 // ───────────────────────────────────────────────────────────────────────
 
 function PropertiesSection({ ticket }: { ticket: TicketDto }) {
+  const t = useT();
   const reporter = useUserDisplay(ticket.reporterUserId);
   const assignee = useUserDisplay(ticket.assignedToUserId);
   return (
-    <EntityDetailSection title="Properties" icon={Info}>
+    <EntityDetailSection title={t("tickets.properties")} icon={Info}>
       <dl className="space-y-3 text-[13px]">
-        <Prop label="Reporter">
+        <Prop label={t("tickets.reporter")}>
           <span
             title={reporter.handle ?? ticket.reporterUserId}
             className="font-medium text-[var(--color-foreground)]"
@@ -533,7 +542,7 @@ function PropertiesSection({ ticket }: { ticket: TicketDto }) {
             {reporter.name}
           </span>
         </Prop>
-        <Prop label="Assignee">
+        <Prop label={t("tickets.assignee")}>
           {ticket.assignedToUserId ? (
             <span
               title={assignee.handle ?? ticket.assignedToUserId}
@@ -542,34 +551,34 @@ function PropertiesSection({ ticket }: { ticket: TicketDto }) {
               {assignee.name}
             </span>
           ) : (
-            <span className="text-[var(--color-muted-foreground)]">Unassigned</span>
+            <span className="text-[var(--color-muted-foreground)]">{t("tickets.unassigned")}</span>
           )}
         </Prop>
-        <Prop label="Status">
+        <Prop label={t("tickets.colStatus")}>
           <EntityStatusBadge tone={STATUS_TONE[ticket.status]}>
-            {STATUS_LABEL[ticket.status]}
+            {ticketStatusLabel(t, ticket.status)}
           </EntityStatusBadge>
         </Prop>
-        <Prop label="Priority">
+        <Prop label={t("tickets.colPriority")}>
           <EntityStatusBadge tone={PRIORITY_TONE[ticket.priority]}>
-            {PRIORITY_LABEL[ticket.priority]}
+            {ticketPriorityLabel(t, ticket.priority)}
           </EntityStatusBadge>
         </Prop>
         <Prop
-          label="Created"
+          label={t("tickets.created")}
           value={formatDate(ticket.createdAtUtc)}
           hint={formatRelative(ticket.createdAtUtc)}
         />
         {ticket.updatedAtUtc && (
           <Prop
-            label="Updated"
+            label={t("tickets.updatedCap")}
             value={formatDate(ticket.updatedAtUtc)}
             hint={formatRelative(ticket.updatedAtUtc)}
           />
         )}
         {ticket.resolvedAtUtc && (
           <Prop
-            label="Resolved"
+            label={t("tickets.resolvedCap")}
             value={formatDate(ticket.resolvedAtUtc)}
             hint={formatRelative(ticket.resolvedAtUtc)}
           />
@@ -624,6 +633,7 @@ function ResolveDialog({
   ticket: TicketDto;
   onClose: () => void;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
 
@@ -634,7 +644,7 @@ function ResolveDialog({
   const mutation = useMutation({
     mutationFn: () => resolveTicket(ticket.id, note.trim() || null),
     onSuccess: () => {
-      toast.success("Ticket resolved");
+      toast.success(t("tickets.ticketResolved"));
       void queryClient.invalidateQueries({ queryKey: ["tickets"] });
       onClose();
     },
@@ -655,8 +665,7 @@ function ResolveDialog({
             {ticket.number} — {ticket.title}
           </DialogTitle>
           <DialogDescription>
-            Resolution notes are kept on the ticket and shown in the description panel.
-            Leave blank if there's nothing to add.
+            {t("tickets.resolveDesc")}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -666,12 +675,12 @@ function ResolveDialog({
           }}
         >
           <DialogBody className="space-y-4">
-            <Field id="resolve-note" label="Resolution note" hint="Optional — leave blank if there's nothing to add.">
+            <Field id="resolve-note" label={t("tickets.resolutionNote")} hint={t("tickets.resolutionHint")}>
               <textarea
                 id="resolve-note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="What changed? Root cause? Anything reviewers should know."
+                placeholder={t("tickets.resolutionPlaceholder")}
                 rows={4}
                 className={cn(
                   "block w-full rounded-md border border-[var(--color-input)] bg-[var(--color-card)]",
@@ -684,7 +693,7 @@ function ResolveDialog({
           </DialogBody>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">{t("chrome.cancel")}</Button>
             </DialogClose>
             <Button
               type="submit"
@@ -692,7 +701,7 @@ function ResolveDialog({
               className="gap-1.5"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {mutation.isPending ? "Resolving…" : "Mark resolved"}
+              {mutation.isPending ? t("tickets.resolving") : t("tickets.markResolved")}
             </Button>
           </DialogFooter>
         </form>
@@ -714,6 +723,7 @@ function AssignDialog({
   ticket: TicketDto;
   onClose: () => void;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [assignee, setAssignee] = useState(ticket.assignedToUserId ?? "");
   const [touched, setTouched] = useState(false);
@@ -728,7 +738,7 @@ function AssignDialog({
   const mutation = useMutation({
     mutationFn: () => assignTicket(ticket.id, assignee.trim() || null),
     onSuccess: () => {
-      toast.success(assignee.trim() ? "Ticket assigned" : "Ticket unassigned");
+      toast.success(assignee.trim() ? t("tickets.assigned") : t("tickets.unassignedToast"));
       void queryClient.invalidateQueries({ queryKey: ["tickets"] });
       onClose();
     },
@@ -755,17 +765,15 @@ function AssignDialog({
             {ticket.number} — {ticket.title}
           </DialogTitle>
           <DialogDescription>
-            Paste a user ID. Picking up the ticket transitions it to{" "}
-            <code className="font-mono">In progress</code>; clearing the assignee on an
-            in-progress ticket sends it back to <code className="font-mono">Open</code>.
+            {t("tickets.assignDesc")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit}>
           <DialogBody className="space-y-4">
             <Field
               id="assignee"
-              label="Assignee"
-              hint="Search by name or email. Clear the selection to unassign."
+              label={t("tickets.assignee")}
+              hint={t("tickets.assignHint")}
             >
               <UserPicker
                 value={assignee || null}
@@ -777,13 +785,13 @@ function AssignDialog({
             </Field>
             {touched && assignee.trim() === "" && (
               <p className="text-[12px] text-[var(--color-muted-foreground)]">
-                Clearing the assignee will <span className="font-medium text-[var(--color-foreground)]">unassign</span> the ticket.
+                {t("tickets.unassignHint")}
               </p>
             )}
           </DialogBody>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">{t("chrome.cancel")}</Button>
             </DialogClose>
             <Button
               type="submit"
@@ -791,7 +799,7 @@ function AssignDialog({
               className="gap-1.5"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {mutation.isPending ? "Saving…" : "Save assignment"}
+              {mutation.isPending ? t("identity.saving") : t("tickets.saveAssignment")}
             </Button>
           </DialogFooter>
         </form>
@@ -832,6 +840,7 @@ function DetailSkeleton() {
 }
 
 function NotFoundPanel({ onBack }: { onBack: () => void }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -851,15 +860,15 @@ function NotFoundPanel({ onBack }: { onBack: () => void }) {
         <TicketIcon className="h-6 w-6 text-[var(--color-primary)]" />
       </span>
       <h3 className="font-display text-xl font-semibold tracking-tight text-[var(--color-foreground)]">
-        This ticket no longer exists.
+        {t("tickets.notFound")}
       </h3>
       <p className="max-w-md text-sm leading-relaxed text-[var(--color-muted-foreground)]">
-        It may have been deleted. Check the trash, or head back to the tickets desk.
+        {t("tickets.notFoundBody")}
       </p>
       <div className="flex items-center gap-2">
-        <Button onClick={onBack} variant="outline">Back to tickets</Button>
+        <Button onClick={onBack} variant="outline">{t("tickets.back")}</Button>
         <Link to="/tickets">
-          <Button>Tickets desk</Button>
+          <Button>{t("tickets.desk")}</Button>
         </Link>
       </div>
     </div>

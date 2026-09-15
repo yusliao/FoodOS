@@ -21,6 +21,7 @@ public sealed class OrderingDbContext : BaseDbContext
 
     public DbSet<CustomerOrg> CustomerOrgs => Set<CustomerOrg>();
     public DbSet<Store> Stores => Set<Store>();
+    public DbSet<CustomerUserStoreAccess> CustomerUserStoreAccesses => Set<CustomerUserStoreAccess>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartLine> CartLines => Set<CartLine>();
     public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();

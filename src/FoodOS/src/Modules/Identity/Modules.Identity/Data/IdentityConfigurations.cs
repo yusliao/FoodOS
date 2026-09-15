@@ -32,6 +32,7 @@ public class ApplicationRoleConfig : IEntityTypeConfiguration<FshRole>
             .ToTable("Roles", IdentityModuleConstants.SchemaName)
             .IsMultiTenant()
                 .AdjustUniqueIndexes();
+        builder.Property(role => role.Audience).IsRequired().HasMaxLength(16);
     }
 }
 

@@ -4,7 +4,7 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class Shipment : AggregateRoot<Guid>
+public sealed class Shipment : AggregateRoot<Guid>, IOperatorOwnedEntity
 {
     private readonly List<ShipmentStop> _stops = [];
     private readonly List<ShipmentLine> _lines = [];

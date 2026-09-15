@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Procurement.Domain;
 
-public sealed class PurchaseOrderLine : BaseEntity<Guid>
+public sealed class PurchaseOrderLine : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid PurchaseOrderId { get; private set; }
     public Guid ProductId { get; private set; }

@@ -21,12 +21,10 @@ import {
 import {
   AuditEventType,
   AuditSeverity,
-  AUDIT_EVENT_TYPE_LABELS,
-  AUDIT_SEVERITY_LABELS,
+  AuditTag,
   AUDIT_TAG_LABELS,
   auditPredicate,
   severityRank,
-  decodeTags,
   getAuditById,
   getAuditsByCorrelation,
   getAuditSummary,
@@ -62,6 +60,38 @@ import {
 } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/cn";
+import { useLocale, useT } from "@/i18n/locale-provider";
+
+type TFn = (key: string, fallback?: string) => string;
+
+const TAG_I18N: Record<number, string> = {
+  [AuditTag.PiiMasked]: "piiMasked",
+  [AuditTag.OutOfQuota]: "outOfQuota",
+  [AuditTag.Sampled]: "sampled",
+  [AuditTag.RetainedLong]: "retainedLong",
+  [AuditTag.HealthCheck]: "healthCheck",
+  [AuditTag.Authentication]: "authentication",
+  [AuditTag.Authorization]: "authorization",
+};
+
+function eventTypeLabel(tr: TFn, type: AuditEventType) {
+  return tr(`system.audits.eventType.${type}`);
+}
+
+function severityLabel(tr: TFn, severity: AuditSeverity) {
+  return tr(`system.audits.severityLabel.${severity}`);
+}
+
+function tagLabel(tr: TFn, flag: number, fallback: string) {
+  const key = TAG_I18N[flag];
+  return key ? tr(`system.audits.tag.${key}`) : fallback;
+}
+
+function taggedNames(mask: number, tr: TFn): string[] {
+  return AUDIT_TAG_LABELS.filter((x) => (mask & x.flag) !== 0).map((x) =>
+    tagLabel(tr, x.flag, x.name),
+  );
+}
 
 const PAGE_SIZE = 25;
 const DESKTOP_COLS = "grid-cols-[minmax(0,1fr)_minmax(0,2fr)_96px_160px]";
@@ -135,16 +165,16 @@ function fmtIsoDense(iso: string): { date: string; time: string } {
   return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${mi}:${ss}.${ms}` };
 }
 
-function fmtRelative(iso: string, now: number = Date.now()): string {
+function fmtRelative(iso: string, tr: TFn, now: number = Date.now()): string {
   const delta = Math.max(0, Math.floor((now - Date.parse(iso)) / 1000));
-  if (delta < 5) return "just now";
-  if (delta < 60) return `${delta}s ago`;
+  if (delta < 5) return tr("system.rel.justNow");
+  if (delta < 60) return tr("system.rel.seconds").replace("{n}", String(delta));
   const m = Math.floor(delta / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return tr("system.rel.minutes").replace("{n}", String(m));
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return tr("system.rel.hours").replace("{n}", String(h));
   const days = Math.floor(h / 24);
-  return `${days}d ago`;
+  return tr("system.rel.days").replace("{n}", String(days));
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -185,6 +215,7 @@ const INITIAL_FILTERS: FilterState = {
 // ────────────────────────────────────────────────────────────────────────
 
 export function AuditsPage() {
+  const t = useT();
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [searchInput, setSearchInput] = useState("");
   const [drawerId, setDrawerId] = useState<string | null>(null);
@@ -281,10 +312,10 @@ export function AuditsPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={ScrollText}
-        title="Audit trail"
+        title={t("system.audits.title")}
         total={paged?.totalCount ?? null}
-        unit="event"
-        description="Activity, security, entity-change, and exception events across the platform. Window enforced server-side; max 90 days."
+        unit={t("system.audits.unit")}
+        description={t("system.audits.pageDesc")}
       >
         <Button
           variant="outline"
@@ -298,7 +329,7 @@ export function AuditsPage() {
           <RefreshCw
             className={cn("size-4", auditsQuery.isFetching && "animate-spin")}
           />
-          Refresh
+          {t("system.audits.refresh")}
         </Button>
       </EntityPageHeader>
 
@@ -306,7 +337,7 @@ export function AuditsPage() {
       <EntitySearch
         value={searchInput}
         onChange={setSearchInput}
-        placeholder="Search payload, source, user…"
+        placeholder={t("system.audits.searchPlaceholder")}
       />
 
       {/* Filter bar — preserved verbatim (range presets, chips, advanced) */}
@@ -338,17 +369,17 @@ export function AuditsPage() {
           className="flex items-start gap-2 rounded-lg border border-[oklch(from_var(--color-destructive)_l_c_h_/_0.30)] bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.06)] px-3 py-2 text-sm text-[var(--color-destructive)]"
         >
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <span>{(auditsQuery.error as Error)?.message ?? "Failed to load audits"}</span>
+          <span>{(auditsQuery.error as Error)?.message ?? t("system.audits.loadFailed")}</span>
         </div>
       ) : items.length === 0 ? (
         <EntityEmpty
           icon={ShieldCheck}
-          title="No audits in this window"
-          body="Try widening the time range or relaxing the filters. Activity events arrive as soon as the platform handles a request."
+          title={t("system.audits.emptyTitle")}
+          body={t("system.audits.emptyBody")}
           action={
             activeChipCount > 0 || filters.search ? (
               <Button variant="outline" onClick={onResetFilters} className="h-9 rounded-lg px-4 text-[13px]">
-                Reset filters
+                {t("system.audits.resetFilters")}
               </Button>
             ) : undefined
           }
@@ -357,7 +388,9 @@ export function AuditsPage() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
-              {paged?.totalCount ?? 0} event{(paged?.totalCount ?? 0) !== 1 ? "s" : ""} found
+              {(paged?.totalCount ?? 0) === 1
+                ? t("system.audits.foundOne").replace("{n}", String(paged?.totalCount ?? 0))
+                : t("system.audits.found").replace("{n}", String(paged?.totalCount ?? 0))}
             </p>
             {auditsQuery.isFetching && (
               <Loader2 className="size-3.5 animate-spin text-[var(--color-muted-foreground)]" />
@@ -378,10 +411,10 @@ export function AuditsPage() {
           {/* Desktop list */}
           <EntityListCard className="hidden md:block">
             <EntityListHeader className={DESKTOP_COLS}>
-              <span>Actor</span>
-              <span>Event</span>
-              <span>Severity</span>
-              <span>Timestamp</span>
+              <span>{t("system.audits.colActor")}</span>
+              <span>{t("system.audits.colEvent")}</span>
+              <span>{t("system.audits.colSeverity")}</span>
+              <span>{t("system.audits.colTimestamp")}</span>
             </EntityListHeader>
             {items.map((row, i) => (
               <AuditDesktopRow
@@ -435,11 +468,12 @@ function AuditMobileCard({
   row: AuditSummaryDto;
   onOpen: () => void;
 }) {
+  const t = useT();
   const ts = fmtIsoDense(row.occurredAtUtc);
   const Icon = eventTypeIcon(row.eventType);
   const tone = severityTone(row.severity);
   const toneColor = severityColorVar(row.severity);
-  const actor = row.userName ?? (row.userId ? `${row.userId.slice(0, 8)}…` : "System");
+  const actor = row.userName ?? (row.userId ? `${row.userId.slice(0, 8)}…` : t("identity.system"));
 
   return (
     <button
@@ -463,12 +497,12 @@ function AuditMobileCard({
               <EntityStatusBadge
                 tone={tone === "danger" ? "danger" : tone === "warning" ? "warning" : tone === "info" ? "info" : "default"}
               >
-                {AUDIT_SEVERITY_LABELS[row.severity]}
+                {severityLabel(t, row.severity)}
               </EntityStatusBadge>
             </div>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--color-muted-foreground)]">
               <Icon className="size-3" style={{ color: toneColor }} aria-hidden />
-              <span>{AUDIT_EVENT_TYPE_LABELS[row.eventType]}</span>
+              <span>{eventTypeLabel(t, row.eventType)}</span>
             </div>
           </div>
         </div>
@@ -499,12 +533,13 @@ function AuditDesktopRow({
   isLast: boolean;
   onOpen: () => void;
 }) {
+  const t = useT();
   const ts = fmtIsoDense(row.occurredAtUtc);
   const Icon = eventTypeIcon(row.eventType);
   const tone = severityTone(row.severity);
   const toneColor = severityColorVar(row.severity);
-  const actor = row.userName ?? (row.userId ? `${row.userId.slice(0, 8)}…` : "System");
-  const tags = decodeTags(row.tags);
+  const actor = row.userName ?? (row.userId ? `${row.userId.slice(0, 8)}…` : t("identity.system"));
+  const tags = taggedNames(row.tags, t);
 
   return (
     <EntityListRow className={DESKTOP_COLS} isLast={isLast} onClick={onOpen}>
@@ -558,7 +593,7 @@ function AuditDesktopRow({
         <EntityStatusBadge
           tone={tone === "danger" ? "danger" : tone === "warning" ? "warning" : tone === "info" ? "info" : "default"}
         >
-          {AUDIT_SEVERITY_LABELS[row.severity]}
+          {severityLabel(t, row.severity)}
         </EntityStatusBadge>
       </div>
 
@@ -595,6 +630,8 @@ function SummaryStrip({
   topSources: Array<[string, number]>;
   range: RangeKey;
 }) {
+  const tr = useT();
+  const { culture } = useLocale();
   if (loading || !byType || !bySeverity) {
     return (
       <Card>
@@ -609,7 +646,7 @@ function SummaryStrip({
 
   // Stack-bar segments — fall back to a single muted segment when the
   // window has zero activity, so the strip still has visual mass.
-  const t = Math.max(1, total);
+  const totalSafe = Math.max(1, total);
   const segments = [
     { key: "activity", value: byType.activity, color: "var(--color-primary)" },
     { key: "entity", value: byType.entity, color: "var(--color-info)" },
@@ -622,12 +659,12 @@ function SummaryStrip({
       <CardContent className="grid grid-cols-1 gap-5 px-6 py-4 lg:grid-cols-[auto_1fr_auto] lg:items-center">
         <div>
           <div className="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-            Window {range}
+            {tr("system.audits.window").replace("{range}", range)}
           </div>
           <div className="mt-1 font-display text-2xl font-semibold tabular-nums leading-none">
-            {new Intl.NumberFormat("en-US").format(total)}
+            {new Intl.NumberFormat(culture).format(total)}
           </div>
-          <div className="mt-1 text-[11px] text-[var(--color-muted-foreground)]">events</div>
+          <div className="mt-1 text-[11px] text-[var(--color-muted-foreground)]">{tr("system.audits.events")}</div>
         </div>
 
         <div className="space-y-2">
@@ -637,7 +674,7 @@ function SummaryStrip({
                 key={s.key}
                 title={`${s.key}: ${s.value}`}
                 style={{
-                  width: `${(s.value / t) * 100}%`,
+                  width: `${(s.value / totalSafe) * 100}%`,
                   backgroundColor: s.color,
                   transition: "width 600ms var(--ease-out-cubic)",
                 }}
@@ -645,19 +682,19 @@ function SummaryStrip({
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
-            <Legend dot="var(--color-primary)" label="Activity" value={byType.activity} />
-            <Legend dot="var(--color-info)" label="Entity" value={byType.entity} />
-            <Legend dot="var(--color-success)" label="Security" value={byType.security} />
-            <Legend dot="var(--color-destructive)" label="Exception" value={byType.exception} />
+            <Legend dot="var(--color-primary)" label={tr("system.audits.eventType.Activity")} value={byType.activity} />
+            <Legend dot="var(--color-info)" label={tr("system.audits.eventType.EntityChange")} value={byType.entity} />
+            <Legend dot="var(--color-success)" label={tr("system.audits.eventType.Security")} value={byType.security} />
+            <Legend dot="var(--color-destructive)" label={tr("system.audits.eventType.Exception")} value={byType.exception} />
             <span aria-hidden className="ml-auto h-3 w-px bg-[var(--color-border)]" />
-            <SeverityDot color="var(--color-warning)" label="Warn" value={bySeverity.warn} />
-            <SeverityDot color="var(--color-destructive)" label="Err" value={bySeverity.err + bySeverity.crit} />
+            <SeverityDot color="var(--color-warning)" label={tr("system.audits.sevWarnShort")} value={bySeverity.warn} />
+            <SeverityDot color="var(--color-destructive)" label={tr("system.audits.sevErrShort")} value={bySeverity.err + bySeverity.crit} />
           </div>
         </div>
 
         <div className="flex flex-col items-end gap-1.5">
           <div className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-            Top sources
+            {tr("system.audits.topSources")}
           </div>
           <div className="flex max-w-[28rem] flex-wrap justify-end gap-1.5">
             {topSources.length === 0 && (
@@ -719,6 +756,7 @@ function FilterBar({
   onSearchInput: (v: string) => void;
   onReset: () => void;
 }) {
+  const t = useT();
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
@@ -749,14 +787,14 @@ function FilterBar({
             <Input
               value={searchInput}
               onChange={(e) => onSearchInput(e.target.value)}
-              placeholder="Search payload, source, user…"
+              placeholder={t("system.audits.searchPlaceholder")}
               className="pl-9"
             />
             {searchInput && (
               <button
                 type="button"
                 onClick={() => onSearchInput("")}
-                aria-label="Clear search"
+                aria-label={t("system.audits.clearSearch")}
                 className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 cursor-pointer place-items-center rounded text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
               >
                 <X className="h-3.5 w-3.5" />
@@ -771,7 +809,7 @@ function FilterBar({
             className="gap-1.5"
           >
             <Filter className="h-3.5 w-3.5" />
-            Advanced
+            {t("system.audits.advanced")}
             {activeChipCount > 0 && (
               <Badge variant="brand" className="ml-1 px-1.5 py-0 text-[10px]">
                 {activeChipCount}
@@ -783,10 +821,10 @@ function FilterBar({
               default so the trail reads as meaningful events, not infrastructure noise. */}
           <div
             className="flex shrink-0 items-center gap-2"
-            title="Hide the per-request system Activity events (api.*) so only meaningful audits show"
+            title={t("system.audits.hideSystemTitle")}
           >
             <Switch
-              aria-label="Hide system activity"
+              aria-label={t("system.audits.hideSystem")}
               checked={filters.hideSystem}
               onCheckedChange={(v) => onPatch({ hideSystem: v })}
             />
@@ -795,7 +833,7 @@ function FilterBar({
               onClick={() => onPatch({ hideSystem: !filters.hideSystem })}
               className="select-none text-[12px] font-medium text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)]"
             >
-              Hide system activity
+              {t("system.audits.hideSystem")}
             </button>
           </div>
 
@@ -805,7 +843,7 @@ function FilterBar({
               onClick={onReset}
               className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
             >
-              Reset
+              {t("system.audits.reset")}
             </button>
           )}
         </div>
@@ -813,35 +851,35 @@ function FilterBar({
         {/* Row 2: event type + severity chips */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
-            Type
+            {t("system.audits.type")}
           </span>
-          {[AuditEventType.Activity, AuditEventType.Security, AuditEventType.EntityChange, AuditEventType.Exception].map((t) => (
+          {[AuditEventType.Activity, AuditEventType.Security, AuditEventType.EntityChange, AuditEventType.Exception].map((etype) => (
             <Chip
-              key={t}
-              active={filters.eventType === t}
+              key={etype}
+              active={filters.eventType === etype}
               onClick={() =>
-                onPatch({ eventType: filters.eventType === t ? null : t })
+                onPatch({ eventType: filters.eventType === etype ? null : etype })
               }
             >
-              {AUDIT_EVENT_TYPE_LABELS[t]}
+              {eventTypeLabel(t, etype)}
             </Chip>
           ))}
 
           <span aria-hidden className="mx-1 h-4 w-px bg-[var(--color-border)]" />
 
           <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
-            Severity
+            {t("system.audits.severity")}
           </span>
-          {[AuditSeverity.Information, AuditSeverity.Warning, AuditSeverity.Error, AuditSeverity.Critical].map((s) => (
+          {[AuditSeverity.Information, AuditSeverity.Warning, AuditSeverity.Error, AuditSeverity.Critical].map((sev) => (
             <Chip
-              key={s}
-              active={filters.severity === s}
-              tone={severityTone(s)}
+              key={sev}
+              active={filters.severity === sev}
+              tone={severityTone(sev)}
               onClick={() =>
-                onPatch({ severity: filters.severity === s ? null : s })
+                onPatch({ severity: filters.severity === sev ? null : sev })
               }
             >
-              {AUDIT_SEVERITY_LABELS[s]}
+              {severityLabel(t, sev)}
             </Chip>
           ))}
         </div>
@@ -850,49 +888,49 @@ function FilterBar({
         {advancedOpen && (
           <div className="grid grid-cols-1 gap-2 border-t border-[var(--color-border)] pt-3 sm:grid-cols-2 lg:grid-cols-3">
             <FieldInput
-              label="Source"
-              placeholder="api.identity.RegisterUser"
+              label={t("system.audits.source")}
+              placeholder={t("system.audits.sourcePlaceholder")}
               value={filters.source}
               onChange={(v) => onPatch({ source: v })}
             />
             <FieldInput
-              label="User ID"
-              placeholder="00000000-0000-…"
+              label={t("system.audits.userId")}
+              placeholder={t("system.audits.userPlaceholder")}
               value={filters.user}
               onChange={(v) => onPatch({ user: v })}
             />
             <FieldInput
-              label="Correlation"
-              placeholder="0HMxxxx…"
+              label={t("system.audits.correlation")}
+              placeholder={t("system.audits.corrPlaceholder")}
               value={filters.correlation}
               onChange={(v) => onPatch({ correlation: v })}
             />
             <FieldInput
-              label="Trace"
-              placeholder="hex traceparent"
+              label={t("system.audits.trace")}
+              placeholder={t("system.audits.tracePlaceholder")}
               value={filters.trace}
               onChange={(v) => onPatch({ trace: v })}
             />
             <div className="sm:col-span-2 lg:col-span-1">
               <div className="mb-1 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
-                Tags
+                {t("system.audits.tags")}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {AUDIT_TAG_LABELS.map((t) => {
-                  const active = (filters.tagsMask & t.flag) !== 0;
+                {AUDIT_TAG_LABELS.map((tag) => {
+                  const active = (filters.tagsMask & tag.flag) !== 0;
                   return (
                     <Chip
-                      key={t.flag}
+                      key={tag.flag}
                       active={active}
                       onClick={() =>
                         onPatch({
                           tagsMask: active
-                            ? filters.tagsMask & ~t.flag
-                            : filters.tagsMask | t.flag,
+                            ? filters.tagsMask & ~tag.flag
+                            : filters.tagsMask | tag.flag,
                         })
                       }
                     >
-                      {t.name}
+                      {tagLabel(t, tag.flag, tag.name)}
                     </Chip>
                   );
                 })}
@@ -988,6 +1026,7 @@ function AuditDetailDrawer({
   onJumpCorrelation: (id: string) => void;
   onJumpTrace: (id: string) => void;
 }) {
+  const t = useT();
   const open = auditId !== null;
 
   const detail = useQuery({
@@ -1012,9 +1051,9 @@ function AuditDetailDrawer({
             "duration-[var(--duration-default)]",
           )}
         >
-          <DialogTitle className="sr-only">Audit detail</DialogTitle>
+          <DialogTitle className="sr-only">{t("system.audits.detailTitle")}</DialogTitle>
           <DialogDescription className="sr-only">
-            Full payload, identifiers, and related actions for the selected audit event.
+            {t("system.audits.detailDesc")}
           </DialogDescription>
 
           <div className="flex h-full flex-col">
@@ -1037,7 +1076,7 @@ function AuditDetailDrawer({
           </div>
 
           <DialogClose
-            aria-label="Close"
+            aria-label={t("system.audits.close")}
             className={cn(
               "absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md",
               "text-[var(--color-muted-foreground)] transition-colors",
@@ -1054,6 +1093,7 @@ function AuditDetailDrawer({
 }
 
 function DrawerHeader({ detail, loading }: { detail?: AuditDetailDto; loading: boolean }) {
+  const t = useT();
   if (loading || !detail) {
     return (
       <div className="border-b border-[var(--color-border)] px-6 py-5">
@@ -1068,7 +1108,7 @@ function DrawerHeader({ detail, loading }: { detail?: AuditDetailDto; loading: b
   const tone = severityTone(detail.severity);
   const toneColor = severityColorVar(detail.severity);
   const ts = fmtIsoDense(detail.occurredAtUtc);
-  const tags = decodeTags(detail.tags);
+  const tags = taggedNames(detail.tags, t);
 
   return (
     <div className="relative border-b border-[var(--color-border)] px-6 py-5">
@@ -1093,21 +1133,21 @@ function DrawerHeader({ detail, loading }: { detail?: AuditDetailDto; loading: b
             <Icon className="h-3.5 w-3.5" />
           </span>
           <Badge variant={tone === "danger" ? "danger" : tone === "warning" ? "warning" : tone === "info" ? "info" : "default"}>
-            {AUDIT_SEVERITY_LABELS[detail.severity]}
+            {severityLabel(t, detail.severity)}
           </Badge>
           <span className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-            {AUDIT_EVENT_TYPE_LABELS[detail.eventType]}
+            {eventTypeLabel(t, detail.eventType)}
           </span>
         </div>
         <div className="mt-2 flex items-baseline gap-3">
           <h2 className="font-display text-xl font-semibold leading-tight tracking-tight">
-            {detail.source ?? "Audit event"}
+            {detail.source ?? t("system.audits.eventFallback")}
           </h2>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
           <span>{ts.date} {ts.time} UTC</span>
           <span aria-hidden>·</span>
-          <span>{fmtRelative(detail.occurredAtUtc)}</span>
+          <span>{fmtRelative(detail.occurredAtUtc, t)}</span>
         </div>
         {tags.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1138,27 +1178,28 @@ function DrawerBody({
   onJumpCorrelation: (id: string) => void;
   onJumpTrace: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-5 pt-5">
       {/* Identity grid */}
       <section>
-        <SectionLabel>Identity</SectionLabel>
+        <SectionLabel>{t("system.audits.identity")}</SectionLabel>
         <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-          <DefRow label="Tenant" value={detail.tenantId ?? "—"} mono />
-          <DefRow label="User" value={detail.userName ?? detail.userId ?? "—"} />
-          <DefRow label="User ID" value={detail.userId ?? "—"} mono />
-          <DefRow label="Source" value={detail.source ?? "—"} mono />
+          <DefRow label={t("system.audits.tenant")} value={detail.tenantId ?? "—"} mono />
+          <DefRow label={t("system.audits.user")} value={detail.userName ?? detail.userId ?? "—"} />
+          <DefRow label={t("system.audits.userId")} value={detail.userId ?? "—"} mono />
+          <DefRow label={t("system.audits.source")} value={detail.source ?? "—"} mono />
         </dl>
       </section>
 
       {/* Trace grid + jump links */}
       <section>
-        <SectionLabel>Trace</SectionLabel>
+        <SectionLabel>{t("system.audits.traceSection")}</SectionLabel>
         <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-          <DefRow label="Trace ID" value={detail.traceId ?? "—"} mono />
-          <DefRow label="Span ID" value={detail.spanId ?? "—"} mono />
-          <DefRow label="Correlation ID" value={detail.correlationId ?? "—"} mono />
-          <DefRow label="Request ID" value={detail.requestId ?? "—"} mono />
+          <DefRow label={t("system.audits.traceId")} value={detail.traceId ?? "—"} mono />
+          <DefRow label={t("system.audits.spanId")} value={detail.spanId ?? "—"} mono />
+          <DefRow label={t("system.audits.correlationId")} value={detail.correlationId ?? "—"} mono />
+          <DefRow label={t("system.audits.requestId")} value={detail.requestId ?? "—"} mono />
         </dl>
         <div className="mt-3 flex flex-wrap gap-2">
           {detail.correlationId && (
@@ -1167,12 +1208,12 @@ function DrawerBody({
               size="sm"
               onClick={() => onJumpCorrelation(detail.correlationId!)}
             >
-              <ExternalLink className="mr-1.5 h-3 w-3" /> All by correlation
+              <ExternalLink className="mr-1.5 h-3 w-3" /> {t("system.audits.allByCorrelation")}
             </Button>
           )}
           {detail.traceId && (
             <Button variant="soft" size="sm" onClick={() => onJumpTrace(detail.traceId!)}>
-              <ExternalLink className="mr-1.5 h-3 w-3" /> All by trace
+              <ExternalLink className="mr-1.5 h-3 w-3" /> {t("system.audits.allByTrace")}
             </Button>
           )}
         </div>
@@ -1193,7 +1234,7 @@ function DrawerBody({
       {/* Payload */}
       <section>
         <div className="flex items-center justify-between">
-          <SectionLabel>Payload</SectionLabel>
+          <SectionLabel>{t("system.audits.payload")}</SectionLabel>
           <CopyButton value={JSON.stringify(detail.payload, null, 2)} />
         </div>
         <pre className="mt-2 max-h-[60vh] overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3 font-mono text-[11px] leading-snug text-[var(--color-foreground)]">
@@ -1203,24 +1244,24 @@ function DrawerBody({
 
       {/* Reception window */}
       <section>
-        <SectionLabel>Pipeline</SectionLabel>
+        <SectionLabel>{t("system.audits.pipeline")}</SectionLabel>
         <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
           <DefRow
-            label="Occurred"
+            label={t("system.audits.occurred")}
             value={`${fmtIsoDense(detail.occurredAtUtc).date} ${fmtIsoDense(detail.occurredAtUtc).time}`}
             mono
           />
           <DefRow
-            label="Received"
+            label={t("system.audits.received")}
             value={`${fmtIsoDense(detail.receivedAtUtc).date} ${fmtIsoDense(detail.receivedAtUtc).time}`}
             mono
           />
           <DefRow
-            label="Sink delay"
+            label={t("system.audits.sinkDelay")}
             value={`${Math.max(0, Date.parse(detail.receivedAtUtc) - Date.parse(detail.occurredAtUtc))} ms`}
             mono
           />
-          <DefRow label="Audit ID" value={detail.id} mono />
+          <DefRow label={t("system.audits.auditId")} value={detail.id} mono />
         </dl>
       </section>
     </div>
@@ -1246,12 +1287,13 @@ function DrawerSkeleton() {
 }
 
 function DrawerError({ message }: { message?: string }) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center gap-2 pt-12 text-center">
       <AlertTriangle className="h-5 w-5 text-[var(--color-destructive)]" />
-      <div className="text-sm font-medium tracking-tight">Could not load audit</div>
+      <div className="text-sm font-medium tracking-tight">{t("system.audits.loadDetailFailed")}</div>
       <p className="max-w-md text-xs leading-relaxed text-[var(--color-muted-foreground)]">
-        {message ?? "The server returned an error fetching this audit. The record may have been purged by the retention job."}
+        {message ?? t("system.audits.loadDetailBody")}
       </p>
     </div>
   );
@@ -1287,6 +1329,7 @@ function RelatedEventsSection({
   currentOccurredAtUtc: string;
   onJumpAudit: (id: string) => void;
 }) {
+  const t = useT();
   const related = useQuery({
     queryKey: ["audit", "by-correlation", correlationId],
     queryFn: ({ signal }) => getAuditsByCorrelation(correlationId, {}, signal),
@@ -1309,10 +1352,10 @@ function RelatedEventsSection({
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <SectionLabel>Related events</SectionLabel>
+        <SectionLabel>{t("system.audits.related")}</SectionLabel>
         {!related.isLoading && (
           <span className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-            {sorted.length} on this correlation
+            {t("system.audits.onCorrelation").replace("{n}", String(sorted.length))}
           </span>
         )}
       </div>
@@ -1325,8 +1368,7 @@ function RelatedEventsSection({
         </div>
       ) : others.length === 0 ? (
         <p className="mt-2 text-[11.5px] text-[var(--color-muted-foreground)]">
-          No other events share this correlation. The full lifecycle of this
-          request is contained in the payload above.
+          {t("system.audits.relatedEmpty")}
         </p>
       ) : (
         <ol className="mt-2 relative pl-4">
@@ -1343,7 +1385,7 @@ function RelatedEventsSection({
             const deltaSec = Math.round((Date.parse(row.occurredAtUtc) - currentMs) / 1000);
             const deltaLabel =
               isCurrent
-                ? "this event"
+                ? t("system.audits.thisEvent")
                 : deltaSec === 0
                   ? "0s"
                   : deltaSec > 0
@@ -1375,10 +1417,10 @@ function RelatedEventsSection({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className={cn("truncate text-[12px] font-medium tracking-tight", isCurrent && "text-[var(--color-primary)]")}>
-                        {row.source ?? AUDIT_EVENT_TYPE_LABELS[row.eventType]}
+                        {row.source ?? eventTypeLabel(t, row.eventType)}
                       </span>
                       <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-                        {AUDIT_SEVERITY_LABELS[row.severity]}
+                        {severityLabel(t, row.severity)}
                       </span>
                     </span>
                     <span className="font-mono text-[10.5px] tabular-nums text-[var(--color-muted-foreground)]">
@@ -1399,6 +1441,7 @@ function RelatedEventsSection({
 }
 
 function CopyButton({ value }: { value: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -1414,7 +1457,7 @@ function CopyButton({ value }: { value: string }) {
         }
       }}
     >
-      {copied ? "Copied" : "Copy"}
+      {copied ? t("system.audits.copied") : t("system.audits.copy")}
     </button>
   );
 }

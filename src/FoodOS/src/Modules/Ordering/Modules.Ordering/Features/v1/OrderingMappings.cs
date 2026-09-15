@@ -6,11 +6,12 @@ namespace FSH.Modules.Ordering.Features.v1;
 internal static class OrderingMappings
 {
     public static CustomerOrgDto ToDto(this CustomerOrg org)
-        => new(org.Id, org.Code, org.Name, org.CreditHold, org.CreatedAtUtc);
+        => new(org.Id, org.CustomerTenantId, org.Code, org.Name, org.CreditHold, org.CreatedAtUtc);
 
     public static StoreDto ToDto(this Store store)
         => new(
             store.Id,
+            store.CustomerTenantId,
             store.CustomerOrgId,
             store.Code,
             store.Name,
@@ -23,6 +24,7 @@ internal static class OrderingMappings
     public static CartDto ToDto(this Cart cart)
         => new(
             cart.Id,
+            cart.CustomerTenantId,
             cart.StoreId,
             cart.Lines.Select(l => new CartLineDto(l.Id, l.ProductId, l.Quantity, l.Zone)).ToList(),
             cart.UpdatedAt);
@@ -31,6 +33,7 @@ internal static class OrderingMappings
         => new(
             order.Id,
             order.Number,
+            order.CustomerTenantId,
             order.StoreId,
             order.CustomerOrgId,
             order.WarehouseId,
@@ -64,6 +67,7 @@ internal static class OrderingMappings
     public static AfterSalesTicketDto ToDto(this AfterSalesTicket ticket)
         => new(
             ticket.Id,
+            ticket.CustomerTenantId,
             ticket.OrderId,
             ticket.StoreId,
             ticket.OrderLineId,
@@ -75,5 +79,5 @@ internal static class OrderingMappings
             ticket.CreatedAt);
 
     public static CartDto EmptyCart(Guid storeId)
-        => new(Guid.Empty, storeId, [], DateTimeOffset.MinValue);
+        => new(Guid.Empty, null, storeId, [], DateTimeOffset.MinValue);
 }

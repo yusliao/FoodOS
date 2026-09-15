@@ -11,6 +11,8 @@ public sealed class CartConfiguration : IEntityTypeConfiguration<Cart>
         ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("Carts");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.CustomerTenantId).HasMaxLength(64);
+        builder.HasIndex(x => new { x.CustomerTenantId, x.StoreId });
         builder.HasIndex(x => x.StoreId).IsUnique();
         builder.HasMany(x => x.Lines)
             .WithOne()

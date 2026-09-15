@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class ProofOfDelivery : BaseEntity<Guid>
+public sealed class ProofOfDelivery : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid StopId { get; private set; }
     public string SignedQtyJson { get; private set; } = default!;

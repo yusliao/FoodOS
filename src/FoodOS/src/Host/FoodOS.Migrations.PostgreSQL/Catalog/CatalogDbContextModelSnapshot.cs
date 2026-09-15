@@ -62,7 +62,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -73,12 +75,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
-                        .HasDatabaseName("IX_Brands_Slug")
-                        .HasFilter("\"IsDeleted\" = FALSE");
+                        .HasDatabaseName("IX_Brands_Slug");
 
                     b.ToTable("Brands", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.Category", b =>
@@ -119,7 +118,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -132,12 +133,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
-                        .HasDatabaseName("IX_Categories_Slug")
-                        .HasFilter("\"IsDeleted\" = FALSE");
+                        .HasDatabaseName("IX_Categories_Slug");
 
                     b.ToTable("Categories", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.PriceList", b =>
@@ -159,7 +157,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<DateTimeOffset>("ValidFrom")
                         .HasColumnType("timestamp with time zone");
@@ -174,8 +174,6 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                     b.HasIndex("ValidFrom", "ValidTo");
 
                     b.ToTable("PriceLists", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.PriceListLine", b =>
@@ -201,7 +199,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(18, 4)
@@ -214,8 +214,6 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                         .HasDatabaseName("IX_PriceListLines_PriceListId_ProductId_MinQty");
 
                     b.ToTable("PriceListLines", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.Product", b =>
@@ -297,7 +295,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -314,17 +314,13 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Sku", "TenantId")
                         .IsUnique()
-                        .HasDatabaseName("IX_Products_Sku")
-                        .HasFilter("\"IsDeleted\" = FALSE");
+                        .HasDatabaseName("IX_Products_Sku");
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
-                        .HasDatabaseName("IX_Products_Slug")
-                        .HasFilter("\"IsDeleted\" = FALSE");
+                        .HasDatabaseName("IX_Products_Slug");
 
                     b.ToTable("Products", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.ProductContractLock", b =>
@@ -346,7 +342,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(18, 4)
@@ -364,8 +362,6 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                         .HasDatabaseName("IX_ProductContractLocks_CustomerOrgId_ProductId");
 
                     b.ToTable("ProductContractLocks", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.ProductImage", b =>
@@ -390,7 +386,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.Property<string>("Url")
                         .IsRequired()
@@ -402,8 +400,6 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                     b.HasIndex("ProductId");
 
                     b.ToTable("ProductImages", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.ProductTranslation", b =>
@@ -431,7 +427,9 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
 
                     b.HasKey("Id");
 
@@ -440,8 +438,6 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                         .HasDatabaseName("IX_ProductTranslations_ProductId_Culture");
 
                     b.ToTable("ProductTranslations", "catalog");
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.PriceListLine", b =>

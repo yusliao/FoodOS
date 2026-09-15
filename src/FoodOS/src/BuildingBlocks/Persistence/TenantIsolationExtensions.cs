@@ -1,6 +1,8 @@
 using Finbuckle.MultiTenant.EntityFrameworkCore.Extensions;
 using FSH.Framework.Core.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using FSH.Framework.Shared.Multitenancy;
 
 namespace FSH.Framework.Persistence;
 
@@ -17,6 +19,44 @@ public static class TenantIsolationExtensions
     /// <summary>Finbuckle's per-entity annotation key. Reading this lets us skip
     /// entities that already opted in via explicit <c>builder.IsMultiTenant()</c>.</summary>
     private const string FinbuckleMultiTenantAnnotation = "Finbuckle:MultiTenant";
+
+    public static void ConfigureOperatorOwnership(this ModelBuilder modelBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
+                     .Where(type => type.BaseType is null
+                         && typeof(IOperatorOwnedEntity).IsAssignableFrom(type.ClrType)))
+        {
+            var builder = modelBuilder.Entity(entityType.ClrType);
+            builder.Property<string>("TenantId")
+                .IsRequired()
+                .HasDefaultValue(MultitenancyConstants.Root.Id);
+
+            var tenantProperty = entityType.FindProperty("TenantId")!;
+            var uniqueIndexes = entityType.GetIndexes()
+                .Where(index => index.IsUnique && !index.Properties.Contains(tenantProperty))
+                .ToList();
+            foreach (var index in uniqueIndexes)
+            {
+                var propertyNames = index.Properties.Select(property => property.Name)
+                    .Append(tenantProperty.Name)
+                    .ToArray();
+                var databaseName = index.GetDatabaseName();
+                var filter = index.GetFilter();
+                entityType.RemoveIndex(index);
+                var rebuilt = builder.HasIndex(propertyNames).IsUnique();
+                if (!string.IsNullOrWhiteSpace(databaseName))
+                {
+                    rebuilt.HasDatabaseName(databaseName);
+                }
+                if (!string.IsNullOrWhiteSpace(filter))
+                {
+                    rebuilt.HasFilter(filter);
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// Iterates every non-owned entity in <paramref name="modelBuilder"/> and

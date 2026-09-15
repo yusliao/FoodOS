@@ -2,7 +2,7 @@ using FSH.Framework.Core.Domain;
 
 namespace FSH.Modules.Warehouse.Domain;
 
-public sealed class StockPlacement : BaseEntity<Guid>
+public sealed class StockPlacement : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid LotId { get; private set; }
     public Guid LocationId { get; private set; }

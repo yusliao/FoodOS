@@ -4,7 +4,7 @@ using FSH.Framework.Core.Exceptions;
 
 namespace FSH.Modules.Logistics.Domain;
 
-public sealed class ShipmentStop : BaseEntity<Guid>
+public sealed class ShipmentStop : BaseEntity<Guid>, IOperatorOwnedEntity
 {
     public Guid ShipmentId { get; private set; }
     public Guid StoreId { get; private set; }

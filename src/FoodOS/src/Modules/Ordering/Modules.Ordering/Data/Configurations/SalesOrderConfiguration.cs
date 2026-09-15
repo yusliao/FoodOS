@@ -11,6 +11,8 @@ public sealed class SalesOrderConfiguration : IEntityTypeConfiguration<SalesOrde
         ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("SalesOrders");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.CustomerTenantId).HasMaxLength(64);
+        builder.HasIndex(x => new { x.CustomerTenantId, x.StoreId, x.Status });
         builder.Property(x => x.Number).IsRequired().HasMaxLength(32);
         builder.HasIndex(x => x.Number).IsUnique();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
