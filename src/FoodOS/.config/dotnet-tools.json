@@ -15,6 +15,13 @@
         "fsh"
       ],
       "rollForward": false
+    },
+    "cwm.roslynnavigator": {
+      "version": "0.8.0",
+      "commands": [
+        "cwm-roslyn-navigator"
+      ],
+      "rollForward": false
     }
   }
 }

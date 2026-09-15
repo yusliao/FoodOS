@@ -17,6 +17,7 @@ import {
   type TenantThemeDto,
 } from "@/api/tenants";
 import { ApiRequestError } from "@/lib/api-client";
+import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
 
 /**
@@ -33,6 +34,7 @@ import { cn } from "@/lib/cn";
  * are rarely tweaked in practice. Wire them up here if the need lands.
  */
 export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
+  const t = useT();
   const queryClient = useQueryClient();
 
   const themeQueryKey = useMemo(
@@ -62,39 +64,39 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
   const saveMutation = useMutation({
     mutationFn: (theme: TenantThemeDto) => updateTenantTheme(tenantId, theme),
     onSuccess: () => {
-      toast.success("Branding saved");
+      toast.success(t("tenants.brandingSaved"));
       void queryClient.invalidateQueries({ queryKey: themeQueryKey });
     },
     onError: (err) =>
-      toast.error("Save failed", { description: apiErr(err) }),
+      toast.error(t("tenants.saveFailed"), { description: apiErr(err, t) }),
   });
 
   const resetMutation = useMutation({
     mutationFn: () => resetTenantTheme(tenantId),
     onSuccess: () => {
-      toast.success("Branding reset to defaults");
+      toast.success(t("tenants.brandingReset"));
       void queryClient.invalidateQueries({ queryKey: themeQueryKey });
     },
     onError: (err) =>
-      toast.error("Reset failed", { description: apiErr(err) }),
+      toast.error(t("tenants.resetFailed"), { description: apiErr(err, t) }),
   });
 
   if (themeQuery.isLoading) {
     return (
       <SettingsSection
-        title="Branding"
+        title={t("tenants.branding")}
         icon={Palette}
-        description="Operator-controlled colors + brand assets that drive this tenant's UI."
+        description={t("tenants.brandingLoadDesc")}
       >
-        <LoadingRow label="Loading branding" />
+        <LoadingRow label={t("tenants.loadingBranding")} />
       </SettingsSection>
     );
   }
 
   if (themeQuery.isError) {
     return (
-      <SettingsSection title="Branding" icon={Palette}>
-        <ErrorBand message={apiErr(themeQuery.error)} />
+      <SettingsSection title={t("tenants.branding")} icon={Palette}>
+        <ErrorBand message={apiErr(themeQuery.error, t)} />
       </SettingsSection>
     );
   }
@@ -116,12 +118,12 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
       <div className="flex items-center gap-2">
         {draft.isDefault && !dirty && (
           <Badge variant="outline" className="font-mono uppercase tracking-[0.14em]">
-            default
+            {t("tenants.default")}
           </Badge>
         )}
         {dirty && (
           <Badge variant="warning" className="font-mono uppercase tracking-[0.14em]">
-            unsaved
+            {t("tenants.unsaved")}
           </Badge>
         )}
       </div>
@@ -131,10 +133,10 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
           variant="ghost"
           onClick={() => resetMutation.mutate()}
           disabled={resetMutation.isPending || saveMutation.isPending}
-          aria-label="Reset branding to defaults"
+          aria-label={t("tenants.resetDefaults")}
         >
           <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-          {resetMutation.isPending ? "Resetting…" : "Reset to defaults"}
+          {resetMutation.isPending ? t("tenants.resetting") : t("tenants.resetDefaults")}
         </Button>
         <Button
           type="button"
@@ -147,7 +149,7 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
           ) : (
             <Save className="mr-1.5 h-3.5 w-3.5" />
           )}
-          {saveMutation.isPending ? "Saving…" : "Save branding"}
+          {saveMutation.isPending ? t("tenants.saving") : t("tenants.saveBranding")}
         </Button>
       </div>
     </div>
@@ -155,23 +157,23 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
 
   return (
     <SettingsSection
-      title="Branding"
+      title={t("tenants.branding")}
       icon={Palette}
-      description="Theme tokens consumed by this tenant's apps on sign-in. Live preview reflects the primary action with the chosen palette."
+      description={t("tenants.brandingDesc")}
       footer={footer}
     >
       <div className="space-y-6">
-        <ThemePreview palette={draft.lightPalette} label="Light preview" />
+        <ThemePreview palette={draft.lightPalette} label={t("tenants.lightPreview")} />
 
         <div className="grid gap-5 lg:grid-cols-2">
           <PaletteEditor
-            title="Light palette"
+            title={t("tenants.lightPalette")}
             palette={draft.lightPalette}
             onChange={onLight}
             defaults={DEFAULT_LIGHT_PALETTE}
           />
           <PaletteEditor
-            title="Dark palette"
+            title={t("tenants.darkPalette")}
             palette={draft.darkPalette}
             onChange={onDark}
             defaults={DEFAULT_DARK_PALETTE}
@@ -188,16 +190,16 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
 // Palette editor — color swatches paired with hex inputs
 // ─────────────────────────────────────────────────────────────────────────
 
-const PALETTE_FIELDS: ReadonlyArray<{ key: keyof PaletteDto; label: string }> = [
-  { key: "primary", label: "Primary" },
-  { key: "secondary", label: "Secondary" },
-  { key: "tertiary", label: "Tertiary" },
-  { key: "background", label: "Background" },
-  { key: "surface", label: "Surface" },
-  { key: "error", label: "Error" },
-  { key: "warning", label: "Warning" },
-  { key: "success", label: "Success" },
-  { key: "info", label: "Info" },
+const PALETTE_FIELDS: ReadonlyArray<{ key: keyof PaletteDto; labelKey: string }> = [
+  { key: "primary", labelKey: "tenants.primary" },
+  { key: "secondary", labelKey: "tenants.secondary" },
+  { key: "tertiary", labelKey: "tenants.tertiary" },
+  { key: "background", labelKey: "tenants.background" },
+  { key: "surface", labelKey: "tenants.surface" },
+  { key: "error", labelKey: "tenants.error" },
+  { key: "warning", labelKey: "tenants.warning" },
+  { key: "success", labelKey: "tenants.success" },
+  { key: "info", labelKey: "tenants.info" },
 ];
 
 function PaletteEditor({
@@ -211,6 +213,7 @@ function PaletteEditor({
   onChange: (next: Partial<PaletteDto>) => void;
   defaults: PaletteDto;
 }) {
+  const t = useT();
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]">
       <div className="flex items-center justify-between border-b border-[oklch(from_var(--color-border)_l_c_h_/_0.5)] px-4 py-2.5">
@@ -223,14 +226,14 @@ function PaletteEditor({
           onClick={() => onChange(defaults)}
         >
           <RotateCcw className="h-2.5 w-2.5" aria-hidden />
-          Reset palette
+          {t("tenants.resetPalette")}
         </button>
       </div>
       <div className="grid gap-2 p-4 sm:grid-cols-2">
-        {PALETTE_FIELDS.map(({ key, label }) => (
+        {PALETTE_FIELDS.map(({ key, labelKey }) => (
           <ColorRow
             key={key}
-            label={label}
+            label={t(labelKey)}
             value={palette[key]}
             onChange={(v) => onChange({ [key]: v } as Partial<PaletteDto>)}
           />
@@ -249,6 +252,7 @@ function ColorRow({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const t = useT();
   const valid = /^#[0-9a-f]{6}$/i.test(value);
   return (
     <div className="flex items-center gap-2.5">
@@ -256,14 +260,14 @@ function ColorRow({
       <label
         className="relative grid h-8 w-8 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-lg shadow-sm ring-1 ring-inset ring-[var(--color-border)]"
         style={{ backgroundColor: valid ? value : undefined }}
-        title={`Pick ${label} color`}
+        title={t("tenants.pickColor").replace("{label}", label)}
       >
         <input
           type="color"
           value={valid ? value : "#000000"}
           onChange={(e) => onChange(e.target.value.toUpperCase())}
           className="sr-only"
-          aria-label={`${label} color`}
+          aria-label={t("tenants.colorAria").replace("{label}", label)}
         />
       </label>
       <div className="min-w-0 flex-1">
@@ -297,21 +301,21 @@ function BrandAssetsEditor({
   assets: BrandAssetsDto;
   onChange: (next: Partial<BrandAssetsDto>) => void;
 }) {
+  const t = useT();
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]">
       <div className="border-b border-[oklch(from_var(--color-border)_l_c_h_/_0.5)] px-4 py-2.5">
         <h4 className="text-[12.5px] font-semibold tracking-tight text-[var(--color-foreground)]">
-          Brand assets
+          {t("tenants.brandAssets")}
         </h4>
         <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--color-muted-foreground)]">
-          URLs to your hosted brand assets. Upload via the Files module first,
-          then paste the resulting public URL here.
+          {t("tenants.brandAssetsHint")}
         </p>
       </div>
       <div className="space-y-4 p-4">
         <AssetField
           id="logo-url"
-          label="Logo URL"
+          label={t("tenants.logoUrl")}
           value={assets.logoUrl ?? ""}
           onChange={(v) =>
             onChange({ logoUrl: v || null, deleteLogo: v.length === 0 })
@@ -319,7 +323,7 @@ function BrandAssetsEditor({
         />
         <AssetField
           id="logo-dark-url"
-          label="Logo URL (dark mode)"
+          label={t("tenants.logoDarkUrl")}
           value={assets.logoDarkUrl ?? ""}
           onChange={(v) =>
             onChange({ logoDarkUrl: v || null, deleteLogoDark: v.length === 0 })
@@ -327,7 +331,7 @@ function BrandAssetsEditor({
         />
         <AssetField
           id="favicon-url"
-          label="Favicon URL"
+          label={t("tenants.faviconUrl")}
           value={assets.faviconUrl ?? ""}
           onChange={(v) =>
             onChange({ faviconUrl: v || null, deleteFavicon: v.length === 0 })
@@ -384,6 +388,7 @@ function AssetField({
 // ─────────────────────────────────────────────────────────────────────────
 
 function ThemePreview({ palette, label }: { palette: PaletteDto; label: string }) {
+  const t = useT();
   return (
     <div
       className="overflow-hidden rounded-xl border border-[var(--color-border)]"
@@ -407,7 +412,7 @@ function ThemePreview({ palette, label }: { palette: PaletteDto; label: string }
           className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em]"
           style={{ backgroundColor: palette.success, color: palette.surface }}
         >
-          live
+          {t("tenants.live")}
         </span>
       </div>
 
@@ -422,21 +427,20 @@ function ThemePreview({ palette, label }: { palette: PaletteDto; label: string }
               className="text-[13px] font-semibold"
               style={{ color: palette.secondary }}
             >
-              Sample tenant page
+              {t("tenants.samplePage")}
             </span>
             <span
               className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em]"
               style={{ backgroundColor: palette.success, color: palette.surface }}
             >
-              active
+              {t("chrome.active")}
             </span>
           </div>
           <p
             className="mb-4 text-[12.5px] leading-relaxed"
             style={{ color: palette.secondary, opacity: 0.72 }}
           >
-            A short paragraph rendered with the chosen body color over the chosen
-            surface, on the chosen page background. Action buttons use the primary token.
+            {t("tenants.brandingDesc")}
           </p>
           <div className="flex flex-wrap gap-2">
             {/* Primary action */}
@@ -444,7 +448,7 @@ function ThemePreview({ palette, label }: { palette: PaletteDto; label: string }
               className="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium shadow-sm"
               style={{ backgroundColor: palette.primary, color: palette.surface }}
             >
-              Primary action
+              {t("tenants.primaryAction")}
             </span>
             {/* Outline secondary */}
             <span
@@ -455,21 +459,21 @@ function ThemePreview({ palette, label }: { palette: PaletteDto; label: string }
                 backgroundColor: "transparent",
               }}
             >
-              Secondary
+              {t("tenants.secondary")}
             </span>
             {/* Warning pill */}
             <span
               className="inline-flex items-center rounded-lg px-2.5 py-1 text-[10.5px] font-mono font-medium uppercase tracking-[0.1em]"
               style={{ backgroundColor: palette.warning, color: palette.background }}
             >
-              warn
+              {t("tenants.warn")}
             </span>
             {/* Error pill */}
             <span
               className="inline-flex items-center rounded-lg px-2.5 py-1 text-[10.5px] font-mono font-medium uppercase tracking-[0.1em]"
               style={{ backgroundColor: palette.error, color: palette.surface }}
             >
-              error
+              {t("tenants.error")}
             </span>
           </div>
         </div>
@@ -478,10 +482,13 @@ function ThemePreview({ palette, label }: { palette: PaletteDto; label: string }
   );
 }
 
-function apiErr(err: unknown): string {
+function apiErr(
+  err: unknown,
+  t?: (key: string, fallback?: string) => string,
+): string {
   if (err instanceof ApiRequestError) {
     return err.problem?.detail ?? err.problem?.title ?? err.message;
   }
   if (err instanceof Error) return err.message;
-  return "Unknown error";
+  return t ? t("tenants.unknownError") : "Unknown error";
 }

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,17 +19,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ApiRequestError } from "@/lib/api-client";
+import { useT } from "@/i18n/locale-provider";
 
 // A `type="date"` input yields a `YYYY-MM-DD` string. zod validates the shape
 // and that it parses to a real calendar date.
-const schema = z.object({
-  validUpto: z
-    .string()
-    .min(1, "Pick a date.")
-    .refine((v) => !Number.isNaN(new Date(v).getTime()), "Enter a valid date."),
-});
+function makeAdjustSchema(t: (key: string, fallback?: string) => string) {
+  return z.object({
+    validUpto: z
+      .string()
+      .min(1, t("tenants.pickDate"))
+      .refine((v) => !Number.isNaN(new Date(v).getTime()), t("tenants.invalidDate")),
+  });
+}
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<ReturnType<typeof makeAdjustSchema>>;
 
 function describe(err: unknown, fallback: string): string {
   if (err instanceof ApiRequestError) return err.problem?.detail ?? err.problem?.title ?? err.message;
@@ -67,7 +70,9 @@ export function AdjustValidityDialog({
   tenantId: string;
   validUpto?: string;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
+  const schema = useMemo(() => makeAdjustSchema(t), [t]);
 
   const {
     register,
@@ -88,14 +93,14 @@ export function AdjustValidityDialog({
     // Pass the date via mutate(arg) — never close over form state at submit time.
     mutationFn: (value: string) => adjustTenantValidity(tenantId, new Date(value).toISOString()),
     onSuccess: (result) => {
-      toast.success("Validity adjusted", {
-        description: `Valid until ${formatDate(result.validUpto)}. No invoice was issued.`,
+      toast.success(t("tenants.validityAdjusted"), {
+        description: t("tenants.adjustedUntil").replace("{date}", formatDate(result.validUpto)),
       });
       queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
       handleClose();
     },
-    onError: (err) => toast.error("Adjust failed", { description: describe(err, "Could not adjust validity.") }),
+    onError: (err) => toast.error(t("tenants.adjustFailed"), { description: describe(err, t("tenants.adjustFailedFallback")) }),
   });
 
   function handleClose() {
@@ -125,13 +130,10 @@ export function AdjustValidityDialog({
             >
               <CalendarCog className="h-[18px] w-[18px]" />
             </span>
-            <DialogTitle className="text-[16px]">Adjust validity</DialogTitle>
+            <DialogTitle className="text-[16px]">{t("tenants.adjustValidity")}</DialogTitle>
           </div>
           <DialogDescription className="mt-1">
-            Set this tenant's expiry date directly — an operator override with{" "}
-            <strong className="text-[var(--color-foreground)]">no invoice</strong>. Use for comps or
-            corrections; renewals that should bill belong in Renew. Currently valid until{" "}
-            {formatDate(validUpto)}.
+            {t("tenants.adjustDesc").replace("{date}", formatDate(validUpto))}
           </DialogDescription>
         </DialogHeader>
 
@@ -139,9 +141,9 @@ export function AdjustValidityDialog({
           <DialogBody className="space-y-4">
             <Field
               id="av-validUpto"
-              label="Valid until"
+              label={t("tenants.validUntilLabel")}
               required
-              hint="Backdating is allowed. No invoice is issued for an adjustment."
+              hint={t("tenants.adjustHint")}
               error={errors.validUpto?.message}
             >
               <Input id="av-validUpto" type="date" {...register("validUpto")} />
@@ -150,10 +152,10 @@ export function AdjustValidityDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
-              Cancel
+              {t("chrome.cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : "Adjust validity"}
+              {submitting ? t("tenants.saving") : t("tenants.adjustValidity")}
             </Button>
           </DialogFooter>
         </form>

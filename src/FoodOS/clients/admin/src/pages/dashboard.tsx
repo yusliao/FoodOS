@@ -14,6 +14,7 @@ import { getOpsKpis } from "@/api/ops";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EntityPageHeader, Stat, StatStrip, ToneIconTile, type ToneIconTileTone } from "@/components/list";
 import { useAuth } from "@/auth/use-auth";
+import { useT } from "@/i18n/locale-provider";
 import { OpsPermissions } from "@/lib/permissions";
 import { cn } from "@/lib/cn";
 
@@ -23,6 +24,7 @@ import { cn } from "@/lib/cn";
  * the rest of the app. No fake "Coming soon" filler.
  */
 export function DashboardPage() {
+  const t = useT();
   const { user } = useAuth();
 
   const tenantsQuery = useQuery({
@@ -61,72 +63,75 @@ export function DashboardPage() {
           icon={LayoutDashboard}
           title={
             <>
-              Overview{firstName ? (
+              {t("dashboard.title")}
+              {firstName ? (
                 <span className="text-[var(--color-muted-foreground)]">, {firstName}</span>
               ) : null}
             </>
           }
           tone="primary"
-          description="Operate every tenant on this instance — identity, multitenancy, billing, and the rest of the system surface."
+          description={t("dashboard.description")}
         />
       </div>
 
       {canViewOps ? (
         <section className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-            Operations
+            {t("dashboard.operations")}
           </p>
           <StatStrip cols={4} className="fsh-enter fsh-enter-2">
             <Stat
-              label="Fulfillment"
+              label={t("dashboard.fulfillment")}
               value={
                 kpisQuery.isLoading ? (
                   <Skeleton className="h-7 w-16" />
                 ) : (
-                  formatRate(kpisQuery.data?.fulfillmentRate)
+                  formatRate(kpisQuery.data?.fulfillmentRate, t)
                 )
               }
               hint={
                 kpisQuery.data
-                  ? `${kpisQuery.data.fulfilledOrderCount}/${kpisQuery.data.committedOrderCount} received`
-                  : "received / committed orders"
+                  ? t("dashboard.fulfillmentHint")
+                      .replace("{fulfilled}", String(kpisQuery.data.fulfilledOrderCount))
+                      .replace("{committed}", String(kpisQuery.data.committedOrderCount))
+                  : t("dashboard.fulfillmentHintEmpty")
               }
               tone="success"
             />
             <Stat
-              label="Stockout"
+              label={t("dashboard.stockout")}
               value={
                 kpisQuery.isLoading ? (
                   <Skeleton className="h-7 w-16" />
                 ) : (
-                  formatRate(kpisQuery.data?.stockoutRate)
+                  formatRate(kpisQuery.data?.stockoutRate, t)
                 )
               }
-              hint="unreserved share of ordered qty"
+              hint={t("dashboard.stockoutHint")}
               tone={(kpisQuery.data?.stockoutRate ?? 0) > 0 ? "warning" : "default"}
             />
             <Stat
-              label="Shrinkage"
+              label={t("dashboard.shrinkage")}
               value={
                 kpisQuery.isLoading ? (
                   <Skeleton className="h-7 w-16" />
                 ) : (
-                  formatRate(kpisQuery.data?.shrinkageRate)
+                  formatRate(kpisQuery.data?.shrinkageRate, t)
                 )
               }
-              hint="isolate + shrink vs inbound"
+              hint={t("dashboard.shrinkageHint")}
               tone={(kpisQuery.data?.shrinkageRate ?? 0) > 0 ? "warning" : "default"}
             />
             <Stat
-              label="Temperature"
+              label={t("dashboard.temperature")}
               value={
                 kpisQuery.isLoading ? (
                   <Skeleton className="h-7 w-16" />
                 ) : (
-                  formatRate(kpisQuery.data?.temperatureComplianceRate)
+                  formatRate(kpisQuery.data?.temperatureComplianceRate, t)
                 )
               }
-              hint="N/A until MQTT ingest (P1)"
+              hint={t("dashboard.temperatureHint")}
             />
           </StatStrip>
         </section>
@@ -135,7 +140,7 @@ export function DashboardPage() {
       {/* ── KPI stat strip ───────────────────────────────────────────── */}
       <StatStrip cols={4} className="fsh-enter fsh-enter-2">
         <Stat
-          label="Tenants"
+          label={t("nav.items.tenants")}
           value={
             tenantsQuery.isLoading ? (
               <Skeleton className="h-7 w-16" />
@@ -143,10 +148,10 @@ export function DashboardPage() {
               tenantsTotal?.toLocaleString() ?? "—"
             )
           }
-          hint="registered on this instance"
+          hint={t("dashboard.tenantsHint")}
         />
         <Stat
-          label="Plans"
+          label={t("dashboard.plans")}
           value={
             plansQuery.isLoading ? (
               <Skeleton className="h-7 w-16" />
@@ -154,10 +159,10 @@ export function DashboardPage() {
               plans.length.toLocaleString()
             )
           }
-          hint={`${activePlans} active`}
+          hint={t("dashboard.plansActive").replace("{n}", String(activePlans))}
         />
         <Stat
-          label="Invoices"
+          label={t("dashboard.invoices")}
           value={
             invoicesQuery.isLoading ? (
               <Skeleton className="h-7 w-16" />
@@ -167,12 +172,12 @@ export function DashboardPage() {
           }
           hint={
             invoicesPage
-              ? `${invoicesPage.totalCount.toLocaleString()} total ledger`
-              : "loading…"
+              ? t("dashboard.invoicesHint").replace("{n}", invoicesPage.totalCount.toLocaleString())
+              : t("dashboard.loading")
           }
         />
         <Stat
-          label="Outstanding"
+          label={t("dashboard.outstanding")}
           value={
             invoicesQuery.isLoading ? (
               <Skeleton className="h-7 w-16" />
@@ -180,7 +185,7 @@ export function DashboardPage() {
               outstandingCount.toLocaleString()
             )
           }
-          hint="issued, awaiting payment"
+          hint={t("dashboard.outstandingHint")}
           tone={outstandingCount > 0 ? "warning" : "default"}
         />
       </StatStrip>
@@ -188,36 +193,36 @@ export function DashboardPage() {
       {/* ── Quick pivots ─────────────────────────────────────────────── */}
       <section className="fsh-enter fsh-enter-3 space-y-3">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-          Entry points
+          {t("dashboard.entryPoints")}
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <PivotCard
             to="/tenants"
             icon={Building2}
             tone="info"
-            title="Tenants"
-            description="Provision, suspend, and inspect tenants."
+            title={t("nav.items.tenants")}
+            description={t("dashboard.tenantsDesc")}
           />
           <PivotCard
             to="/users"
             icon={UsersRound}
             tone="primary"
-            title="Users"
-            description="Root-tenant operators and role management."
+            title={t("nav.items.users")}
+            description={t("dashboard.usersDesc")}
           />
           <PivotCard
             to="/billing/plans"
             icon={Receipt}
             tone="success"
-            title="Billing"
-            description="Plans, subscriptions, invoices and pricing."
+            title={t("nav.items.billing")}
+            description={t("dashboard.billingDesc")}
           />
           <PivotCard
             to="/billing/invoices"
             icon={FileText}
             tone="warning"
-            title="Invoices"
-            description="Cross-tenant ledger. Issue, mark paid, void."
+            title={t("dashboard.invoices")}
+            description={t("dashboard.invoicesDesc")}
           />
         </div>
       </section>
@@ -268,9 +273,12 @@ function PivotCard({
   );
 }
 
-function formatRate(value: number | null | undefined) {
+function formatRate(
+  value: number | null | undefined,
+  t: (key: string, fallback?: string) => string,
+) {
   if (value === null || value === undefined) {
-    return "N/A";
+    return t("dashboard.na");
   }
   return `${(value * 100).toFixed(1)}%`;
 }

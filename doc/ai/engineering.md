@@ -2,6 +2,8 @@
 
 以下源码路径相对工程根目录 `src/FoodOS`。这是针对本地项目整理的约定，不是上游 main 的完整镜像。
 
+首次跨模块工作先按需读 [源码导读](project-tour.md)，其中说明实际订单/追溯归属和待验证的失败恢复边界。可使用已配置的 [Roslyn MCP](roslyn-mcp.md) 查询符号和引用；工具不可用时继续使用 rg。
+
 ## 架构与功能切片
 
 - .NET 10、EF Core 10、PostgreSQL；具体包版本见 [中央依赖](../../src/FoodOS/src/Directory.Packages.props)，编译约束见 [构建配置](../../src/FoodOS/src/Directory.Build.props)。保留 `TreatWarningsAsErrors`，不要为通过构建随意关闭诊断。

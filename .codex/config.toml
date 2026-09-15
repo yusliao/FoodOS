@@ -1,0 +1,8 @@
+# FoodOS local Roslyn MCP. Paths target this checkout; update cwd after relocating it.
+[mcp_servers.foodos_roslyn]
+command = "dotnet"
+args = ["tool", "run", "cwm-roslyn-navigator", "--", "--solution", "src/FoodOS.slnx"]
+cwd = "D:/MyDomain/src/sally/FoodOS/src/FoodOS"
+startup_timeout_sec = 60
+tool_timeout_sec = 120
+enabled = true

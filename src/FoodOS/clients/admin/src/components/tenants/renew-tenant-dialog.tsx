@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ApiRequestError } from "@/lib/api-client";
+import { useT } from "@/i18n/locale-provider";
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -48,6 +49,7 @@ export function RenewTenantDialog({
   currentPlanKey?: string | null;
   validUpto?: string;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [planKey, setPlanKey] = useState<string>("");
 
@@ -65,7 +67,7 @@ export function RenewTenantDialog({
 
   const options: SelectOption[] = (plansQuery.data ?? []).map((p) => ({
     value: p.key,
-    label: p.key === currentPlanKey ? `${p.name} (current)` : p.name,
+    label: p.key === currentPlanKey ? t("tenants.currentPlan").replace("{name}", p.name) : p.name,
     hint: `${p.interval} · ${formatMoney(planTermPrice(p), p.currency)}`,
   }));
 
@@ -73,8 +75,10 @@ export function RenewTenantDialog({
     mutationFn: (key: string) => renewTenant(tenantId, key || null),
     onSuccess: (result) => {
       toast.success(
-        result.planChanged ? `Plan changed to ${result.planKey}` : "Tenant renewed",
-        { description: `Valid until ${formatDate(result.validUpto)}. A term invoice was issued.` },
+        result.planChanged
+          ? t("tenants.planChanged").replace("{plan}", result.planKey)
+          : t("tenants.tenantRenewed"),
+        { description: t("tenants.renewedUntil").replace("{date}", formatDate(result.validUpto)) },
       );
       queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
@@ -85,7 +89,7 @@ export function RenewTenantDialog({
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : (err as Error).message;
-      toast.error("Renew failed", { description: detail });
+      toast.error(t("tenants.renewFailed"), { description: detail });
     },
   });
 
@@ -104,23 +108,22 @@ export function RenewTenantDialog({
             >
               <CalendarClock className="h-[18px] w-[18px]" />
             </span>
-            <DialogTitle className="text-[16px]">Renew subscription</DialogTitle>
+            <DialogTitle className="text-[16px]">{t("tenants.renewSub")}</DialogTitle>
           </div>
           <DialogDescription className="mt-1">
-            Extend the tenant by one plan term (stacking on remaining time) or switch plans. Currently
-            valid until {formatDate(validUpto)}.
+            {t("tenants.renewDesc").replace("{date}", formatDate(validUpto))}
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-4">
           <Field
             id="renew-plan"
-            label="Plan"
+            label={t("tenants.plan")}
             required
             hint={
               planChanged
-                ? "Switching plans — the new plan applies from this renewal forward."
-                : "Renewing the current plan extends validity by one term."
+                ? t("tenants.switchPlanHint")
+                : t("tenants.samePlanHint")
             }
           >
             <Select
@@ -128,7 +131,7 @@ export function RenewTenantDialog({
               value={planKey}
               onValueChange={setPlanKey}
               options={options}
-              emptyLabel={plansQuery.isLoading ? "Loading plans…" : options.length === 0 ? "No active plans" : undefined}
+              emptyLabel={plansQuery.isLoading ? t("tenants.loadingPlans") : options.length === 0 ? t("tenants.noActivePlans") : undefined}
               disabled={plansQuery.isLoading || options.length === 0}
             />
           </Field>
@@ -136,10 +139,10 @@ export function RenewTenantDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
-            Cancel
+            {t("chrome.cancel")}
           </Button>
           <Button type="button" onClick={() => mutation.mutate(planKey)} disabled={mutation.isPending || !planKey}>
-            {mutation.isPending ? "Renewing…" : planChanged ? "Change plan & renew" : "Renew"}
+            {mutation.isPending ? t("tenants.renewing") : planChanged ? t("tenants.changeAndRenew") : t("tenants.renew")}
           </Button>
         </DialogFooter>
       </DialogContent>

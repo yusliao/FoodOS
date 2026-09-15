@@ -9,6 +9,7 @@ import { EntityPageHeader, ErrorBand } from "@/components/list";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { CreateTenantDialog } from "@/components/tenants/create-tenant-dialog";
+import { useT } from "@/i18n/locale-provider";
 import { useAuth } from "@/auth/use-auth";
 import { MultitenancyPermissions } from "@/lib/permissions";
 
@@ -23,6 +24,7 @@ function formatDate(value: string): string {
 }
 
 export function TenantsListPage() {
+  const t = useT();
   const [pageNumber, setPageNumber] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const navigate = useNavigate();
@@ -43,22 +45,25 @@ export function TenantsListPage() {
   const pageBadge = useMemo(() => {
     if (!data) return "—";
     const p = String(data.pageNumber).padStart(2, "0");
-    const t = String(Math.max(data.totalPages, 1)).padStart(2, "0");
-    return `Page ${p} of ${t}`;
-  }, [data]);
+    const tp = String(Math.max(data.totalPages, 1)).padStart(2, "0");
+    return t("tenants.pageOf").replace("{p}", p).replace("{t}", tp);
+  }, [data, t]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Building2}
-        title="Registry"
+        title={t("tenants.registry")}
         tone="info"
         total={data?.totalCount ?? null}
-        unit="tenant"
+        unit={t("tenants.unit")}
         description={
           data
-            ? `${data.totalCount} ${data.totalCount === 1 ? "tenant" : "tenants"} registered on this instance.`
-            : "Loading the registry…"
+            ? t(data.totalCount === 1 ? "tenants.countOne" : "tenants.countMany").replace(
+                "{n}",
+                String(data.totalCount),
+              )
+            : t("tenants.loadingRegistry")
         }
       >
         {canCreateTenant && (
@@ -66,7 +71,7 @@ export function TenantsListPage() {
             onClick={() => setCreateOpen(true)}
             className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
           >
-            <Plus className="size-4" /> New tenant
+            <Plus className="size-4" /> {t("tenants.newTenant")}
           </Button>
         )}
       </EntityPageHeader>
@@ -76,7 +81,7 @@ export function TenantsListPage() {
           message={
             query.error instanceof ApiRequestError
               ? query.error.problem?.detail ?? query.error.message
-              : "Failed to load tenants."
+              : t("tenants.loadFailed")
           }
         />
       )}
@@ -86,15 +91,15 @@ export function TenantsListPage() {
           role="status"
           className="py-12 text-center font-mono text-sm uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]"
         >
-          Loading…
+          {t("tenants.loading")}
         </div>
       )}
 
       {!query.isLoading && items.length === 0 && !query.isError && (
         <div className="py-16 text-center">
-          <p className="font-display text-2xl text-[var(--color-foreground)]">No tenants yet.</p>
+          <p className="font-display text-2xl text-[var(--color-foreground)]">{t("tenants.emptyTitle")}</p>
           <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-            Provision the first tenant to get started.
+            {t("tenants.emptyBody")}
           </p>
         </div>
       )}
@@ -102,7 +107,9 @@ export function TenantsListPage() {
       {items.length > 0 && (
         <div>
           <p className="mb-3 text-[12px] font-medium text-[var(--color-muted-foreground)]">
-            {data?.totalCount ?? 0} tenant{(data?.totalCount ?? 0) !== 1 ? "s" : ""} registered
+            {(data?.totalCount ?? 0) === 1
+              ? t("tenants.registeredCountOne").replace("{n}", String(data?.totalCount ?? 0))
+              : t("tenants.registeredCount").replace("{n}", String(data?.totalCount ?? 0))}
           </p>
 
           {/* Mobile card list */}
@@ -122,13 +129,13 @@ export function TenantsListPage() {
               className={`grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-muted)]/40 px-4 py-2.5 ${DESKTOP_COLS}`}
             >
               <span className="text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Tenant
+                {t("tenants.colTenant")}
               </span>
               <span className="hidden text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] lg:block">
-                Admin email
+                {t("tenants.colAdminEmail")}
               </span>
               <span className="text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Status
+                {t("tenants.colStatus")}
               </span>
               <span />
             </div>
@@ -160,7 +167,7 @@ export function TenantsListPage() {
               onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
               className="h-9 rounded-lg px-3 text-[13px]"
             >
-              <ChevronLeft className="mr-1 h-3.5 w-3.5" /> Previous
+              <ChevronLeft className="mr-1 h-3.5 w-3.5" /> {t("common.previous")}
             </Button>
             <Button
               variant="outline"
@@ -169,7 +176,7 @@ export function TenantsListPage() {
               onClick={() => setPageNumber((p) => p + 1)}
               className="h-9 rounded-lg px-3 text-[13px]"
             >
-              Next <ChevronRight className="ml-1 h-3.5 w-3.5" />
+              {t("common.next")} <ChevronRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
@@ -183,6 +190,7 @@ export function TenantsListPage() {
 // ─── Status pill ─────────────────────────────────────────────────────────
 
 function StatusPill({ active }: { active: boolean }) {
+  const t = useT();
   return (
     <span
       className={cn(
@@ -192,7 +200,7 @@ function StatusPill({ active }: { active: boolean }) {
           : "bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
       )}
     >
-      {active ? "Active" : "Inactive"}
+      {active ? t("chrome.active") : t("tenants.inactive")}
     </span>
   );
 }
@@ -200,12 +208,13 @@ function StatusPill({ active }: { active: boolean }) {
 // ─── Mobile card ───────────────────────────────────────────────────────────
 
 function TenantMobileCard({ tenant, onClick }: { tenant: TenantDto; onClick: () => void }) {
+  const t = useT();
   return (
     <li className="list-none">
       <button
         type="button"
         onClick={onClick}
-        aria-label={`Open tenant ${tenant.name}`}
+        aria-label={t("tenants.openTenant").replace("{name}", tenant.name)}
         className={cn(
           "group w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-left shadow-xs",
           "transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-accent)]",
@@ -241,6 +250,7 @@ function TenantMobileCard({ tenant, onClick }: { tenant: TenantDto; onClick: () 
 // ─── Desktop row ────────────────────────────────────────────────────────────
 
 function TenantDesktopRow({ tenant, onClick }: { tenant: TenantDto; onClick: () => void }) {
+  const t = useT();
   return (
     <li className="list-none">
       <button
@@ -259,7 +269,7 @@ function TenantDesktopRow({ tenant, onClick }: { tenant: TenantDto; onClick: () 
               {tenant.name}
             </span>
             <span className="block truncate font-mono text-[12px] text-[var(--color-muted-foreground)]">
-              {tenant.id} · valid {formatDate(tenant.validUpto)}
+              {tenant.id} · {t("tenants.validUntilShort").replace("{date}", formatDate(tenant.validUpto))}
             </span>
           </div>
         </div>
