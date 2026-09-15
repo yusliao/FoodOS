@@ -4,6 +4,7 @@ import { AlertTriangle, Clock, X } from "lucide-react";
 import { getMyStatus, type TenantStatusDto } from "@/api/billing";
 import { useAuth } from "@/auth/use-auth";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 // Days within which an "Active" subscription nearing its validUpto starts
 // surfacing the soft info bar.
@@ -50,7 +51,7 @@ function deriveBannerView(
       daysLeft: daysUntil(status.graceEndsUtc, now),
       graceEndsLabel: status.graceEndsUtc
         ? dateFmt.format(new Date(status.graceEndsUtc))
-        : "soon",
+        : "",
     };
   }
 
@@ -69,8 +70,8 @@ function deriveBannerView(
   return { kind: "none" };
 }
 
-function pluralizeDays(n: number): string {
-  return `${n} day${n === 1 ? "" : "s"}`;
+function pluralizeDays(t: (key: string) => string, n: number): string {
+  return (n === 1 ? t("expiry.day") : t("expiry.days")).replace("{n}", String(n));
 }
 
 /**
@@ -80,6 +81,7 @@ function pluralizeDays(n: number): string {
  * session — it reappears on reload while the condition still holds.
  */
 export function ExpiryBanner() {
+  const t = useT();
   const { user } = useAuth();
   const [dismissed, setDismissed] = useState(false);
 
@@ -108,11 +110,16 @@ export function ExpiryBanner() {
       ? "var(--color-warning)"
       : "var(--color-info)";
   const Icon = isExpired || isGrace ? AlertTriangle : Clock;
+  const graceDate = isGrace
+    ? view.graceEndsLabel || t("expiry.soon")
+    : "";
   const message = isExpired
-    ? "Your subscription has expired. Contact your operator to renew and restore full access."
+    ? t("expiry.expiredPinned")
     : isGrace
-      ? `Your subscription expired — ${pluralizeDays(view.daysLeft)} of grace left (until ${view.graceEndsLabel}). Contact your operator to renew.`
-      : `Your subscription expires in ${pluralizeDays(view.daysLeft)}.`;
+      ? t("expiry.expiredGrace")
+          .replace("{days}", pluralizeDays(t, view.daysLeft))
+          .replace("{date}", graceDate)
+      : t("expiry.nearing").replace("{days}", pluralizeDays(t, view.daysLeft));
 
   return (
     <div
@@ -150,8 +157,8 @@ export function ExpiryBanner() {
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          aria-label="Dismiss subscription notice"
-          title="Dismiss"
+          aria-label={t("expiry.dismissAria")}
+          title={t("expiry.dismiss")}
           className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-md transition-colors hover:bg-[oklch(from_var(--color-foreground)_l_c_h_/_0.06)]"
           style={{ color: tone }}
         >

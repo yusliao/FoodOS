@@ -20,6 +20,7 @@ import {
   type EntityStatusTone,
 } from "@/components/list";
 import { describe, formatDate, formatMoney } from "@/lib/list-helpers";
+import { useT } from "@/i18n/locale-provider";
 
 // ────────────────────────────────────────────────────────────────────
 // Helpers
@@ -47,6 +48,7 @@ function formatPeriod(year: number, month: number) {
 // ────────────────────────────────────────────────────────────────────
 
 export function InvoiceDetailPage() {
+  const t = useT();
   const { id = "" } = useParams<{ id: string }>();
 
   const query = useQuery({
@@ -59,7 +61,7 @@ export function InvoiceDetailPage() {
 
   return (
     <div className="pb-12">
-      <EntityDetailBack to="/invoices" label="Back to invoices" />
+      <EntityDetailBack to="/invoices" label={t("billing.back")} />
 
       {query.isError && (
         <div className="mb-5">
@@ -83,24 +85,25 @@ export function InvoiceDetailPage() {
 // ────────────────────────────────────────────────────────────────────
 
 function InvoiceBody({ invoice }: { invoice: InvoiceDto }) {
+  const t = useT();
   return (
     <div className="space-y-5">
       <InvoiceHeader invoice={invoice} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px]">
         {/* Left: line items + totals */}
-        <EntityDetailSection title="Line items" icon={FileText} padded={false}>
+        <EntityDetailSection title={t("billing.lineItems")} icon={FileText} padded={false}>
           <LineItemsTable invoice={invoice} />
         </EntityDetailSection>
 
         {/* Right: meta + dates + notes */}
         <aside className="space-y-5">
-          <EntityDetailSection title="Details" icon={Receipt}>
+          <EntityDetailSection title={t("billing.details")} icon={Receipt}>
             <DetailsBody invoice={invoice} />
           </EntityDetailSection>
 
           {invoice.notes && (
-            <EntityDetailSection title="Notes" icon={FileText}>
+            <EntityDetailSection title={t("billing.notes")} icon={FileText}>
               <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--color-foreground)]/90">
                 {invoice.notes}
               </p>
@@ -113,6 +116,7 @@ function InvoiceBody({ invoice }: { invoice: InvoiceDto }) {
 }
 
 function InvoiceHeader({ invoice }: { invoice: InvoiceDto }) {
+  const t = useT();
   const [downloading, setDownloading] = useState(false);
 
   const onDownload = async () => {
@@ -121,7 +125,7 @@ function InvoiceHeader({ invoice }: { invoice: InvoiceDto }) {
     try {
       await downloadInvoicePdf(invoice.id, invoice.invoiceNumber);
     } catch (err) {
-      toast.error("Download failed", { description: describe(err) });
+      toast.error(t("billing.downloadFailed"), { description: describe(err) });
     } finally {
       setDownloading(false);
     }
@@ -158,7 +162,7 @@ function InvoiceHeader({ invoice }: { invoice: InvoiceDto }) {
               )}
             </div>
             <p className="mt-1.5 text-[12px] text-[var(--color-muted-foreground)]">
-              Period {formatPeriod(invoice.periodYear, invoice.periodMonth)} ·{" "}
+              {t("billing.periodDot").replace("{period}", formatPeriod(invoice.periodYear, invoice.periodMonth))}
               <span className="font-display font-semibold text-[var(--color-foreground)]">
                 {formatMoney(invoice.subtotalAmount, invoice.currency)}
               </span>
@@ -175,7 +179,7 @@ function InvoiceHeader({ invoice }: { invoice: InvoiceDto }) {
             className="gap-1.5"
           >
             <Download className="size-3.5" />
-            {downloading ? "Preparing…" : "Download PDF"}
+            {downloading ? t("billing.preparing") : t("billing.downloadPdf")}
           </Button>
         </div>
       </div>
@@ -190,16 +194,17 @@ function InvoiceHeader({ invoice }: { invoice: InvoiceDto }) {
 const LINE_GRID = "grid-cols-[1fr_80px_110px_110px] sm:grid-cols-[1fr_100px_130px_130px]";
 
 function LineItemsTable({ invoice }: { invoice: InvoiceDto }) {
+  const t = useT();
   const items = invoice.lineItems ?? [];
 
   if (items.length === 0) {
     return (
       <div className="px-5 py-10 text-center">
         <p className="text-[13px] font-semibold text-[var(--color-foreground)]">
-          No line items
+          {t("billing.noLineItems")}
         </p>
         <p className="mt-1 text-[11.5px] text-[var(--color-muted-foreground)]">
-          This invoice has no itemized charges.
+          {t("billing.noLineItemsBody")}
         </p>
       </div>
     );
@@ -210,10 +215,10 @@ function LineItemsTable({ invoice }: { invoice: InvoiceDto }) {
       <div
         className={`grid ${LINE_GRID} items-center gap-3 border-b border-[var(--color-border)] bg-[oklch(from_var(--color-muted)_l_c_h_/_0.4)] px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]`}
       >
-        <span>Description</span>
-        <span className="text-right">Qty</span>
-        <span className="text-right">Unit price</span>
-        <span className="text-right">Amount</span>
+        <span>{t("billing.description")}</span>
+        <span className="text-right">{t("billing.qty")}</span>
+        <span className="text-right">{t("billing.unitPrice")}</span>
+        <span className="text-right">{t("billing.amount")}</span>
       </div>
 
       {items.map((item, i) => (
@@ -230,7 +235,7 @@ function LineItemsTable({ invoice }: { invoice: InvoiceDto }) {
         className={`grid ${LINE_GRID} items-center gap-3 border-t border-[var(--color-border)] bg-[oklch(from_var(--color-muted)_l_c_h_/_0.25)] px-5 py-3.5`}
       >
         <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-          Total
+          {t("billing.total")}
         </span>
         <span />
         <span />
@@ -288,37 +293,38 @@ function LineItemRow({
 // ────────────────────────────────────────────────────────────────────
 
 function DetailsBody({ invoice }: { invoice: InvoiceDto }) {
+  const t = useT();
   return (
     <dl className="space-y-2.5 text-[12.5px]">
-      <Row label="Status">
+      <Row label={t("billing.colStatus")}>
         <EntityStatusBadge tone={statusTone(invoice.status)}>
           {invoice.status}
         </EntityStatusBadge>
       </Row>
-      <Row label="Currency">{invoice.currency}</Row>
-      <Row label="Period">{formatPeriod(invoice.periodYear, invoice.periodMonth)}</Row>
-      <Row label="Created">{formatDate(invoice.createdAtUtc)}</Row>
-      {invoice.issuedAtUtc && <Row label="Issued">{formatDate(invoice.issuedAtUtc)}</Row>}
+      <Row label={t("billing.currency")}>{invoice.currency}</Row>
+      <Row label={t("billing.periodLabel")}>{formatPeriod(invoice.periodYear, invoice.periodMonth)}</Row>
+      <Row label={t("billing.created")}>{formatDate(invoice.createdAtUtc)}</Row>
+      {invoice.issuedAtUtc && <Row label={t("billing.issued")}>{formatDate(invoice.issuedAtUtc)}</Row>}
       {invoice.dueAtUtc && (
-        <Row label="Due" tone={invoice.status === "Issued" ? "warning" : undefined}>
+        <Row label={t("billing.dueLabel")} tone={invoice.status === "Issued" ? "warning" : undefined}>
           {formatDate(invoice.dueAtUtc)}
         </Row>
       )}
       {invoice.paidAtUtc && (
-        <Row label="Paid" tone="success">
+        <Row label={t("billing.paidLabel")} tone="success">
           {formatDate(invoice.paidAtUtc)}
         </Row>
       )}
       {invoice.voidedAtUtc && (
-        <Row label="Voided" tone="danger">
+        <Row label={t("billing.voided")} tone="danger">
           {formatDate(invoice.voidedAtUtc)}
         </Row>
       )}
       {invoice.periodStartUtc && (
-        <Row label="Period start">{formatDate(invoice.periodStartUtc)}</Row>
+        <Row label={t("billing.periodStart")}>{formatDate(invoice.periodStartUtc)}</Row>
       )}
       {invoice.periodEndUtc && (
-        <Row label="Period end">{formatDate(invoice.periodEndUtc)}</Row>
+        <Row label={t("billing.periodEnd")}>{formatDate(invoice.periodEndUtc)}</Row>
       )}
     </dl>
   );
@@ -377,19 +383,20 @@ function DetailSkeleton() {
 }
 
 function NotFoundPanel() {
+  const t = useT();
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-8 py-16 text-center">
       <div className="mb-5 grid size-16 place-items-center rounded-2xl bg-[oklch(from_var(--color-primary)_l_c_h_/_0.08)]">
         <Receipt className="size-7 text-[var(--color-primary)]" />
       </div>
       <h3 className="mb-1.5 text-[17px] font-semibold text-[var(--color-foreground)]">
-        Invoice not found
+        {t("billing.notFound")}
       </h3>
       <p className="mb-6 text-[13px] text-[var(--color-muted-foreground)]">
-        It may not belong to your tenant, or the link may be wrong.
+        {t("billing.notFoundBody")}
       </p>
       <Button asChild variant="outline" size="sm">
-        <Link to="/invoices">Back to invoices</Link>
+        <Link to="/invoices">{t("billing.back")}</Link>
       </Button>
     </div>
   );

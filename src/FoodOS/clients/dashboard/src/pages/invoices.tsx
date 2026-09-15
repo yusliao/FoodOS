@@ -25,6 +25,7 @@ import {
   type EntityStatusTone,
 } from "@/components/list";
 import { formatDate } from "@/lib/list-helpers";
+import { useT } from "@/i18n/locale-provider";
 
 const PAGE_SIZE = 20;
 
@@ -69,6 +70,7 @@ const DESKTOP_GRID =
 // ────────────────────────────────────────────────────────────────────
 
 export function InvoicesPage() {
+  const t = useT();
   const { user } = useAuth();
   const [pageNumber, setPageNumber] = useState(1);
   const query = useQuery({
@@ -115,7 +117,7 @@ export function InvoicesPage() {
     query.error instanceof ApiRequestError
       ? query.error.problem?.detail ?? query.error.message
       : query.error
-        ? "Failed to load invoices."
+        ? t("billing.loadFailed")
         : null;
 
   const searchActive = search.trim().length > 0;
@@ -126,16 +128,16 @@ export function InvoicesPage() {
     <div className="space-y-4 sm:space-y-6">
       <EntityPageHeader
         icon={Receipt}
-        title="Invoices"
+        title={t("billing.invoicesTitle")}
         total={query.data?.totalCount ?? null}
-        unit="invoice"
-        description="Your tenant's billing history, newest first."
+        unit={t("billing.invoicesUnit")}
+        description={t("billing.invoicesDesc")}
       />
 
       <EntitySearch
         value={search}
         onChange={setSearch}
-        placeholder="Search by invoice number, status, or period…"
+        placeholder={t("billing.searchPlaceholder")}
       />
 
       {errorMessage && <ErrorBand message={errorMessage} />}
@@ -145,11 +147,11 @@ export function InvoicesPage() {
       ) : filtered.length === 0 ? (
         <EntityEmpty
           icon={Receipt}
-          title={searchActive ? "No invoices found" : "No invoices yet"}
+          title={searchActive ? t("billing.noInvoicesFound") : t("billing.noInvoices")}
           body={
             searchActive
-              ? `Nothing matches "${search.trim()}". Try a different term or clear the search.`
-              : "Once your tenant has been billed for a period, invoices will appear here."
+              ? t("billing.emptySearchBody").replace("{q}", search.trim())
+              : t("billing.noInvoicesBody")
           }
           action={
             searchActive ? (
@@ -158,7 +160,7 @@ export function InvoicesPage() {
                 onClick={() => setSearch("")}
                 className="h-9 rounded-lg px-4 text-[13px]"
               >
-                Clear search
+                {t("identity.clearSearch")}
               </Button>
             ) : undefined
           }
@@ -169,14 +171,21 @@ export function InvoicesPage() {
             <p className="text-[12px] font-medium text-[var(--color-muted-foreground)]">
               {searchActive ? (
                 <>
-                  {filtered.length} invoice{filtered.length === 1 ? "" : "s"} matched
-                  on this page
+                  {(filtered.length === 1
+                    ? t("billing.matchedOnPageOne")
+                    : t("billing.matchedOnPage")
+                  ).replace("{n}", String(filtered.length))}
                 </>
               ) : (
                 <>
-                  Showing {sorted.length} of {totalCount} invoice
-                  {totalCount === 1 ? "" : "s"}
-                  {totalPages > 1 ? ` · page ${pageNumber} of ${totalPages}` : ""}
+                  {(totalCount === 1 ? t("billing.showingOne") : t("billing.showing"))
+                    .replace("{shown}", String(sorted.length))
+                    .replace("{total}", String(totalCount))}
+                  {totalPages > 1
+                    ? t("billing.showingPage")
+                        .replace("{page}", String(pageNumber))
+                        .replace("{pages}", String(totalPages))
+                    : ""}
                 </>
               )}
             </p>
@@ -192,11 +201,11 @@ export function InvoicesPage() {
           {/* Desktop: table */}
           <EntityListCard className="hidden md:block">
             <EntityListHeader className={DESKTOP_GRID}>
-              <span>Invoice #</span>
-              <span>Customer</span>
-              <span className="text-right">Amount</span>
-              <span>Status</span>
-              <span>Due date</span>
+              <span>{t("billing.colInvoice")}</span>
+              <span>{t("billing.colCustomer")}</span>
+              <span className="text-right">{t("billing.colAmount")}</span>
+              <span>{t("billing.colStatus")}</span>
+              <span>{t("billing.colDue")}</span>
             </EntityListHeader>
             {filtered.map((invoice, i) => (
               <DesktopRow
@@ -229,6 +238,7 @@ export function InvoicesPage() {
 // ────────────────────────────────────────────────────────────────────
 
 function MobileCard({ invoice }: { invoice: InvoiceDto }) {
+  const t = useT();
   return (
     <Link
       to={`/invoices/${invoice.id}`}
@@ -246,7 +256,7 @@ function MobileCard({ invoice }: { invoice: InvoiceDto }) {
               </EntityStatusBadge>
             </div>
             <p className="mt-0.5 font-mono text-[11px] text-[var(--color-muted-foreground)]">
-              period {formatPeriod(invoice.periodYear, invoice.periodMonth)}
+              {t("billing.period").replace("{period}", formatPeriod(invoice.periodYear, invoice.periodMonth))}
             </p>
           </div>
         </div>
@@ -256,7 +266,7 @@ function MobileCard({ invoice }: { invoice: InvoiceDto }) {
           </div>
           {invoice.dueAtUtc && invoice.status === "Issued" && (
             <div className="mt-0.5 font-mono text-[10.5px] text-[var(--color-warning)]">
-              due {formatDate(invoice.dueAtUtc)}
+              {t("billing.due").replace("{date}", formatDate(invoice.dueAtUtc))}
             </div>
           )}
         </div>
@@ -272,6 +282,7 @@ function DesktopRow({
   invoice: InvoiceDto;
   isLast: boolean;
 }) {
+  const t = useT();
   const navigate = useNavigate();
   return (
     <EntityListRow
@@ -287,7 +298,7 @@ function DesktopRow({
             {invoice.invoiceNumber}
           </code>
           <span className="mt-0.5 block truncate font-mono text-[11px] text-[var(--color-muted-foreground)]">
-            period {formatPeriod(invoice.periodYear, invoice.periodMonth)}
+            {t("billing.period").replace("{period}", formatPeriod(invoice.periodYear, invoice.periodMonth))}
           </span>
         </div>
       </div>
@@ -321,7 +332,9 @@ function DesktopRow({
             formatDate(invoice.dueAtUtc)
           )
         ) : invoice.paidAtUtc && invoice.status === "Paid" ? (
-          <span className="text-[var(--color-success)]">paid {formatDate(invoice.paidAtUtc)}</span>
+          <span className="text-[var(--color-success)]">
+            {t("billing.paidOn").replace("{date}", formatDate(invoice.paidAtUtc))}
+          </span>
         ) : (
           "—"
         )}
