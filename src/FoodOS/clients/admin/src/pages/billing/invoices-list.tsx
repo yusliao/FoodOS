@@ -25,12 +25,11 @@ import { Select } from "@/components/list";
 import { KpiTile } from "@/components/kpi-tile";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 const PAGE_SIZE = 20;
 
 const STATUSES: InvoiceStatus[] = ["Draft", "Issued", "Paid", "Void"];
-
-// ─── helpers ─────────────────────────────────────────────────────────
 
 function formatMoney(amount: number, currency: string) {
   try {
@@ -71,15 +70,35 @@ function statusVariant(status: InvoiceStatus): React.ComponentProps<typeof Badge
   }
 }
 
-function describe(err: unknown): string {
-  if (err instanceof ApiRequestError) return err.problem?.detail ?? err.problem?.title ?? err.message;
-  if (err instanceof Error) return err.message;
-  return "Failed to load invoices.";
+function statusLabel(
+  status: InvoiceStatus,
+  t: (key: string, fallback?: string) => string,
+): string {
+  switch (status) {
+    case "Draft":
+      return t("billing.statusDraft");
+    case "Issued":
+      return t("billing.statusIssued");
+    case "Paid":
+      return t("billing.statusPaid");
+    case "Void":
+      return t("billing.statusVoid");
+    default:
+      return status;
+  }
 }
 
-// ─── component ───────────────────────────────────────────────────────
+function describe(
+  err: unknown,
+  t: (key: string, fallback?: string) => string,
+): string {
+  if (err instanceof ApiRequestError) return err.problem?.detail ?? err.problem?.title ?? err.message;
+  if (err instanceof Error) return err.message;
+  return t("billing.loadInvoicesFailed");
+}
 
 export function InvoicesListPage() {
+  const t = useT();
   const navigate = useNavigate();
   const [pageNumber, setPageNumber] = useState(1);
 
@@ -105,8 +124,6 @@ export function InvoicesListPage() {
   });
 
   const data = query.data;
-  // useMemo dependencies need a stable reference; wrap the optional list once
-  // so both the page render and the totals memo derive from the same value.
   const items = useMemo<InvoiceDto[]>(() => data?.items ?? [], [data]);
 
   const totals = useMemo(() => {
@@ -140,15 +157,18 @@ export function InvoicesListPage() {
 
   return (
     <div className="space-y-6">
-      {/* KPI strip — page-scope (current page, not all-time) */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile
-          label="Page invoices"
+          label={t("billing.pageInvoices")}
           value={query.isLoading ? <Skeleton className="h-7 w-16" /> : data?.items.length ?? 0}
-          subtitle={data ? `${data.totalCount.toLocaleString()} total` : "loading…"}
+          subtitle={
+            data
+              ? t("billing.totalCount").replace("{n}", data.totalCount.toLocaleString())
+              : t("billing.loadingEllipsis")
+          }
         />
         <KpiTile
-          label="Billed"
+          label={t("billing.billed")}
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
@@ -156,10 +176,10 @@ export function InvoicesListPage() {
               formatMoney(totals.totalBilled, totals.currency)
             )
           }
-          subtitle="this page"
+          subtitle={t("billing.thisPage")}
         />
         <KpiTile
-          label="Outstanding"
+          label={t("billing.outstanding")}
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
@@ -167,10 +187,10 @@ export function InvoicesListPage() {
               formatMoney(totals.outstanding, totals.currency)
             )
           }
-          subtitle="issued, awaiting payment"
+          subtitle={t("billing.outstandingHint")}
         />
         <KpiTile
-          label="Paid"
+          label={t("billing.paid")}
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
@@ -178,34 +198,33 @@ export function InvoicesListPage() {
               formatMoney(totals.paid, totals.currency)
             )
           }
-          subtitle={`${totals.paidCount} invoice${totals.paidCount === 1 ? "" : "s"}`}
+          subtitle={t(
+            totals.paidCount === 1 ? "billing.paidInvoiceOne" : "billing.paidInvoiceMany",
+          ).replace("{n}", String(totals.paidCount))}
         />
       </div>
 
-      {/* Filter panel */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-[var(--color-muted-foreground)]" />
-              <span>Filters</span>
+              <span>{t("billing.filters")}</span>
             </CardTitle>
-            <CardDescription>
-              All filters are AND-combined. Period is matched exactly (year + month).
-            </CardDescription>
+            <CardDescription>{t("billing.filtersDesc")}</CardDescription>
           </div>
           {filtersDirty && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X className="mr-1 h-3.5 w-3.5" /> Clear
+              <X className="mr-1 h-3.5 w-3.5" /> {t("billing.clear")}
             </Button>
           )}
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
-            <Label htmlFor="filter-tenant">Tenant</Label>
+            <Label htmlFor="filter-tenant">{t("billing.tenant")}</Label>
             <Input
               id="filter-tenant"
-              placeholder="tenant identifier"
+              placeholder={t("billing.tenantPlaceholder")}
               value={tenantFilter}
               onChange={(e) => {
                 setTenantFilter(e.target.value);
@@ -215,7 +234,7 @@ export function InvoicesListPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="filter-status">Status</Label>
+            <Label htmlFor="filter-status">{t("billing.status")}</Label>
             <Select
               id="filter-status"
               value={statusFilter}
@@ -223,12 +242,12 @@ export function InvoicesListPage() {
                 setStatusFilter(v as InvoiceStatus | "");
                 setPageNumber(1);
               }}
-              options={STATUSES.map((s) => ({ value: s, label: s }))}
-              emptyLabel="All"
+              options={STATUSES.map((s) => ({ value: s, label: statusLabel(s, t) }))}
+              emptyLabel={t("billing.all")}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="filter-year">Year</Label>
+            <Label htmlFor="filter-year">{t("billing.year")}</Label>
             <Input
               id="filter-year"
               inputMode="numeric"
@@ -241,11 +260,11 @@ export function InvoicesListPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="filter-month">Month</Label>
+            <Label htmlFor="filter-month">{t("billing.month")}</Label>
             <Input
               id="filter-month"
               inputMode="numeric"
-              placeholder="1–12"
+              placeholder={t("billing.monthPlaceholder")}
               value={periodMonth}
               onChange={(e) => {
                 setPeriodMonth(e.target.value.replace(/[^0-9]/g, "").slice(0, 2));
@@ -256,26 +275,24 @@ export function InvoicesListPage() {
         </CardContent>
       </Card>
 
-      {/* List */}
       <Card>
         <CardHeader>
-          <CardTitle>Invoices</CardTitle>
+          <CardTitle>{t("billing.invoices")}</CardTitle>
           <CardDescription>
             {data ? (
-              <>
-                Page <span className="tabular-nums">{data.pageNumber}</span> of{" "}
-                <span className="tabular-nums">{Math.max(data.totalPages, 1)}</span> ·{" "}
-                <span className="tabular-nums">{data.totalCount.toLocaleString()}</span> total
-              </>
+              t("billing.pageOfTotal")
+                .replace("{page}", String(data.pageNumber))
+                .replace("{pages}", String(Math.max(data.totalPages, 1)))
+                .replace("{total}", data.totalCount.toLocaleString())
             ) : (
-              "Loading…"
+              t("billing.loading")
             )}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {query.isError && (
             <div className="border-t border-[var(--color-border)] px-6 py-4 text-sm text-[var(--color-destructive)]">
-              {describe(query.error)}
+              {describe(query.error, t)}
             </div>
           )}
 
@@ -295,7 +312,7 @@ export function InvoicesListPage() {
             </ul>
           ) : items.length === 0 ? (
             <div className="px-6 py-10 text-center text-sm text-[var(--color-muted-foreground)]">
-              No invoices match the current filters.
+              {t("billing.emptyInvoices")}
             </div>
           ) : (
             <ul>
@@ -309,7 +326,6 @@ export function InvoicesListPage() {
                     )}
                     style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
                   >
-                  {/* Identity column */}
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       aria-hidden
@@ -322,22 +338,25 @@ export function InvoicesListPage() {
                         <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-tight">
                           {inv.invoiceNumber}
                         </code>
-                        <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>
+                        <Badge variant={statusVariant(inv.status)}>{statusLabel(inv.status, t)}</Badge>
                         {inv.purpose && (
                           <Badge variant="outline">
-                            {inv.purpose === "Subscription" ? "Subscription" : "Usage"}
+                            {inv.purpose === "Subscription"
+                              ? t("billing.purposeSubscription")
+                              : t("billing.purposeUsage")}
                           </Badge>
                         )}
                       </div>
                       <div className="mt-1 truncate font-mono text-[11px] tracking-tight text-[var(--color-muted-foreground)]">
-                        tenant <span className="text-[var(--color-foreground)]">{inv.tenantId}</span> ·
-                        period {formatPeriod(inv.periodYear, inv.periodMonth)} ·
-                        created {formatDate(inv.createdAtUtc)}
+                        {t("billing.metaLine")
+                          .replace("{tenant}", inv.tenantId)
+                          .replace("{period}", formatPeriod(inv.periodYear, inv.periodMonth))
+                          .replace("{created}", formatDate(inv.createdAtUtc))}
                         {inv.paidAtUtc && (
                           <>
                             {" · "}
                             <span className="text-[var(--color-success)]">
-                              paid {formatDate(inv.paidAtUtc)}
+                              {t("billing.paidOn").replace("{date}", formatDate(inv.paidAtUtc))}
                             </span>
                           </>
                         )}
@@ -345,7 +364,7 @@ export function InvoicesListPage() {
                           <>
                             {" · "}
                             <span className="text-[var(--color-destructive)]">
-                              voided {formatDate(inv.voidedAtUtc)}
+                              {t("billing.voidedOn").replace("{date}", formatDate(inv.voidedAtUtc))}
                             </span>
                           </>
                         )}
@@ -353,14 +372,13 @@ export function InvoicesListPage() {
                     </div>
                   </div>
 
-                  {/* Amount column */}
                   <div className="text-right">
                     <div className="text-display text-base font-semibold tabular-nums">
                       {formatMoney(inv.subtotalAmount, inv.currency)}
                     </div>
                     {inv.dueAtUtc && inv.status === "Issued" && (
                       <div className="font-mono text-[11px] text-[var(--color-warning)]">
-                        due {formatDate(inv.dueAtUtc)}
+                        {t("billing.dueOn").replace("{date}", formatDate(inv.dueAtUtc))}
                       </div>
                     )}
                   </div>
@@ -372,10 +390,13 @@ export function InvoicesListPage() {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
       <div className="flex items-center justify-between text-sm">
         <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
-          {data ? `Page ${data.pageNumber} / ${Math.max(data.totalPages, 1)}` : ""}
+          {data
+            ? t("billing.pageSlash")
+                .replace("{page}", String(data.pageNumber))
+                .replace("{pages}", String(Math.max(data.totalPages, 1)))
+            : ""}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -384,7 +405,7 @@ export function InvoicesListPage() {
             disabled={!data?.hasPrevious || query.isFetching}
             onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
           >
-            <ChevronLeft className="mr-1 h-4 w-4" /> Previous
+            <ChevronLeft className="mr-1 h-4 w-4" /> {t("common.previous")}
           </Button>
           <Button
             variant="outline"
@@ -392,7 +413,7 @@ export function InvoicesListPage() {
             disabled={!data?.hasNext || query.isFetching}
             onClick={() => setPageNumber((p) => p + 1)}
           >
-            Next <ChevronRight className="ml-1 h-4 w-4" />
+            {t("common.next")} <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
       </div>

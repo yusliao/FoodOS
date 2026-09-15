@@ -29,16 +29,20 @@ import {
 } from "@/lib/permissions";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 const SYSTEM_ROLE_NAMES = new Set(["Admin", "Basic"]);
 
-const profileSchema = z.object({
-  name: z.string().trim().min(2, "At least 2 characters.").max(64),
-  description: z.string().trim().max(256).optional(),
-});
-type ProfileValues = z.infer<typeof profileSchema>;
+function makeProfileSchema(t: (key: string, fallback?: string) => string) {
+  return z.object({
+    name: z.string().trim().min(2, t("roles.atLeast2")).max(64),
+    description: z.string().trim().max(256).optional(),
+  });
+}
+type ProfileValues = z.infer<ReturnType<typeof makeProfileSchema>>;
 
 export function RoleDetailPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -56,16 +60,14 @@ export function RoleDetailPage() {
     <div className="space-y-6">
       <EntityPageHeader
         icon={Shield}
-        title={role?.name ?? "Role"}
+        title={role?.name ?? t("roles.fallbackTitle")}
         total={role ? (role.permissions?.length ?? 0) : null}
-        unit="grant"
-        description={
-          role?.description ?? "Inspect and edit this role's profile and permission grants."
-        }
+        unit={t("roles.unitGrant")}
+        description={role?.description ?? t("roles.inspectDesc")}
       >
         {isSystem && (
           <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-[0.14em]">
-            <Lock className="mr-1 h-3 w-3" /> System
+            <Lock className="mr-1 h-3 w-3" /> {t("roles.system")}
           </Badge>
         )}
         <Button
@@ -74,7 +76,7 @@ export function RoleDetailPage() {
           onClick={() => navigate("/roles")}
           className="h-9 gap-1.5 rounded-lg px-3 text-[13px]"
         >
-          <ArrowLeft className="size-3.5" /> Registry
+          <ArrowLeft className="size-3.5" /> {t("roles.registry")}
         </Button>
       </EntityPageHeader>
 
@@ -83,12 +85,12 @@ export function RoleDetailPage() {
           message={
             query.error instanceof ApiRequestError
               ? query.error.problem?.detail ?? query.error.message
-              : "Failed to load role."
+              : t("roles.loadRoleFailed")
           }
         />
       )}
 
-      {query.isLoading && <LoadingRow label="Loading role" />}
+      {query.isLoading && <LoadingRow label={t("roles.loadingRole")} />}
 
       {isSystem && role && (
         <div
@@ -104,12 +106,19 @@ export function RoleDetailPage() {
           </span>
           <div className="min-w-0 text-sm leading-relaxed">
             <p className="font-medium text-[var(--color-foreground)]">
-              Built-in role — read only
+              {t("roles.builtInTitle")}
             </p>
             <p className="mt-0.5 text-[12.5px] text-[var(--color-muted-foreground)]">
-              <span className="font-mono font-medium">{role.name}</span> ships with the framework.
-              Its name, description, and permissions are managed centrally. Create a custom role if
-              you need a different set of grants.
+              {t("roles.builtInBody").split("{name}").map((part, i, arr) =>
+                i < arr.length - 1 ? (
+                  <span key={i}>
+                    {part}
+                    <span className="font-mono font-medium">{role.name}</span>
+                  </span>
+                ) : (
+                  <span key={i}>{part}</span>
+                ),
+              )}
             </p>
           </div>
         </div>
@@ -137,14 +146,16 @@ export function RoleDetailPage() {
 // ─── Profile section ────────────────────────────────────────────────────
 
 function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }) {
+  const t = useT();
   const queryClient = useQueryClient();
+  const schema = useMemo(() => makeProfileSchema(t), [t]);
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors, isDirty, isSubmitting },
   } = useForm<ProfileValues>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       name: role.name,
       description: role.description ?? "",
@@ -164,7 +175,7 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
         description: values.description?.trim() ? values.description : null,
       }),
     onSuccess: (result) => {
-      toast.success("Role updated");
+      toast.success(t("roles.updated"));
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["roles", result.id] });
     },
@@ -173,7 +184,7 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : (err as Error).message;
-      toast.error("Update failed", { description: detail });
+      toast.error(t("roles.updateFailed"), { description: detail });
     },
   });
 
@@ -182,13 +193,9 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
   return (
     <form onSubmit={handleSubmit((v) => mutation.mutate(v))}>
       <SettingsSection
-        title="Profile"
+        title={t("roles.profile")}
         icon={ShieldCheck}
-        description={
-          disabled
-            ? "Name and description — system roles cannot be renamed."
-            : "Name and description shown to operators when assigning users to this role."
-        }
+        description={disabled ? t("roles.profileLocked") : t("roles.profileDesc")}
         footer={
           <div className="flex items-center gap-2">
             <Button
@@ -196,7 +203,7 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
               disabled={!isDirty || submitting || disabled}
               className="h-9 rounded-lg px-4 text-[13px]"
             >
-              {submitting ? "Saving…" : "Save profile"}
+              {submitting ? t("roles.saving") : t("roles.saveProfile")}
             </Button>
             <Button
               type="button"
@@ -205,13 +212,13 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
               disabled={!isDirty || submitting}
               className="h-9 rounded-lg px-4 text-[13px]"
             >
-              Reset
+              {t("roles.reset")}
             </Button>
           </div>
         }
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <Field id="name" label="Name" required error={errors.name?.message}>
+          <Field id="name" label={t("roles.name")} required error={errors.name?.message}>
             <Input
               id="name"
               aria-invalid={errors.name ? true : undefined}
@@ -219,7 +226,7 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
               {...register("name")}
             />
           </Field>
-          <Field id="description" label="Description" error={errors.description?.message}>
+          <Field id="description" label={t("roles.descriptionLabel")} error={errors.description?.message}>
             <Input
               id="description"
               aria-invalid={errors.description ? true : undefined}
@@ -235,6 +242,7 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
 // ─── Permission editor ──────────────────────────────────────────────────
 
 function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const initial = useMemo(() => new Set(role.permissions ?? []), [role.permissions]);
   const [selected, setSelected] = useState<Set<string>>(initial);
@@ -248,7 +256,7 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
         permissions: Array.from(selected),
       }),
     onSuccess: () => {
-      toast.success("Permissions updated");
+      toast.success(t("roles.permissionsUpdated"));
       queryClient.invalidateQueries({ queryKey: ["roles", role.id] });
     },
     onError: (err: unknown) => {
@@ -256,7 +264,7 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : (err as Error).message;
-      toast.error("Update failed", { description: detail });
+      toast.error(t("roles.updateFailed"), { description: detail });
     },
   });
 
@@ -286,11 +294,14 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
     });
   };
 
+  const granted = String(selected.size).padStart(2, "0");
+  const totalLabel = String(total).padStart(2, "0");
+
   return (
     <SettingsSection
-      title="Permissions"
+      title={t("roles.permissions")}
       icon={ShieldCheck}
-      description={`Pick what holders of this role can do. Root-only permissions take effect only on roles assigned in the root tenant.`}
+      description={t("roles.permissionsDesc")}
       footer={
         !disabled ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -298,13 +309,15 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
               {dirty ? (
                 <span className="inline-flex items-center gap-1.5 text-[var(--color-warning)]">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-warning)]" />
-                  Unsaved changes · {String(selected.size).padStart(2, "0")} of{" "}
-                  {String(total).padStart(2, "0")} granted
+                  {t("roles.unsavedGranted")
+                    .replace("{selected}", granted)
+                    .replace("{total}", totalLabel)}
                 </span>
               ) : (
                 <span>
-                  All changes saved · {String(selected.size).padStart(2, "0")} of{" "}
-                  {String(total).padStart(2, "0")} granted
+                  {t("roles.savedGranted")
+                    .replace("{selected}", granted)
+                    .replace("{total}", totalLabel)}
                 </span>
               )}
             </div>
@@ -317,7 +330,7 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
                 onClick={() => setSelected(new Set(initial))}
                 className="h-9 rounded-lg px-3 text-[13px]"
               >
-                Discard
+                {t("roles.discard")}
               </Button>
               <Button
                 type="button"
@@ -327,7 +340,7 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
                 className="h-9 rounded-lg px-3 text-[13px]"
               >
                 <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                {mutation.isPending ? "Saving…" : "Save permissions"}
+                {mutation.isPending ? t("roles.saving") : t("roles.savePermissions")}
               </Button>
             </div>
           </div>
@@ -348,14 +361,14 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
                 <div className="min-w-0">
                   <div className="flex items-baseline gap-3">
                     <h3 className="text-[13px] font-semibold tracking-tight text-[var(--color-foreground)]">
-                      {group.category}
+                      {t(`roles.cat.${group.category}`, group.category)}
                     </h3>
                     <span className="font-mono text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
                       {String(groupCount).padStart(2, "0")} / {String(group.entries.length).padStart(2, "0")}
                     </span>
                   </div>
                   <p className="mt-0.5 text-[11.5px] text-[var(--color-muted-foreground)]">
-                    {group.blurb}
+                    {t(`roles.blurb.${group.category}`, group.blurb)}
                   </p>
                 </div>
                 <button
@@ -369,7 +382,7 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
                     disabled && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-[var(--color-muted-foreground)]",
                   )}
                 >
-                  {allOn ? "Clear all" : someOn ? "Select remaining" : "Select all"}
+                  {allOn ? t("roles.clearAll") : someOn ? t("roles.selectRemaining") : t("roles.selectAll")}
                 </button>
               </div>
 
@@ -418,16 +431,16 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
                                 checked ? "text-[var(--color-foreground)]" : "text-[var(--color-muted-foreground)]",
                               )}
                             >
-                              {entry.description}
+                              {t(`roles.perm.${entry.name}`, entry.description)}
                             </span>
                             {entry.root && (
                               <span className="rounded-full bg-[oklch(from_var(--color-warning)_l_c_h_/_0.16)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--color-warning)]">
-                                root
+                                {t("roles.root")}
                               </span>
                             )}
                             {entry.basic && (
                               <span className="rounded-full bg-[oklch(from_var(--color-info)_l_c_h_/_0.16)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--color-info)]">
-                                basic
+                                {t("roles.basic")}
                               </span>
                             )}
                           </div>
@@ -451,12 +464,13 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
 // ─── Danger zone ────────────────────────────────────────────────────────
 
 function DangerZone({ role, onDeleted }: { role: RoleDto; onDeleted: () => void }) {
+  const t = useT();
   const [confirm, setConfirm] = useState("");
 
   const mutation = useMutation({
     mutationFn: () => deleteRole(role.id),
     onSuccess: () => {
-      toast.success(`Role ${role.name} deleted`);
+      toast.success(t("roles.deleted").replace("{name}", role.name));
       onDeleted();
     },
     onError: (err: unknown) => {
@@ -464,22 +478,25 @@ function DangerZone({ role, onDeleted }: { role: RoleDto; onDeleted: () => void 
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : (err as Error).message;
-      toast.error("Delete failed", { description: detail });
+      toast.error(t("roles.deleteFailed"), { description: detail });
     },
   });
 
   const ready = confirm.trim() === role.name;
+  const confirmParts = t("roles.typeToConfirm").split("{name}");
 
   return (
     <SettingsSection
-      title="Danger zone"
+      title={t("roles.dangerZone")}
       icon={Trash2}
-      description="Delete this role. Users assigned to it will lose every permission this role grants — this is not reversible."
+      description={t("roles.dangerDesc")}
     >
       <div className="space-y-4 rounded-lg border border-[var(--color-destructive)]/40 bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.04)] p-5">
         <div>
           <p className="text-[13px] font-medium text-[var(--color-foreground)]">
-            Type <code className="rounded bg-[var(--color-muted)] px-1 py-0.5 font-mono text-[12px]">{role.name}</code> to confirm deletion.
+            {confirmParts[0]}
+            <code className="rounded bg-[var(--color-muted)] px-1 py-0.5 font-mono text-[12px]">{role.name}</code>
+            {confirmParts[1]}
           </p>
           <Input
             value={confirm}
@@ -497,7 +514,7 @@ function DangerZone({ role, onDeleted }: { role: RoleDto; onDeleted: () => void 
           className="h-9 rounded-lg px-4 text-[13px]"
         >
           <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-          {mutation.isPending ? "Deleting…" : "Delete role"}
+          {mutation.isPending ? t("roles.deleting") : t("roles.deleteRole")}
         </Button>
       </div>
     </SettingsSection>

@@ -10,8 +10,7 @@ import { PlanFormDialog } from "@/components/billing/plan-form-dialog";
 import { ApiRequestError } from "@/lib/api-client";
 import { useAuth } from "@/auth/use-auth";
 import { BillingPermissions } from "@/lib/permissions";
-
-// ─── helpers ──────────────────────────────────────────────────────────
+import { useT } from "@/i18n/locale-provider";
 
 function formatMoney(amount: number, currency: string) {
   try {
@@ -29,15 +28,17 @@ function formatOverageRates(rates: BillingPlanDto["overageRates"], currency: str
     .join(" · ");
 }
 
-function describe(err: unknown): string {
+function describe(
+  err: unknown,
+  t: (key: string, fallback?: string) => string,
+): string {
   if (err instanceof ApiRequestError) return err.problem?.detail ?? err.problem?.title ?? err.message;
   if (err instanceof Error) return err.message;
-  return "Failed to load plans.";
+  return t("billing.loadPlansFailed");
 }
 
-// ─── component ────────────────────────────────────────────────────────
-
 export function PlansListPage() {
+  const t = useT();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<BillingPlanDto | undefined>(undefined);
   const { user: currentUser } = useAuth();
@@ -75,20 +76,23 @@ export function PlansListPage() {
 
   return (
     <div className="space-y-6">
-      {/* KPI strip */}
       <StatStrip cols={3}>
         <Stat
-          label="Plans"
+          label={t("billing.plans")}
           value={query.isLoading ? <Skeleton className="h-7 w-16" /> : totals.count}
-          hint={`${totals.active} active`}
+          hint={t("billing.activeHint").replace("{n}", String(totals.active))}
         />
         <Stat
-          label="Active"
+          label={t("billing.active")}
           value={query.isLoading ? <Skeleton className="h-7 w-16" /> : totals.active}
-          hint={totals.count - totals.active > 0 ? `${totals.count - totals.active} inactive` : "all active"}
+          hint={
+            totals.count - totals.active > 0
+              ? t("billing.inactiveHint").replace("{n}", String(totals.count - totals.active))
+              : t("billing.allActive")
+          }
         />
         <Stat
-          label="Average base"
+          label={t("billing.averageBase")}
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
@@ -96,26 +100,25 @@ export function PlansListPage() {
               formatMoney(totals.averagePrice, totals.currency)
             )
           }
-          hint="monthly subscription fee"
+          hint={t("billing.monthlyFeeHint")}
         />
       </StatStrip>
 
-      {/* Plans list */}
       <SettingsSection
         icon={Tag}
-        title="All plans"
-        description="Pricing schedule used by tenant subscriptions and invoice generation."
+        title={t("billing.allPlans")}
+        description={t("billing.allPlansDesc")}
         footer={
           canManageBilling ? (
             <Button onClick={openCreate}>
-              <Plus className="mr-1 h-4 w-4" /> New plan
+              <Plus className="mr-1 h-4 w-4" /> {t("billing.newPlan")}
             </Button>
           ) : undefined
         }
       >
         {query.isError && (
           <div className="mb-4 rounded-md border border-[oklch(from_var(--color-destructive)_l_c_h_/_0.30)] bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.05)] px-4 py-3 text-sm text-[var(--color-destructive)]">
-            {describe(query.error)}
+            {describe(query.error, t)}
           </div>
         )}
 
@@ -130,7 +133,7 @@ export function PlansListPage() {
           </ul>
         ) : plans.length === 0 ? (
           <div className="py-10 text-center text-sm text-[var(--color-muted-foreground)]">
-            No plans yet. Create your first plan to start charging tenants.
+            {t("billing.emptyPlans")}
           </div>
         ) : (
           <ul className="-mx-5 border-t border-[var(--color-border)]">
@@ -140,41 +143,42 @@ export function PlansListPage() {
                 className="fsh-enter grid grid-cols-[1fr_auto] items-center gap-x-6 gap-y-1 border-b border-[var(--color-border)] last:border-b-0 px-5 py-4 transition-colors hover:bg-[var(--color-muted)]"
                 style={{ animationDelay: `${Math.min(i, 6) * 30}ms` }}
               >
-                {/* Identity column */}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-tight">
                       {plan.key}
                     </code>
                     <span className="font-display text-base font-semibold">{plan.name}</span>
-                    <Badge variant="outline">{plan.interval === "Yearly" ? "Yearly" : "Monthly"}</Badge>
+                    <Badge variant="outline">
+                      {plan.interval === "Yearly" ? t("billing.yearly") : t("billing.monthly")}
+                    </Badge>
                     {plan.isActive ? (
-                      <Badge variant="success">Active</Badge>
+                      <Badge variant="success">{t("billing.active")}</Badge>
                     ) : (
-                      <Badge variant="muted">Inactive</Badge>
+                      <Badge variant="muted">{t("billing.inactive")}</Badge>
                     )}
                   </div>
                   <div className="mt-1 font-mono text-[11px] tracking-tight text-[var(--color-muted-foreground)]">
-                    currency {plan.currency} ·{" "}
-                    overage {formatOverageRates(plan.overageRates, plan.currency)}
+                    {t("billing.currencyOverage")
+                      .replace("{currency}", plan.currency)
+                      .replace("{overage}", formatOverageRates(plan.overageRates, plan.currency))}
                   </div>
                 </div>
 
-                {/* Right column — price + edit */}
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <div className="text-display text-lg font-semibold leading-none tabular-nums">
                       {formatMoney(planTermPrice(plan), plan.currency)}
                     </div>
                     <div className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
-                      {plan.interval === "Yearly" ? "per year" : "per month"}
+                      {plan.interval === "Yearly" ? t("billing.perYear") : t("billing.perMonth")}
                     </div>
                   </div>
                   {canManageBilling && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Edit ${plan.name}`}
+                      aria-label={t("billing.editPlan").replace("{name}", plan.name)}
                       onClick={() => openEdit(plan)}
                     >
                       <Pencil className="h-4 w-4" />

@@ -20,6 +20,7 @@ import { Monogram } from "@/components/monogram";
 import { ApiRequestError } from "@/lib/api-client";
 import { env } from "@/env";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 type Props = {
   open: boolean;
@@ -30,12 +31,7 @@ type Props = {
   prefillUser?: UserDto;
 };
 
-type DurationOption = { minutes: number; label: string };
-const DURATION_OPTIONS: DurationOption[] = [
-  { minutes: 10, label: "10 min" },
-  { minutes: 15, label: "15 min" },
-  { minutes: 30, label: "30 min" },
-];
+const DURATION_MINUTES = [10, 15, 30] as const;
 
 /**
  * ImpersonateDialog — two-step modal flow:
@@ -54,6 +50,7 @@ export function ImpersonateDialog({
   tenantName,
   prefillUser,
 }: Props) {
+  const t = useT();
   const [step, setStep] = useState<"pick" | "configure">(prefillUser ? "configure" : "pick");
   const [selected, setSelected] = useState<UserDto | null>(prefillUser ?? null);
 
@@ -76,14 +73,12 @@ export function ImpersonateDialog({
             >
               <UserCog className="h-4 w-4" />
             </span>
-            <DialogTitle>Impersonate user</DialogTitle>
+            <DialogTitle>{t("impersonation.dialogTitle")}</DialogTitle>
           </div>
           <DialogDescription>
-            Tenant{" "}
+            {t("impersonation.tenantPrefix")}{" "}
             <code className="code-chip">{tenantName ?? tenantId}</code> ·{" "}
-            {step === "pick"
-              ? "pick a user to impersonate."
-              : "session details. Token will be issued and opened in the dashboard."}
+            {step === "pick" ? t("impersonation.pickHint") : t("impersonation.configureHint")}
           </DialogDescription>
         </DialogHeader>
 
@@ -130,6 +125,7 @@ function PickStep({
   onPick: (user: UserDto) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
 
@@ -164,8 +160,8 @@ function PickStep({
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email, or username…"
-            aria-label="Search users to impersonate"
+            placeholder={t("impersonation.searchPlaceholder")}
+            aria-label={t("impersonation.searchAria")}
             className="pl-9"
           />
         </div>
@@ -175,20 +171,22 @@ function PickStep({
             <div className="px-3 py-6 text-sm text-[var(--color-destructive)]">
               {query.error instanceof ApiRequestError
                 ? query.error.problem?.detail ?? query.error.message
-                : "Failed to load users."}
+                : t("impersonation.loadUsersFailed")}
             </div>
           )}
 
           {query.isLoading && (
             <div className="px-3 py-10 text-center font-mono text-xs uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
-              Loading
+              {t("common.loading")}
               <span className="caret text-[var(--color-accent-signal)]" aria-hidden />
             </div>
           )}
 
           {!query.isLoading && users.length === 0 && (
             <div className="px-3 py-10 text-center text-sm text-[var(--color-muted-foreground)]">
-              No users match{debounced ? ` “${debounced}”` : ""}.
+              {debounced
+                ? t("impersonation.noUsersMatchQuery").replace("{q}", debounced)
+                : t("impersonation.noUsersMatch")}
             </div>
           )}
 
@@ -213,7 +211,7 @@ function PickStep({
                         {[user.firstName, user.lastName].filter(Boolean).join(" ") ||
                           user.userName ||
                           user.email ||
-                          "Unnamed"}
+                          t("impersonation.unnamed")}
                       </span>
                       {user.userName && (
                         <span className="truncate font-mono text-[11px] text-[var(--color-muted-foreground)]">
@@ -235,7 +233,7 @@ function PickStep({
 
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
-          Cancel
+          {t("chrome.cancel")}
         </Button>
       </DialogFooter>
     </>
@@ -257,6 +255,7 @@ function ConfigureStep({
   onBack?: () => void;
   onDone: () => void;
 }) {
+  const t = useT();
   const [reason, setReason] = useState("");
   const [minutes, setMinutes] = useState<number>(15);
 
@@ -273,8 +272,8 @@ function ConfigureStep({
       }),
     onSuccess: (response) => {
       handoffToDashboard(response, tenantId);
-      toast.success(`Impersonation started · ${minutes} min`, {
-        description: `Opened the dashboard as ${labelFor(user)}. End impersonation from inside the dashboard tab.`,
+      toast.success(t("impersonation.started").replace("{n}", String(minutes)), {
+        description: t("impersonation.startedBody").replace("{name}", labelFor(user, t)),
       });
       onDone();
     },
@@ -283,7 +282,7 @@ function ConfigureStep({
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : err.message;
-      toast.error("Impersonation failed", { description: detail });
+      toast.error(t("impersonation.failed"), { description: detail });
     },
   });
 
@@ -293,15 +292,15 @@ function ConfigureStep({
         <SelectedUserCard user={user} tenantId={tenantId} tenantName={tenantName} />
 
         <fieldset className="space-y-2">
-          <legend className="meta text-[var(--color-muted-foreground)]">// Duration</legend>
+          <legend className="meta text-[var(--color-muted-foreground)]">{t("impersonation.duration")}</legend>
           <div className="grid grid-cols-3 gap-2">
-            {DURATION_OPTIONS.map((opt) => {
-              const active = minutes === opt.minutes;
+            {DURATION_MINUTES.map((opt) => {
+              const active = minutes === opt;
               return (
                 <button
-                  key={opt.minutes}
+                  key={opt}
                   type="button"
-                  onClick={() => setMinutes(opt.minutes)}
+                  onClick={() => setMinutes(opt)}
                   aria-pressed={active}
                   className={cn(
                     "flex flex-col items-center gap-0.5 rounded-md border px-3 py-2 transition-colors",
@@ -311,9 +310,9 @@ function ConfigureStep({
                   )}
                 >
                   <span className="font-display text-lg font-semibold tabular-nums">
-                    {opt.minutes}
+                    {opt}
                   </span>
-                  <span className="meta text-[var(--color-muted-foreground)]">minutes</span>
+                  <span className="meta text-[var(--color-muted-foreground)]">{t("impersonation.minutes")}</span>
                 </button>
               );
             })}
@@ -325,7 +324,7 @@ function ConfigureStep({
             htmlFor="impersonation-reason"
             className="meta flex items-center gap-1.5 text-[var(--color-muted-foreground)]"
           >
-            Reason
+            {t("impersonation.reason")}
             <span className="text-[var(--color-destructive)]" aria-hidden>
               ·
             </span>
@@ -334,7 +333,7 @@ function ConfigureStep({
             id="impersonation-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. Customer ticket #4821 — verifying ledger discrepancy"
+            placeholder={t("impersonation.reasonPlaceholder")}
             rows={3}
             maxLength={500}
             className={cn(
@@ -345,10 +344,7 @@ function ConfigureStep({
             )}
           />
           <p className="flex items-center justify-between text-[11px] text-[var(--color-muted-foreground)]">
-            <span>
-              Recorded in the security audit trail — be specific enough that a reviewer can
-              reconstruct the case later.
-            </span>
+            <span>{t("impersonation.reasonHint")}</span>
             <span
               className={cn(
                 "font-mono tabular-nums",
@@ -363,10 +359,9 @@ function ConfigureStep({
         <div className="flex items-start gap-2 rounded-md border border-[var(--color-warning)]/40 bg-[oklch(from_var(--color-warning)_l_c_h_/_0.08)] px-3 py-2.5 text-xs text-[var(--color-foreground)]">
           <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warning)]" />
           <div>
-            <strong className="font-medium">Everything you do is attributed to your account.</strong>
-            {" "}The session token carries actor claims; the audit trail will show
-            both the user being impersonated and you as the actor. End from the dashboard
-            tab when done.
+            <strong className="font-medium">{t("impersonation.attrTitle")}</strong>
+            {" "}
+            {t("impersonation.attrBody")}
           </div>
         </div>
       </DialogBody>
@@ -374,7 +369,7 @@ function ConfigureStep({
       <DialogFooter>
         {onBack && (
           <Button variant="outline" onClick={onBack} disabled={mutation.isPending} className="sm:mr-auto">
-            <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Choose another user
+            <ArrowLeft className="mr-1 h-3.5 w-3.5" /> {t("impersonation.chooseAnother")}
           </Button>
         )}
         <Button
@@ -383,10 +378,11 @@ function ConfigureStep({
           onClick={() => mutation.mutate()}
         >
           {mutation.isPending ? (
-            "Issuing token…"
+            t("impersonation.issuing")
           ) : (
             <>
-              <Check className="mr-1 h-3.5 w-3.5" /> Start {minutes}-min impersonation
+              <Check className="mr-1 h-3.5 w-3.5" />{" "}
+              {t("impersonation.startAction").replace("{n}", String(minutes))}
             </>
           )}
         </Button>
@@ -404,6 +400,7 @@ function SelectedUserCard({
   tenantId: string;
   tenantName?: string;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-3">
       <Monogram
@@ -415,7 +412,7 @@ function SelectedUserCard({
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="truncate text-sm font-medium">{labelFor(user)}</span>
+          <span className="truncate text-sm font-medium">{labelFor(user, t)}</span>
           {user.userName && (
             <span className="truncate font-mono text-[11px] text-[var(--color-muted-foreground)]">
               @{user.userName}
@@ -456,11 +453,11 @@ function handoffToDashboard(response: ImpersonationResponse, tenantId: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-function labelFor(user: UserDto): string {
+function labelFor(user: UserDto, t: (key: string, fallback?: string) => string): string {
   return (
     [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
     user.userName ||
     user.email ||
-    "Unnamed user"
+    t("impersonation.unnamedUser")
   );
 }

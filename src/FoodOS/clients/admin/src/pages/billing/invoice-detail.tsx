@@ -21,8 +21,7 @@ import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/auth/use-auth";
 import { BillingPermissions } from "@/lib/permissions";
-
-// ─── helpers ─────────────────────────────────────────────────────────
+import { useT } from "@/i18n/locale-provider";
 
 function formatMoney(amount: number, currency: string) {
   try {
@@ -62,20 +61,36 @@ function statusVariant(status: InvoiceStatus): React.ComponentProps<typeof Badge
   }
 }
 
+function statusLabel(
+  status: InvoiceStatus,
+  t: (key: string, fallback?: string) => string,
+): string {
+  switch (status) {
+    case "Draft":
+      return t("billing.statusDraft");
+    case "Issued":
+      return t("billing.statusIssued");
+    case "Paid":
+      return t("billing.statusPaid");
+    case "Void":
+      return t("billing.statusVoid");
+    default:
+      return status;
+  }
+}
+
 function describe(err: unknown, fallback: string): string {
   if (err instanceof ApiRequestError) return err.problem?.detail ?? err.problem?.title ?? err.message;
   if (err instanceof Error) return err.message;
   return fallback;
 }
 
-// ─── component ───────────────────────────────────────────────────────
-
 export function InvoiceDetailPage() {
+  const t = useT();
   const { invoiceId = "" } = useParams<{ invoiceId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
-  // Issue / mark-paid / void and PDF download all require Billing.Manage on the server.
   const canManageBilling = (currentUser?.permissions ?? []).includes(BillingPermissions.Manage);
 
   const query = useQuery({
@@ -90,54 +105,56 @@ export function InvoiceDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["billing", "invoices"] });
   };
 
-  // ── state-machine mutations ────────────────────────────────────────
-
   const [dueAt, setDueAt] = useState("");
   const [voidReason, setVoidReason] = useState("");
 
-  // Pass id + number via mutate(arg) — never close over invoice state, which
-  // could be stale if the query refetched between render and click.
   const downloadMutation = useMutation({
     mutationFn: ({ id, number }: { id: string; number: string }) => downloadInvoicePdf(id, number),
-    onError: (err) => toast.error("Download failed", { description: describe(err, "Could not download the invoice PDF.") }),
+    onError: (err) =>
+      toast.error(t("billing.downloadFailed"), {
+        description: describe(err, t("billing.downloadFailedBody")),
+      }),
   });
 
   const issueMutation = useMutation({
     mutationFn: () => issueInvoice(invoiceId, dueAt ? new Date(dueAt).toISOString() : null),
     onSuccess: () => {
-      toast.success("Invoice issued", { description: "Status moved to Issued." });
+      toast.success(t("billing.issuedToast"), { description: t("billing.issuedToastBody") });
       setDueAt("");
       invalidate();
     },
-    onError: (err) => toast.error("Issue failed", { description: describe(err, "Could not issue invoice.") }),
+    onError: (err) =>
+      toast.error(t("billing.issueFailed"), { description: describe(err, t("billing.issueFailedBody")) }),
   });
 
   const payMutation = useMutation({
     mutationFn: () => markInvoicePaid(invoiceId),
     onSuccess: () => {
-      toast.success("Marked paid");
+      toast.success(t("billing.markedPaid"));
       invalidate();
     },
-    onError: (err) => toast.error("Mark-paid failed", { description: describe(err, "Could not mark paid.") }),
+    onError: (err) =>
+      toast.error(t("billing.markPaidFailed"), {
+        description: describe(err, t("billing.markPaidFailedBody")),
+      }),
   });
 
   const voidMutation = useMutation({
     mutationFn: () => voidInvoice(invoiceId, voidReason.trim() ? voidReason.trim() : null),
     onSuccess: () => {
-      toast.success("Invoice voided");
+      toast.success(t("billing.voidedToast"));
       setVoidReason("");
       invalidate();
     },
-    onError: (err) => toast.error("Void failed", { description: describe(err, "Could not void invoice.") }),
+    onError: (err) =>
+      toast.error(t("billing.voidFailed"), { description: describe(err, t("billing.voidFailedBody")) }),
   });
-
-  // ── render ─────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
       <div>
         <Button variant="ghost" size="sm" onClick={() => navigate("/billing/invoices")} className="-ml-2 mb-4">
-          <ArrowLeft className="mr-1 h-4 w-4" /> All invoices
+          <ArrowLeft className="mr-1 h-4 w-4" /> {t("billing.allInvoices")}
         </Button>
 
         {query.isLoading ? (
@@ -147,7 +164,7 @@ export function InvoiceDetailPage() {
           </div>
         ) : query.isError ? (
           <div className="text-sm text-[var(--color-destructive)]">
-            {describe(query.error, "Failed to load invoice.")}
+            {describe(query.error, t("billing.loadInvoiceFailed"))}
           </div>
         ) : invoice ? (
           <EntityPageHeader
@@ -159,26 +176,43 @@ export function InvoiceDetailPage() {
                 <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-tight">
                   {invoice.invoiceNumber}
                 </code>
-                <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
+                <Badge variant={statusVariant(invoice.status)}>{statusLabel(invoice.status, t)}</Badge>
                 {invoice.purpose && (
                   <Badge variant="outline">
-                    {invoice.purpose === "Subscription" ? "Subscription" : "Usage"}
+                    {invoice.purpose === "Subscription"
+                      ? t("billing.purposeSubscription")
+                      : t("billing.purposeUsage")}
                   </Badge>
                 )}
                 <span className="font-mono text-[11px] text-[var(--color-muted-foreground)]">
-                  tenant {invoice.tenantId} · period {formatPeriod(invoice.periodYear, invoice.periodMonth)} · created {formatDate(invoice.createdAtUtc)}
+                  {t("billing.metaLine")
+                    .replace("{tenant}", invoice.tenantId)
+                    .replace("{period}", formatPeriod(invoice.periodYear, invoice.periodMonth))
+                    .replace("{created}", formatDate(invoice.createdAtUtc))}
                   {invoice.periodStartUtc && invoice.periodEndUtc && (
-                    ` · term ${formatDate(invoice.periodStartUtc)} – ${formatDate(invoice.periodEndUtc)}`
+                    ` · ${t("billing.termRange")
+                      .replace("{start}", formatDate(invoice.periodStartUtc))
+                      .replace("{end}", formatDate(invoice.periodEndUtc))}`
                   )}
-                  {invoice.issuedAtUtc && ` · issued ${formatDate(invoice.issuedAtUtc)}`}
+                  {invoice.issuedAtUtc &&
+                    ` · ${t("billing.issuedOn").replace("{date}", formatDate(invoice.issuedAtUtc))}`}
                   {invoice.dueAtUtc && invoice.status === "Issued" && (
-                    <span className="text-[var(--color-warning)]"> · due {formatDate(invoice.dueAtUtc)}</span>
+                    <span className="text-[var(--color-warning)]">
+                      {" "}
+                      · {t("billing.dueOn").replace("{date}", formatDate(invoice.dueAtUtc))}
+                    </span>
                   )}
                   {invoice.paidAtUtc && (
-                    <span className="text-[var(--color-success)]"> · paid {formatDate(invoice.paidAtUtc)}</span>
+                    <span className="text-[var(--color-success)]">
+                      {" "}
+                      · {t("billing.paidOn").replace("{date}", formatDate(invoice.paidAtUtc))}
+                    </span>
                   )}
                   {invoice.voidedAtUtc && (
-                    <span className="text-[var(--color-destructive)]"> · voided {formatDate(invoice.voidedAtUtc)}</span>
+                    <span className="text-[var(--color-destructive)]">
+                      {" "}
+                      · {t("billing.voidedOn").replace("{date}", formatDate(invoice.voidedAtUtc))}
+                    </span>
                   )}
                 </span>
               </span>
@@ -192,10 +226,10 @@ export function InvoiceDetailPage() {
                   downloadMutation.mutate({ id: invoice.id, number: invoice.invoiceNumber })
                 }
                 disabled={downloadMutation.isPending}
-                title="Download this invoice as a PDF"
+                title={t("billing.downloadTitle")}
               >
                 <Download className="mr-1.5 h-3.5 w-3.5" />
-                {downloadMutation.isPending ? "Preparing…" : "Download PDF"}
+                {downloadMutation.isPending ? t("billing.preparing") : t("billing.downloadPdf")}
               </Button>
             )}
           </EntityPageHeader>
@@ -203,20 +237,22 @@ export function InvoiceDetailPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Line items */}
         <SettingsSection
-          title="Line items"
+          title={t("billing.lineItems")}
           description={
             invoice
-              ? `${invoice.lineItems.length} line${invoice.lineItems.length === 1 ? "" : "s"}`
+              ? t(invoice.lineItems.length === 1 ? "billing.lineOne" : "billing.lineMany").replace(
+                  "{n}",
+                  String(invoice.lineItems.length),
+                )
               : query.isError
-                ? "Unavailable"
-                : "Loading…"
+                ? t("billing.unavailable")
+                : t("billing.loading")
           }
         >
           {query.isError ? (
             <div className="py-8 text-center text-sm text-[var(--color-destructive)]">
-              {describe(query.error, "Failed to load line items.")}
+              {describe(query.error, t("billing.loadLinesFailed"))}
             </div>
           ) : query.isLoading ? (
             <ul className="-mx-5 divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
@@ -229,7 +265,7 @@ export function InvoiceDetailPage() {
             </ul>
           ) : invoice && invoice.lineItems.length === 0 ? (
             <div className="py-8 text-center text-sm text-[var(--color-muted-foreground)]">
-              No line items.
+              {t("billing.noLineItems")}
             </div>
           ) : invoice ? (
             <ul className="-mx-5 border-t border-[var(--color-border)]">
@@ -238,7 +274,7 @@ export function InvoiceDetailPage() {
               ))}
               <li className="grid grid-cols-[1fr_auto] items-baseline gap-x-6 border-t-2 border-[var(--color-border-strong)] px-5 py-4">
                 <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
-                  subtotal
+                  {t("billing.subtotal")}
                 </div>
                 <div className="text-display text-xl font-semibold tabular-nums">
                   {formatMoney(invoice.subtotalAmount, invoice.currency)}
@@ -248,22 +284,18 @@ export function InvoiceDetailPage() {
           ) : null}
         </SettingsSection>
 
-        {/* Actions side panel */}
         <div className="space-y-4">
           {invoice && (
             <>
-              {/* Issue / Mark-paid / Void all mutate invoice state — gated behind
-                  Billing.Manage. View-only users still see read-only Notes below. */}
               {canManageBilling && (
                 <>
-              {/* Issue */}
               <SettingsSection
                 icon={Send}
-                title="Issue"
-                description="Transition from Draft to Issued status."
+                title={t("billing.issue")}
+                description={t("billing.issueDesc")}
               >
                 <div className={cn("space-y-3", invoice.status !== "Draft" && "opacity-60")}>
-                  <Field id="dueAt" label="Due date" hint="Leave blank for server default (+14 days).">
+                  <Field id="dueAt" label={t("billing.dueDate")} hint={t("billing.dueDateHint")}>
                     <Input
                       id="dueAt"
                       type="date"
@@ -278,16 +310,15 @@ export function InvoiceDetailPage() {
                     onClick={() => issueMutation.mutate()}
                     className="w-full"
                   >
-                    {issueMutation.isPending ? "Issuing…" : "Issue invoice"}
+                    {issueMutation.isPending ? t("billing.issuing") : t("billing.issueInvoice")}
                   </Button>
                 </div>
               </SettingsSection>
 
-              {/* Mark paid */}
               <SettingsSection
                 icon={CheckCircle2}
-                title="Mark paid"
-                description="Records manual payment receipt. Idempotent."
+                title={t("billing.markPaid")}
+                description={t("billing.markPaidDesc")}
               >
                 <div className={cn(invoice.status !== "Issued" && "opacity-60")}>
                   <Button
@@ -296,16 +327,15 @@ export function InvoiceDetailPage() {
                     onClick={() => payMutation.mutate()}
                     className="w-full"
                   >
-                    {payMutation.isPending ? "Saving…" : "Mark as paid"}
+                    {payMutation.isPending ? t("billing.saving") : t("billing.markAsPaid")}
                   </Button>
                 </div>
               </SettingsSection>
 
-              {/* Void */}
               <SettingsSection
                 icon={Ban}
-                title="Void"
-                description="Cancel from Draft or Issued. Irreversible."
+                title={t("billing.void")}
+                description={t("billing.voidDesc")}
               >
                 <div
                   className={cn(
@@ -313,10 +343,10 @@ export function InvoiceDetailPage() {
                     (invoice.status === "Paid" || invoice.status === "Void") && "opacity-60",
                   )}
                 >
-                  <Field id="voidReason" label="Reason" hint="Optional — appended to notes.">
+                  <Field id="voidReason" label={t("billing.reason")} hint={t("billing.reasonHint")}>
                     <Input
                       id="voidReason"
-                      placeholder="duplicate · disputed · …"
+                      placeholder={t("billing.voidPlaceholder")}
                       value={voidReason}
                       onChange={(e) => setVoidReason(e.target.value)}
                       disabled={
@@ -337,7 +367,7 @@ export function InvoiceDetailPage() {
                     onClick={() => voidMutation.mutate()}
                     className="w-full"
                   >
-                    {voidMutation.isPending ? "Voiding…" : "Void invoice"}
+                    {voidMutation.isPending ? t("billing.voiding") : t("billing.voidInvoice")}
                   </Button>
                 </div>
               </SettingsSection>
@@ -345,7 +375,7 @@ export function InvoiceDetailPage() {
               )}
 
               {invoice.notes && (
-                <SettingsSection title="Notes">
+                <SettingsSection title={t("billing.notes")}>
                   <p className="whitespace-pre-line text-xs text-[var(--color-foreground)]">
                     {invoice.notes}
                   </p>
@@ -358,8 +388,6 @@ export function InvoiceDetailPage() {
     </div>
   );
 }
-
-// ─── subcomponents ───────────────────────────────────────────────────
 
 function LineItemRow({
   item,
@@ -397,4 +425,3 @@ function LineItemRow({
     </li>
   );
 }
-

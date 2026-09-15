@@ -13,6 +13,7 @@ import { SettingsSection } from "@/components/list";
 import { ImpersonateDialog } from "@/components/impersonation/impersonate-dialog";
 import { RevokeGrantDialog } from "@/components/impersonation/revoke-grant-dialog";
 import { IdentityPermissions } from "@/lib/permissions";
+import { useT } from "@/i18n/locale-provider";
 
 const REFRESH_INTERVAL_MS = 5_000;
 
@@ -22,6 +23,7 @@ const REFRESH_INTERVAL_MS = 5_000;
  * if the caller can't see impersonation grants (perm-gated upstream).
  */
 export function ActiveGrantsCard({ tenantId }: { tenantId: string }) {
+  const t = useT();
   const { user } = useAuth();
   const canView = (user?.permissions ?? []).includes(IdentityPermissions.Impersonation.View);
   const canRevoke = (user?.permissions ?? []).includes(IdentityPermissions.Impersonation.Revoke);
@@ -66,9 +68,9 @@ export function ActiveGrantsCard({ tenantId }: { tenantId: string }) {
   return (
     <>
       <SettingsSection
-        title="Active impersonations"
+        title={t("impersonation.activeCardTitle")}
         icon={UserCog}
-        description="Operators currently signed in as users in this tenant. Revoking immediately invalidates the issued token; the dashboard tab will 401 on its next request."
+        description={t("impersonation.activeCardDesc")}
       >
         <ul className="divide-y divide-[var(--color-border)]">
           {items.map((g) => (
@@ -104,10 +106,6 @@ export function ActiveGrantsCard({ tenantId }: { tenantId: string }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// GrantRow — a single active impersonation session row
-// ─────────────────────────────────────────────────────────────────────────
-
 function GrantRow({
   grant: g,
   canRevoke,
@@ -121,13 +119,14 @@ function GrantRow({
   onRevoke: () => void;
   onReopen: () => void;
 }) {
+  const t = useT();
   return (
     <li className="grid grid-cols-[auto_1fr_auto] items-center gap-4 py-3 first:pt-0 last:pb-0">
       {/* Live-session pulse dot */}
       <span
         aria-hidden
         className="pulse-dot"
-        title="Active session"
+        title={t("impersonation.activeSession")}
       />
 
       {/* Session detail */}
@@ -143,22 +142,19 @@ function GrantRow({
             </span>
           </span>
           <Badge variant="brand" className="font-mono uppercase tracking-[0.14em]">
-            Active
+            {t("impersonation.active")}
           </Badge>
         </div>
         <div className="mt-0.5 truncate font-mono text-[10.5px] text-[var(--color-muted-foreground)]">
-          started {new Date(g.startedAtUtc).toLocaleTimeString()} · expires{" "}
-          {new Date(g.expiresAtUtc).toLocaleTimeString()}
+          {t("impersonation.startedExpires")
+            .replace("{started}", new Date(g.startedAtUtc).toLocaleTimeString())
+            .replace("{expires}", new Date(g.expiresAtUtc).toLocaleTimeString())}
           {g.reason && <> · {truncate(g.reason, 80)}</>}
         </div>
       </div>
 
-      {/* Row actions */}
       <RowActions
         canRevoke={canRevoke}
-        // Re-open: operator's own grant + still Active + has start perm.
-        // Closed-browser recovery path — issues a fresh token, leaves
-        // the original grant alive until natural expiry or revoke.
         canReopen={canReopen}
         onRevoke={onRevoke}
         onReopen={onReopen}
@@ -178,10 +174,11 @@ function RowActions({
   onRevoke: () => void;
   onReopen: () => void;
 }) {
+  const t = useT();
   if (!canRevoke && !canReopen) {
     return (
       <Badge variant="muted" className="font-mono uppercase tracking-[0.14em]">
-        <UserCog className="h-3 w-3" /> view-only
+        <UserCog className="h-3 w-3" /> {t("impersonation.viewOnly")}
       </Badge>
     );
   }
@@ -192,14 +189,14 @@ function RowActions({
           variant="outline"
           size="sm"
           onClick={onReopen}
-          title="Issue a fresh impersonation token — use when you lost the original dashboard tab."
+          title={t("impersonation.reopenTitleCard")}
         >
-          <UserCog className="mr-1 h-3.5 w-3.5" /> Re-open
+          <UserCog className="mr-1 h-3.5 w-3.5" /> {t("impersonation.reopen")}
         </Button>
       )}
       {canRevoke && (
         <Button variant="outline" size="sm" onClick={onRevoke}>
-          <ShieldOff className="mr-1 h-3.5 w-3.5" /> Revoke
+          <ShieldOff className="mr-1 h-3.5 w-3.5" /> {t("impersonation.revoke")}
         </Button>
       )}
     </div>

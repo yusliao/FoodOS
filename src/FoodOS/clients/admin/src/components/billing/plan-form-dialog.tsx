@@ -23,50 +23,39 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ApiRequestError } from "@/lib/api-client";
+import { useT } from "@/i18n/locale-provider";
 
 const PLAN_KEY_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
 
-// A money/rate field is a free-text decimal string. These refinements run
-// client-side so a negative price is rejected before any network call (the
-// server also rejects it, but we don't rely on that).
-const NON_NEGATIVE_MSG = "Must be a non-negative number.";
+type Translate = (key: string, fallback?: string) => string;
 
-/** Required non-negative decimal (e.g. monthly base price). */
-const requiredNonNegative = z
-  .string()
-  .trim()
-  .min(1, "Required.")
-  .refine((v) => Number.isFinite(Number(v)) && Number(v) >= 0, NON_NEGATIVE_MSG);
-
-/** Optional non-negative decimal (blank allowed → omitted). */
-const optionalNonNegative = z
-  .string()
-  .trim()
-  .refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0), NON_NEGATIVE_MSG);
-
-const INTERVAL_OPTIONS: SelectOption<PlanInterval>[] = [
-  { value: "Monthly", label: "Monthly", hint: "billed every month" },
-  { value: "Yearly", label: "Yearly", hint: "billed every 12 months" },
-];
-
-const OVERAGE_RESOURCES: { key: QuotaResource; label: string; placeholder: string }[] = [
-  { key: "ApiCalls", label: "API calls", placeholder: "0.0010" },
-  { key: "StorageBytes", label: "Storage bytes", placeholder: "0.00000001" },
-  { key: "Users", label: "Users", placeholder: "5.00" },
-  { key: "ActiveFeatureFlags", label: "Feature flags", placeholder: "1.00" },
-];
+function makeMoneySchemas(t: Translate) {
+  const nonNegative = t("billing.nonNegative");
+  return {
+    requiredNonNegative: z
+      .string()
+      .trim()
+      .min(1, t("billing.required"))
+      .refine((v) => Number.isFinite(Number(v)) && Number(v) >= 0, nonNegative),
+    optionalNonNegative: z
+      .string()
+      .trim()
+      .refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0), nonNegative),
+  };
+}
 
 type OverageState = Record<string, string>;
 
-function toOverageNumbers(state: OverageState): Record<string, number> | null {
+function toOverageNumbers(
+  state: OverageState,
+  resources: { key: QuotaResource }[],
+): Record<string, number> | null {
   const out: Record<string, number> = {};
   let any = false;
-  for (const { key } of OVERAGE_RESOURCES) {
+  for (const { key } of resources) {
     const raw = state[key];
     if (raw === undefined || raw.trim() === "") continue;
     const n = Number(raw);
-    // Submission is blocked upstream when a value is invalid, so anything that
-    // reaches here is a non-negative finite number.
     if (!Number.isFinite(n) || n < 0) continue;
     out[key] = n;
     any = true;
@@ -74,7 +63,6 @@ function toOverageNumbers(state: OverageState): Record<string, number> | null {
   return any ? out : null;
 }
 
-/** First validation message for a value against a schema, or undefined when valid. */
 function fieldError(schema: z.ZodTypeAny, value: string): string | undefined {
   const result = schema.safeParse(value);
   return result.success ? undefined : result.error.issues[0]?.message;
@@ -111,10 +99,6 @@ function SectionLabel({
   );
 }
 
-/**
- * Create or edit a billing plan in a dialog. Pass `plan` to edit (key + currency are immutable then),
- * omit it to create. On success it invalidates the plans cache and closes.
- */
 export function PlanFormDialog({
   open,
   onOpenChange,
@@ -124,8 +108,28 @@ export function PlanFormDialog({
   onOpenChange: (open: boolean) => void;
   plan?: BillingPlanDto;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const isEdit = !!plan;
+  const { requiredNonNegative, optionalNonNegative } = useMemo(() => makeMoneySchemas(t), [t]);
+
+  const intervalOptions: SelectOption<PlanInterval>[] = useMemo(
+    () => [
+      { value: "Monthly", label: t("billing.monthly"), hint: t("billing.intervalMonthlyHint") },
+      { value: "Yearly", label: t("billing.yearly"), hint: t("billing.intervalYearlyHint") },
+    ],
+    [t],
+  );
+
+  const overageResources: { key: QuotaResource; label: string; placeholder: string }[] = useMemo(
+    () => [
+      { key: "ApiCalls", label: t("billing.resApiCalls"), placeholder: "0.0010" },
+      { key: "StorageBytes", label: t("billing.resStorageBytes"), placeholder: "0.00000001" },
+      { key: "Users", label: t("billing.resUsers"), placeholder: "5.00" },
+      { key: "ActiveFeatureFlags", label: t("billing.resFeatureFlags"), placeholder: "1.00" },
+    ],
+    [t],
+  );
 
   const [key, setKey] = useState("");
   const [name, setName] = useState("");
@@ -135,7 +139,6 @@ export function PlanFormDialog({
   const [annualPrice, setAnnualPrice] = useState("");
   const [overage, setOverage] = useState<OverageState>({});
 
-  // Reset/populate whenever the dialog opens (or the target plan changes).
   useEffect(() => {
     if (!open) return;
     setKey(plan?.key ?? "");
@@ -153,25 +156,21 @@ export function PlanFormDialog({
 
   const keyInvalid = !isEdit && key.length > 0 && !PLAN_KEY_PATTERN.test(key);
   const priceNum = Number(monthlyBasePrice);
-  // Only surface the price error once something's been typed; submit-time
-  // validation (onSubmit) still blocks an empty required field.
   const priceError =
     monthlyBasePrice.length > 0 ? fieldError(requiredNonNegative, monthlyBasePrice) : undefined;
   const annualNum = Number(annualPrice);
   const annualError = fieldError(optionalNonNegative, annualPrice);
   const annualPricePayload = interval === "Yearly" && annualPrice.trim().length > 0 ? annualNum : null;
 
-  // Per-resource overage validation — a negative or non-numeric rate blocks submit.
   const overageErrors = useMemo(() => {
     const out: Partial<Record<string, string>> = {};
-    for (const { key: resKey } of OVERAGE_RESOURCES) {
+    for (const { key: resKey } of overageResources) {
       const err = fieldError(optionalNonNegative, overage[resKey] ?? "");
       if (err) out[resKey] = err;
     }
     return out;
-  }, [overage]);
+  }, [overage, optionalNonNegative, overageResources]);
   const hasOverageError = Object.keys(overageErrors).length > 0;
-  // Aggregate validity for disabling submit. Monthly price is required + non-negative.
   const pricingInvalid =
     !!fieldError(requiredNonNegative, monthlyBasePrice) || !!annualError || hasOverageError;
 
@@ -180,21 +179,23 @@ export function PlanFormDialog({
   const createMutation = useMutation({
     mutationFn: createPlan,
     onSuccess: () => {
-      toast.success(`Plan "${name}" created`);
+      toast.success(t("billing.createdPlan").replace("{name}", name));
       queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
       onClose();
     },
-    onError: (err) => toast.error("Create failed", { description: describe(err, "Could not create plan.") }),
+    onError: (err) =>
+      toast.error(t("billing.createFailed"), { description: describe(err, t("billing.createFailedBody")) }),
   });
 
   const updateMutation = useMutation({
     mutationFn: updatePlan,
     onSuccess: () => {
-      toast.success(`Plan "${name}" updated`);
+      toast.success(t("billing.updatedPlan").replace("{name}", name));
       queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
       onClose();
     },
-    onError: (err) => toast.error("Update failed", { description: describe(err, "Could not update plan.") }),
+    onError: (err) =>
+      toast.error(t("billing.updateFailed"), { description: describe(err, t("billing.updateFailedBody")) }),
   });
 
   const pending = createMutation.isPending || updateMutation.isPending;
@@ -202,7 +203,7 @@ export function PlanFormDialog({
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (pricingInvalid) return;
-    const overageRates = toOverageNumbers(overage);
+    const overageRates = toOverageNumbers(overage, overageResources);
 
     if (isEdit && plan) {
       updateMutation.mutate({
@@ -240,32 +241,31 @@ export function PlanFormDialog({
             >
               <CreditCard className="h-[18px] w-[18px]" />
             </span>
-            <DialogTitle className="text-[16px]">{isEdit ? "Edit plan" : "New plan"}</DialogTitle>
+            <DialogTitle className="text-[16px]">
+              {isEdit ? t("billing.editPlanTitle") : t("billing.newPlanTitle")}
+            </DialogTitle>
           </div>
           <DialogDescription className="mt-1">
-            {isEdit
-              ? "Update name, pricing, interval, or overage rates. Key and currency are immutable."
-              : "Plan keys are canonical slugs used by tenant subscriptions and quota configuration."}
+            {isEdit ? t("billing.editPlanDesc") : t("billing.newPlanDesc")}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit}>
           <DialogBody className="space-y-6">
-            {/* ── Details ── */}
             <div className="space-y-3">
               <SectionLabel
                 icon={CreditCard}
-                title="Plan details"
-                description="Identity + pricing. The interval sets the term length and how often the tenant is billed."
+                title={t("billing.planDetails")}
+                description={t("billing.planDetailsDesc")}
               />
               <div className="h-px bg-[var(--color-border)] opacity-60" />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   id="pf-key"
-                  label="Key"
-                  hint="Lowercase slug (e.g. 'pro', 'team-2025'). Immutable."
+                  label={t("billing.key")}
+                  hint={t("billing.keyHint")}
                   required={!isEdit}
-                  error={keyInvalid ? "Invalid slug." : undefined}
+                  error={keyInvalid ? t("billing.invalidSlug") : undefined}
                 >
                   <Input
                     id="pf-key"
@@ -277,10 +277,10 @@ export function PlanFormDialog({
                     autoComplete="off"
                   />
                 </Field>
-                <Field id="pf-name" label="Display name" required>
+                <Field id="pf-name" label={t("billing.displayName")} required>
                   <Input id="pf-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Pro" />
                 </Field>
-                <Field id="pf-currency" label="Currency" hint="ISO 4217. Immutable." required={!isEdit}>
+                <Field id="pf-currency" label={t("billing.currency")} hint={t("billing.currencyHint")} required={!isEdit}>
                   <Input
                     id="pf-currency"
                     value={currency}
@@ -293,8 +293,8 @@ export function PlanFormDialog({
                 </Field>
                 <Field
                   id="pf-monthlyBasePrice"
-                  label="Monthly base price"
-                  hint="Canonical monthly rate; the term price for monthly plans."
+                  label={t("billing.monthlyBase")}
+                  hint={t("billing.monthlyBaseHint")}
                   required
                   error={priceError}
                 >
@@ -306,19 +306,19 @@ export function PlanFormDialog({
                     placeholder="29.00"
                   />
                 </Field>
-                <Field id="pf-interval" label="Billing interval" required>
+                <Field id="pf-interval" label={t("billing.billingInterval")} required>
                   <Select<PlanInterval>
                     id="pf-interval"
                     value={interval}
                     onValueChange={(v) => setInterval(v === "Yearly" ? "Yearly" : "Monthly")}
-                    options={INTERVAL_OPTIONS}
+                    options={intervalOptions}
                   />
                 </Field>
                 {interval === "Yearly" && (
                   <Field
                     id="pf-annualPrice"
-                    label="Annual price"
-                    hint="Per yearly term. Blank → 12× monthly."
+                    label={t("billing.annualPrice")}
+                    hint={t("billing.annualPriceHint")}
                     error={annualError}
                   >
                     <Input
@@ -333,16 +333,15 @@ export function PlanFormDialog({
               </div>
             </div>
 
-            {/* ── Overage rates ── */}
             <div className="space-y-3">
               <SectionLabel
                 icon={Gauge}
-                title="Overage rates"
-                description="Per-unit price when a tenant exceeds the plan limit. Leave blank to skip a resource."
+                title={t("billing.overageRates")}
+                description={t("billing.overageRatesDesc")}
               />
               <div className="h-px bg-[var(--color-border)] opacity-60" />
               <div className="grid gap-4 sm:grid-cols-2">
-                {OVERAGE_RESOURCES.map((res) => (
+                {overageResources.map((res) => (
                   <Field
                     key={res.key}
                     id={`pf-overage-${res.key}`}
@@ -364,10 +363,10 @@ export function PlanFormDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
-              Cancel
+              {t("chrome.cancel")}
             </Button>
             <Button type="submit" disabled={pending || keyInvalid || pricingInvalid}>
-              {pending ? "Saving…" : isEdit ? "Save changes" : "Create plan"}
+              {pending ? t("billing.saving") : isEdit ? t("billing.saveChanges") : t("billing.createPlan")}
             </Button>
           </DialogFooter>
         </form>

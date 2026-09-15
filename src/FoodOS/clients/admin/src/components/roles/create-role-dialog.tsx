@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -19,21 +20,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ApiRequestError } from "@/lib/api-client";
+import { useT } from "@/i18n/locale-provider";
 
-// ─── Schema (identical to the old create page) ───────────────────────────────
+function makeSchema(t: (key: string, fallback?: string) => string) {
+  return z.object({
+    name: z
+      .string()
+      .trim()
+      .min(2, t("roles.atLeast2"))
+      .max(64, t("roles.max64")),
+    description: z.string().trim().max(256, t("roles.max256")).optional(),
+  });
+}
 
-const schema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(2, "At least 2 characters.")
-    .max(64, "Keep under 64 characters."),
-  description: z.string().trim().max(256, "Keep under 256 characters.").optional(),
-});
-
-type FormValues = z.infer<typeof schema>;
-
-// ─── Dialog ───────────────────────────────────────────────────────────────────
+type FormValues = z.infer<ReturnType<typeof makeSchema>>;
 
 export function CreateRoleDialog({
   open,
@@ -42,8 +42,10 @@ export function CreateRoleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const schema = useMemo(() => makeSchema(t), [t]);
 
   const {
     register,
@@ -64,7 +66,7 @@ export function CreateRoleDialog({
         description: values.description?.trim() ? values.description : null,
       }),
     onSuccess: (result) => {
-      toast.success(`Role ${result.name} created`);
+      toast.success(t("roles.created").replace("{name}", result.name));
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       handleClose();
       navigate(`/roles/${result.id}`);
@@ -74,7 +76,7 @@ export function CreateRoleDialog({
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : err.message;
-      toast.error("Create failed", { description: detail });
+      toast.error(t("roles.createFailed"), { description: detail });
     },
   });
 
@@ -108,19 +110,18 @@ export function CreateRoleDialog({
               <Shield className="h-[18px] w-[18px]" />
             </span>
             <div className="min-w-0">
-              <DialogTitle className="text-[16px]">New role</DialogTitle>
+              <DialogTitle className="text-[16px]">{t("roles.newRole")}</DialogTitle>
             </div>
           </div>
           <DialogDescription className="mt-1">
-            Create a role, then grant it permissions on its detail page. The role name is what shows
-            up in user role assignments — choose something descriptive.
+            {t("roles.createDesc")}
           </DialogDescription>
         </DialogHeader>
 
         {/* ── Form ── */}
         <form onSubmit={onSubmit}>
           <DialogBody className="space-y-4">
-            <Field id="cr-name" label="Name" required error={errors.name?.message}>
+            <Field id="cr-name" label={t("roles.name")} required error={errors.name?.message}>
               <Input
                 id="cr-name"
                 placeholder="Support agent"
@@ -131,8 +132,8 @@ export function CreateRoleDialog({
             </Field>
             <Field
               id="cr-description"
-              label="Description"
-              hint="Optional. Plain English explaining what this role is for."
+              label={t("roles.descriptionLabel")}
+              hint={t("roles.descriptionHint")}
               error={errors.description?.message}
             >
               <Input
@@ -152,10 +153,10 @@ export function CreateRoleDialog({
               onClick={handleClose}
               disabled={submitting}
             >
-              Cancel
+              {t("chrome.cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : "Create role"}
+              {submitting ? t("roles.saving") : t("roles.createRole")}
             </Button>
           </DialogFooter>
         </form>
