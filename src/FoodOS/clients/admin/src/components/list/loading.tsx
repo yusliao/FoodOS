@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 type LoadingRowProps = {
   className?: string;
@@ -10,7 +11,8 @@ type LoadingRowProps = {
  * a list while the first page resolves. Subtle, no spinner — the
  * caret-style ellipsis is enough.
  */
-export function LoadingRow({ className, label = "Loading" }: LoadingRowProps) {
+export function LoadingRow({ className, label }: LoadingRowProps) {
+  const t = useT();
   return (
     <div
       role="status"
@@ -19,7 +21,7 @@ export function LoadingRow({ className, label = "Loading" }: LoadingRowProps) {
         className,
       )}
     >
-      {label}
+      {label ?? t("common.loading")}
       <span className="caret text-[var(--color-accent-signal)]" aria-hidden />
     </div>
   );

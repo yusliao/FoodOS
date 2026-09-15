@@ -18,6 +18,7 @@ import {
 import { SidebarNavBody } from "@/components/layout/sidebar";
 import { findSectionForPath, sections, filterNavSpec } from "@/components/layout/nav-items";
 import { useAuth } from "@/auth/use-auth";
+import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
 import type { NavSection } from "@/components/layout/nav-items";
 
@@ -61,6 +62,7 @@ export function MobileNavProvider({ children }: { children: ReactNode }) {
  * Auto-closes on route changes.
  */
 export function MobileNavRoot() {
+  const t = useT();
   const { open, setOpen } = useMobileNav();
   const location = useLocation();
   const { user, permissionsHydrated } = useAuth();
@@ -93,9 +95,9 @@ export function MobileNavRoot() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent side="left" className="flex flex-col p-0">
         {/* Radix Dialog requires a Title for the accessible tree. */}
-        <DialogTitle className="sr-only">Primary navigation</DialogTitle>
+        <DialogTitle className="sr-only">{t("chrome.primaryNav")}</DialogTitle>
         <DialogDescription className="sr-only">
-          Admin sections and account links.
+          {t("common.adminSections")}
         </DialogDescription>
 
         {/* Brand row — matches Topbar height */}
@@ -115,7 +117,7 @@ export function MobileNavRoot() {
               fullstack<span className="text-[var(--color-primary)]">hero</span>
             </span>
             <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.7)]">
-              Admin
+              {t("chrome.admin")}
             </span>
           </div>
         </div>
@@ -142,12 +144,13 @@ export function MobileNavRoot() {
  * Hamburger trigger — `md:hidden`. Place in the Topbar.
  */
 export function MobileNavTrigger({ className }: { className?: string }) {
+  const t = useT();
   const { setOpen } = useMobileNav();
   const onClick = useCallback(() => setOpen(true), [setOpen]);
   return (
     <button
       type="button"
-      aria-label="Open navigation menu"
+      aria-label={t("common.openNav")}
       onClick={onClick}
       className={cn(
         "grid h-9 w-9 cursor-pointer place-items-center rounded-md md:hidden",

@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 type EmptyStateProps = {
   icon?: LucideIcon;
@@ -25,6 +26,7 @@ export function EmptyState({
   action,
   className,
 }: EmptyStateProps) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -47,7 +49,7 @@ export function EmptyState({
       {kicker && (
         <span className="meta text-[var(--color-muted-foreground)]">{kicker}</span>
       )}
-      <h3 className="font-display text-2xl font-semibold tracking-tight">{title}</h3>
+      <h3 className="font-display text-2xl font-semibold tracking-tight">{title || t("common.emptyDefault")}</h3>
       {description && (
         <p className="max-w-md text-sm text-[var(--color-muted-foreground)] leading-relaxed">
           {description}

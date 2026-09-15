@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 /**
  * A reusable confirmation dialog for important / irreversible actions. Replaces ad-hoc
@@ -22,8 +23,8 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   onConfirm,
   destructive = false,
   pending = false,
@@ -38,6 +39,7 @@ export function ConfirmDialog({
   destructive?: boolean;
   pending?: boolean;
 }) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={(o) => (pending ? undefined : onOpenChange(o))}>
       <DialogContent size="sm">
@@ -64,7 +66,7 @@ export function ConfirmDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
-            {cancelLabel}
+            {cancelLabel ?? t("chrome.cancel")}
           </Button>
           <Button
             type="button"
@@ -72,7 +74,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={pending}
           >
-            {pending ? "Working…" : confirmLabel}
+            {pending ? t("common.working") : (confirmLabel ?? t("common.confirm"))}
           </Button>
         </DialogFooter>
       </DialogContent>
