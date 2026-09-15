@@ -1,5 +1,7 @@
 # FoodOS
 
+Codex 开发入口见 [仓库项目指令](../../AGENTS.md) 和 [Codex 开发指南](../../doc/Codex-开发指南.md)。本文件命令均从当前工程目录执行；外层仓库根目录需先进入 `src/FoodOS`。
+
 Your application, generated from the **FSH .NET Starter Kit** — a production-ready modular
 .NET 10 monolith with two React 19 apps, multitenancy, identity, background jobs, and
 cloud-native deploy.
