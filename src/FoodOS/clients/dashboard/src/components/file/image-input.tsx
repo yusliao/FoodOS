@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { useFileUpload, formatBytes } from "@/hooks/use-file-upload";
 import { getFileMetadata, Visibility } from "@/api/files";
 import { ApiRequestError } from "@/lib/api-client";
+import { useT } from "@/i18n/locale-provider";
 
 type Props = {
   /** Current image URL (or empty). The component is fully controlled. */
@@ -45,6 +46,7 @@ export function ImageInput({
   shape = "square",
   className,
 }: Props) {
+  const t = useT();
   const [mode, setMode] = useState<"upload" | "url">("upload");
   const { upload, progress, isUploading, reset } = useFileUpload({
     ownerType,
@@ -60,7 +62,7 @@ export function ImageInput({
     mutationFn: async (fileAssetId: string) => {
       const dto = await getFileMetadata(fileAssetId);
       if (!dto.publicUrl) {
-        throw new Error("Server returned no publicUrl for this file.");
+        throw new Error(t("settings.noPublicUrl"));
       }
       return dto.publicUrl;
     },
@@ -77,7 +79,7 @@ export function ImageInput({
         const asset = await upload(file);
         const url = await resolveUrl.mutateAsync(asset.id);
         onChange(url);
-        toast.success("Image uploaded");
+        toast.success(t("settings.imageUploaded"));
         // Clear progress so the dropzone re-arms for another upload.
         setTimeout(reset, 1500);
       } catch (e) {
@@ -86,7 +88,7 @@ export function ImageInput({
             ? (e.problem?.detail ?? e.problem?.title ?? e.message)
             : e instanceof Error
               ? e.message
-              : "Upload failed";
+              : t("settings.uploadFailed");
         toast.error(message);
       }
     };
@@ -108,10 +110,10 @@ export function ImageInput({
       {/* Mode toggle */}
       <div className="flex gap-1">
         <ModeChip active={mode === "upload"} onClick={() => setMode("upload")} icon={<Upload className="h-3.5 w-3.5" />}>
-          Upload
+          {t("settings.uploadMode")}
         </ModeChip>
         <ModeChip active={mode === "url"} onClick={() => setMode("url")} icon={<LinkIcon className="h-3.5 w-3.5" />}>
-          Paste URL
+          {t("settings.pasteUrl")}
         </ModeChip>
       </div>
 
@@ -144,12 +146,12 @@ export function ImageInput({
                 {isWorking
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <Upload className="h-3.5 w-3.5" />}
-                {showImage ? "Replace image" : "Choose image"}
+                {showImage ? t("settings.replaceImage") : t("settings.chooseImage")}
               </Button>
               {showImage && !isWorking && (
                 <Button type="button" size="sm" variant="outline" onClick={() => onChange("")}>
                   <X className="h-3.5 w-3.5" />
-                  Remove
+                  {t("settings.removeImage")}
                 </Button>
               )}
               {isUploading && progress && (
@@ -170,8 +172,8 @@ export function ImageInput({
 
           <p className="text-xs text-[var(--color-muted-foreground)]">
             {mode === "upload"
-              ? `JPG/PNG/WebP/GIF · up to ${formatBytes(maxBytes)}`
-              : "Direct link to an image you host elsewhere."}
+              ? t("settings.uploadHint").replace("{size}", formatBytes(maxBytes))
+              : t("settings.pasteHint")}
           </p>
         </div>
       </div>

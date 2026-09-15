@@ -114,14 +114,31 @@ public sealed class Shipment : AggregateRoot<Guid>
         Status = ShipmentStatus.Departed;
     }
 
-    public ReturnOnTruck RecordReturn(Guid orderId, Guid productId, Guid lotId, decimal quantity, string reason)
+    public ReturnOnTruck RecordReturn(Guid orderId, Guid productId, Guid lotId, decimal quantity, string reason, Guid? returnId = null)
     {
-        var ret = ReturnOnTruck.Create(Id, orderId, productId, lotId, quantity, reason);
+        var ret = ReturnOnTruck.Create(Id, orderId, productId, lotId, quantity, reason, returnId);
         _returns.Add(ret);
         return ret;
     }
 
     public ProofOfDelivery ConfirmStop(
+        Guid stopId,
+        string signedQtyJson,
+        IReadOnlyList<Guid> photoFileIds,
+        string signerName,
+        string? geo)
+    {
+        PrepareStopSignature(stopId, signedQtyJson, photoFileIds, signerName, geo);
+        var pod = _stops.First(s => s.Id == stopId).ConfirmPod(signedQtyJson, photoFileIds, signerName, geo);
+        if (_stops.TrueForAll(s => s.Status == StopStatus.Delivered))
+        {
+            Status = ShipmentStatus.Completed;
+        }
+
+        return pod;
+    }
+
+    public ProofOfDelivery PrepareStopSignature(
         Guid stopId,
         string signedQtyJson,
         IReadOnlyList<Guid> photoFileIds,
@@ -142,12 +159,6 @@ public sealed class Shipment : AggregateRoot<Guid>
                 (IEnumerable<string>?)null,
                 HttpStatusCode.NotFound);
 
-        var pod = stop.ConfirmPod(signedQtyJson, photoFileIds, signerName, geo);
-        if (_stops.TrueForAll(s => s.Status == StopStatus.Delivered))
-        {
-            Status = ShipmentStatus.Completed;
-        }
-
-        return pod;
+        return stop.PreparePod(signedQtyJson, photoFileIds, signerName, geo);
     }
 }

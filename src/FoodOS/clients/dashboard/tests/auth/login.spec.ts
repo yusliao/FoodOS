@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mockJsonResponse, mockProblemDetails } from "../helpers/api-mocks";
 
 // The dashboard login page (rebuilt to the dentalOS card layout): FSH logo
-// lockup + ".NET 10 Starter Kit" caption, tenant/email/password card, and a
+// lockup + tenant workspace caption, tenant/email/password card, and a
 // demoMode-gated "Step into any role" picker that signs in instantly.
 
 const TOKEN_RESPONSE = {
@@ -28,10 +28,10 @@ test.describe("login — page chrome", () => {
     await setConfig(page, true);
   });
 
-  test("renders the FSH logo lockup with the .NET 10 caption", async ({ page }) => {
+  test("renders the FSH logo lockup with the workspace caption", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByRole("img", { name: /fullstackhero/i })).toBeVisible();
-    await expect(page.getByText(/\.NET 10 Starter Kit/i)).toBeVisible();
+    await expect(page.getByText(/tenant workspace/i)).toBeVisible();
     await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
     await expect(page.getByText(/sign in to your account/i)).toBeVisible();
   });

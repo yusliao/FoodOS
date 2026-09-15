@@ -21,15 +21,13 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 type Filter = "all" | "unread";
-
-const FILTER_OPTIONS = [
-  { value: "unread", label: "Unread" },
-  { value: "all", label: "All" },
-];
+type Translate = (key: string, fallback?: string) => string;
 
 export function NotificationsInboxPage() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Filter>("unread");
 
@@ -48,28 +46,37 @@ export function NotificationsInboxPage() {
   const markOne = useMutation({
     mutationFn: (id: string) => markNotificationRead(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
-    onError: (err) => toast.error("Mark read failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("notifications.markReadFailed"), { description: describe(err) }),
   });
 
   const markAll = useMutation({
     mutationFn: markAllNotificationsRead,
     onSuccess: (data) => {
-      toast.success(`${data.updated} ${data.updated === 1 ? "notification" : "notifications"} marked read`);
+      toast.success(
+        (data.updated === 1 ? t("notifications.markedOne") : t("notifications.markedMany")).replace(
+          "{n}",
+          String(data.updated),
+        ),
+      );
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
-    onError: (err) => toast.error("Mark all failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("notifications.markAllFailed"), { description: describe(err) }),
   });
 
   const items = query.data ?? [];
+  const filterOptions = [
+    { value: "unread", label: t("notifications.filterUnread") },
+    { value: "all", label: t("notifications.filterAll") },
+  ];
 
   return (
     <div className="space-y-8">
       <EntityPageHeader
         icon={Bell}
-        title="Notifications"
+        title={t("notifications.title")}
         total={items.length}
-        unit="item"
-        description="Events the system has surfaced for you. Live-updates as new notifications arrive — no refresh needed."
+        unit={t("notifications.unit")}
+        description={t("notifications.description")}
       >
         <Button
           variant="outline"
@@ -79,7 +86,7 @@ export function NotificationsInboxPage() {
           className="flex-1 sm:flex-none"
         >
           <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", query.isFetching && "animate-spin")} />
-          Refresh
+          {t("notifications.refresh")}
         </Button>
         <Button
           variant="signal"
@@ -89,7 +96,7 @@ export function NotificationsInboxPage() {
           className="flex-1 sm:flex-none"
         >
           <CheckCheck className="mr-1.5 h-3.5 w-3.5" />
-          {markAll.isPending ? "Marking…" : "Mark all read"}
+          {markAll.isPending ? t("notifications.marking") : t("notifications.markAll")}
         </Button>
       </EntityPageHeader>
 
@@ -97,7 +104,7 @@ export function NotificationsInboxPage() {
         <Select
           value={filter}
           onValueChange={(v) => setFilter((v as Filter) || "all")}
-          options={FILTER_OPTIONS}
+          options={filterOptions}
           className="min-w-[10rem]"
         />
       </FilterBar>
@@ -107,22 +114,20 @@ export function NotificationsInboxPage() {
           message={
             query.error instanceof ApiRequestError
               ? query.error.problem?.detail ?? query.error.message
-              : "Failed to load notifications."
+              : t("notifications.loadFailed")
           }
         />
       )}
 
-      {query.isLoading && <LoadingRow label="Loading notifications" />}
+      {query.isLoading && <LoadingRow label={t("notifications.loading")} />}
 
       {!query.isLoading && items.length === 0 && !query.isError && (
         <EmptyState
           icon={Bell}
-          kicker="// inbox zero"
-          title={filter === "unread" ? "Nothing unread." : "No notifications yet."}
+          kicker={t("notifications.emptyKicker")}
+          title={filter === "unread" ? t("notifications.emptyUnreadTitle") : t("notifications.emptyAllTitle")}
           description={
-            filter === "unread"
-              ? "You're all caught up. Live updates will pop in here as they fire."
-              : "Notifications from the system will appear here as they're generated."
+            filter === "unread" ? t("notifications.emptyUnreadBody") : t("notifications.emptyAllBody")
           }
         />
       )}
@@ -130,7 +135,7 @@ export function NotificationsInboxPage() {
       {items.length > 0 && (
         <ul className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
           {items.map((n) => (
-            <Row key={n.id} notif={n} onMarkRead={() => markOne.mutate(n.id)} />
+            <Row key={n.id} notif={n} onMarkRead={() => markOne.mutate(n.id)} t={t} />
           ))}
         </ul>
       )}
@@ -141,9 +146,11 @@ export function NotificationsInboxPage() {
 function Row({
   notif,
   onMarkRead,
+  t,
 }: {
   notif: NotificationDto;
   onMarkRead: () => void;
+  t: Translate;
 }) {
   const unread = !notif.readAtUtc;
   return (
@@ -184,13 +191,13 @@ function Row({
             className="mt-1 inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-foreground)] hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
-            Open
+            {t("notifications.open")}
           </a>
         )}
       </div>
       {unread && (
         <Button variant="ghost" size="sm" onClick={onMarkRead}>
-          <CheckCheck className="mr-1 h-3.5 w-3.5" /> Mark read
+          <CheckCheck className="mr-1 h-3.5 w-3.5" /> {t("notifications.markRead")}
         </Button>
       )}
     </li>

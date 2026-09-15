@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FoodOS Shop 模块汇报</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5c6873;
+      --line: #dce3e8;
+      --paper: #ffffff;
+      --wash: #f4f7f8;
+      --blue: #175cd3;
+      --blue-soft: #eaf2ff;
+      --green: #147d64;
+      --green-soft: #e8f6f0;
+      --amber: #a15c00;
+      --amber-soft: #fff3df;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--wash);
+      font: 16px/1.75 "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .page { max-width: 1180px; margin: 0 auto; padding: 42px 28px 64px; }
+    .hero {
+      background: var(--ink);
+      color: #fff;
+      padding: 42px 46px;
+      border-radius: 18px;
+      margin-bottom: 30px;
+    }
+    .eyebrow { color: #b8d0ff; letter-spacing: .12em; font-size: 13px; font-weight: 700; }
+    h1 { margin: 8px 0 12px; font-size: clamp(32px, 5vw, 52px); line-height: 1.15; letter-spacing: -.03em; }
+    .hero p { max-width: 820px; margin: 0; color: #d7e0e8; font-size: 18px; }
+    h2 { margin: 42px 0 14px; font-size: 27px; letter-spacing: -.02em; }
+    h3 { margin: 0 0 8px; font-size: 19px; }
+    p { margin: 8px 0 14px; }
+    .lead { font-size: 19px; color: var(--muted); max-width: 920px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid.two { grid-template-columns: repeat(2, 1fr); }
+    .card { background: var(--paper); border: 1px solid var(--line); border-radius: 13px; padding: 22px; }
+    .card p { color: var(--muted); }
+    .kicker { color: var(--blue); font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    .callout { background: var(--blue-soft); border-left: 4px solid var(--blue); padding: 18px 22px; border-radius: 8px; margin: 20px 0; }
+    .callout strong { color: #0f4aa9; }
+    .flow { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; align-items: stretch; margin: 22px 0; }
+    .step { position: relative; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px 11px; min-height: 104px; }
+    .step:not(:last-child)::after { content: "→"; position: absolute; right: -14px; top: 34px; color: var(--blue); font-weight: 700; z-index: 2; }
+    .step b { display: block; color: var(--blue); font-size: 14px; margin-bottom: 5px; }
+    .step span { display: block; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .number { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--blue); color: white; font-weight: 700; margin-bottom: 8px; }
+    ul { margin: 8px 0 4px; padding-left: 21px; }
+    li { margin: 4px 0; }
+    .tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-right: 5px; }
+    .tag.done { background: var(--green-soft); color: var(--green); }
+    .tag.next { background: var(--amber-soft); color: var(--amber); }
+    table { width: 100%; border-collapse: collapse; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; vertical-align: top; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    th { background: #eef2f5; font-size: 14px; }
+    tr:last-child td { border-bottom: 0; }
+    td { color: var(--muted); }
+    td:first-child { color: var(--ink); font-weight: 700; }
+    .score { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 12px; }
+    .score strong { font-size: 34px; color: var(--blue); }
+    .score span { color: var(--muted); }
+    .source { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 34px; }
+    a { color: var(--blue); }
+    .footer { color: var(--muted); font-size: 13px; margin-top: 26px; }
+    @media (max-width: 860px) {
+      .grid, .grid.two { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: repeat(2, 1fr); }
+      .step:not(:last-child)::after { content: ""; }
+      .hero { padding: 30px 25px; }
+    }
+    @media print {
+      body { background: white; }
+      .page { padding: 0; max-width: none; }
+      .hero { color: #111; background: white; border: 2px solid var(--ink); }
+      .hero p, .eyebrow { color: #333; }
+      .card, table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="eyebrow">FOODOS · BUSINESS REVIEW · 2026-09-15</div>
+      <h1>Shop 模块业务汇报</h1>
+      <p>面向餐饮客户的 B2B 订货入口，连接客户组织、商品价格、库存预占、仓库履约、配送签收和售后处理。</p>
+    </header>
+
+    <section>
+      <h2>给管理层的一句话</h2>
+      <p class="lead">FoodOS Shop 不是单纯的商品展示页，而是把客户的采购意图转化为可执行、可追踪的供应链订单。当前 P0 已形成从订货到库存预占、仓配履约和签收对账的核心闭环；下一阶段重点是提升一线客户的订货效率，并补齐付款、账期、税费和审批等商业能力。</p>
+      <div class="callout"><strong>核心设计心得：</strong>购物车保存“客户想买什么”，订单确认“系统承诺什么”，库存预占确认“仓库能保留什么”，具体批次则留到仓库作业阶段按效期策略分配。</div>
+    </section>
+
+    <section>
+      <h2>一、当前业务流程</h2>
+      <div class="flow" aria-label="Shop 业务流程">
+        <div class="step"><span class="number">1</span><b>客户与门店</b><span>客户组织、门店、默认仓库、配送窗口、信用状态</span></div>
+        <div class="step"><span class="number">2</span><b>商品与价格</b><span>商品目录、温区、客户合同价、阶梯价、锁价</span></div>
+        <div class="step"><span class="number">3</span><b>购物车</b><span>维护采购意图，允许反复调整，不承诺具体库存批次</span></div>
+        <div class="step"><span class="number">4</span><b>提交订单</b><span>校验客户、信用、商品、截单时间和价格</span></div>
+        <div class="step"><span class="number">5</span><b>库存预占</b><span>按仓库、SKU、温区预占 ATP，成功后进入 Reserved</span></div>
+        <div class="step"><span class="number">6</span><b>仓库履约</b><span>截单、计划、波次、拣货、复核、装车、在途</span></div>
+        <div class="step"><span class="number">7</span><b>签收售后</b><span>签收、短配、拒收、退货、售后工单</span></div>
+        <div class="step"><span class="number">8</span><b>对账</b><span>订单由 Received 进入 Reconciled</span></div>
+      </div>
+      <p><span class="tag done">已实现主干</span>购物车、客户专属价格、订单提交、库存预占、截单、仓库履约、配送签收、退货和售后已形成可测试链路。</p>
+      <p><span class="tag next">后续增强</span>常购清单、再次购买、替代品、库存可视化、支付账期、税费、审批和消息提醒仍属于后续产品化方向。</p>
+    </section>
+
+    <section>
+      <h2>二、这么设计的意义</h2>
+      <div class="grid">
+        <article class="card"><div class="kicker">业务边界</div><h3>客户意图与供应链承诺分离</h3><p>购物车可以随时修改，订单提交后才创建商业记录，库存预占成功后才形成供应承诺，避免客户尚未决定购买就锁定具体批次。</p></article>
+        <article class="card"><div class="kicker">餐饮适配</div><h3>价格以客户组织为中心</h3><p>餐饮采购通常存在合同价、等级价、阶梯价和锁价。订单保存价格快照，后续调价不会改变已提交订单的商业事实。</p></article>
+        <article class="card"><div class="kicker">仓配协同</div><h3>截单是作业规则而非页面提示</h3><p>系统按仓库时区计算业务日和截单时间，使订货真正进入正确的配送批次，而不是只在前端显示一个倒计时。</p></article>
+        <article class="card"><div class="kicker">库存可信</div><h3>预占和批次分配分阶段完成</h3><p>下单阶段确认 SKU、仓库和温区的 ATP；拣货阶段再按照批次和效期分配，兼顾客户承诺与仓库作业弹性。</p></article>
+        <article class="card"><div class="kicker">责任追踪</div><h3>一笔订单贯穿全生命周期</h3><p>同一订单从购物车、价格、库存、仓库、配送到签收和售后，减少电话、表格和手工录单带来的信息断裂。</p></article>
+        <article class="card"><div class="kicker">生产意识</div><h3>开始考虑失败与重试</h3><p>当前已覆盖请求取消、签收保存失败、重复退货、重复上架和非法质检状态等场景，系统设计开始从演示流程走向生产流程。</p></article>
+      </div>
+    </section>
+
+    <section>
+      <h2>三、设想中的使用场景</h2>
+      <div class="grid two">
+        <article class="card"><h3>单店日常补货</h3><p>餐厅在截单前查看商品和客户价格，加入购物车并提交订单，系统反馈是否可以预占以及进入哪个配送业务日。</p></article>
+        <article class="card"><h3>连锁门店采购</h3><p>一个客户组织下有多个门店，每个门店拥有独立购物车、收货信息和配送安排，同时共享客户合同价格。</p></article>
+        <article class="card"><h3>周期性重复订货</h3><p>餐厅重复采购肉类、蔬菜、冷冻品和耗材，后续可以在现有订单基础上增加常购清单、模板订单和再次购买。</p></article>
+        <article class="card"><h3>多温区配送</h3><p>常温、冷藏、冷冻商品进入不同仓库作业环节，订单在订货阶段记录温区，仓库在履约阶段按实际批次执行。</p></article>
+      </div>
+    </section>
+
+    <section>
+      <h2>四、与行业方案的异同</h2>
+      <table>
+        <thead><tr><th>代表方案</th><th>行业侧重点</th><th>与 FoodOS 的共同点</th><th>FoodOS 当前差异</th></tr></thead>
+        <tbody>
+          <tr><td>US Foods MOXē</td><td>餐饮客户订货、常购清单、智能搜索、配送跟踪、库存和食品成本工具。</td><td>都面向餐饮经营者，强调客户自助订货和供应链协同。</td><td>MOXē 在推荐、提醒、图片下单和客户工作台方面更成熟；FoodOS 当前更聚焦订单到仓配的可追溯闭环。</td></tr>
+          <tr><td>Sysco Shop</td><td>将传统高接触 B2B 采购做成接近 B2C 的体验，强调常购提醒、漏买提醒和配送通知。</td><td>都希望减少电话、微信和人工录单，让餐厅自助采购。</td><td>FoodOS 当前的客户运营和通知能力较少，但模块化供应链底座和业务状态设计更明确。</td></tr>
+          <tr><td>Shopify B2B</td><td>公司、公司地点、客户目录、专属价格、付款条件和税务配置。</td><td>都有客户组织、门店/地点和客户专属价格的概念。</td><td>Shopify 更偏通用 B2B 电商；FoodOS 更深入餐饮特有的温区、库存预占、批次、波次和配送签收。</td></tr>
+          <tr><td>Faire 等批发市场</td><td>多品牌、多供应商撮合，强调品牌发现、灵活付款和平台化采购。</td><td>都支持批发客户在线订货和订单管理。</td><td>FoodOS 是供应商服务自身客户的订货系统，不承担开放市场撮合和多供应商结算。</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><strong>FoodOS 的亮点：</strong>不是在成熟商城能力上做简单复刻，而是把“餐饮客户订货”直接连接到温区库存、仓库批次、配送签收和订单追溯。这是当前最有辨识度的产品方向。</div>
+    </section>
+
+    <section>
+      <h2>五、严谨性和易用性评价</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>严谨性：核心业务较扎实</h3>
+          <div class="score"><strong>较成熟</strong><span>适合 P0 核心链路</span></div>
+          <ul>
+            <li>订单状态有明确状态机，不允许任意跳转。</li>
+            <li>价格进入订单行快照，客户合同价和锁价有模型支撑。</li>
+            <li>库存预占经过真实 Inventory 模块，不是前端虚假库存。</li>
+            <li>截单使用仓库时区和业务日，适合配送作业。</li>
+            <li>库存、订单和跨模块路径已有 PostgreSQL/Testcontainers 验证。</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>完整度：商业化能力仍需补齐</h3>
+          <div class="score"><strong>基础完成</strong><span>距离成熟平台仍有差距</span></div>
+          <ul>
+            <li>信用冻结已存在，但信用额度、账期、应收和付款尚不完整。</li>
+            <li>税费、运费、发票、审批和支付仍不是当前 Shop 主干。</li>
+            <li>替代商品、缺货候补、常购清单和再次购买需要增强。</li>
+            <li>并发修改、进程崩溃、事件补发等恢复场景仍需专项设计。</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>后台和业务人员：易理解</h3>
+          <p>客户组织、门店、订单、仓库和履约状态的职责划分清楚。业务人员能够沿订单追踪价格、库存、批次和签收结果。</p>
+        </article>
+        <article class="card">
+          <h3>餐厅一线用户：基础可用，仍需提效</h3>
+          <p>“选门店—选商品—购物车—提交订单”的路径简单，但高频采购场景还需要常购、模板、智能推荐、库存提示和配送承诺来减少操作次数。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>六、建议的下一阶段</h2>
+      <div class="grid">
+        <article class="card"><h3>优先提升客户效率</h3><p>增加再次购买、常购清单、订单模板、缺货替代、预计配送日和可售库存提示。</p></article>
+        <article class="card"><h3>补齐 B2B 商业能力</h3><p>明确付款方式、账期、信用额度、税费、运费、发票和订单审批模型。</p></article>
+        <article class="card"><h3>扩大生产级验证</h3><p>继续验证重复提交、并发修改、数据库短暂不可用、进程崩溃和事件补发，确保跨模块状态可恢复。</p></article>
+      </div>
+    </section>
+
+    <p class="source">资料依据：FoodOS 当前源码、领域模型及 PostgreSQL/Testcontainers 集成测试；行业对比参考 <a href="https://www.usfoods.com/how-we-help-you/easy-ordering" target="_blank" rel="noreferrer">US Foods MOXē</a>、<a href="https://foodie.sysco.com/wp-content/uploads/2021/12/21Foodie_E29_Spread_MR.pdf" target="_blank" rel="noreferrer">Sysco Shop 公开资料</a>、<a href="https://shopify.dev/docs/api/admin-graphql/latest/objects/companylocation" target="_blank" rel="noreferrer">Shopify B2B 官方文档</a> 和 <a href="https://www.faire.com/how-faire-works" target="_blank" rel="noreferrer">Faire 官方说明</a>。行业方案仅用于定位比较，不代表 FoodOS 已具备对方全部功能。</p>
+    <div class="footer">FoodOS · Shop 模块业务汇报 · 版本：P0 核心闭环评估</div>
+  </main>
+</body>
+</html>

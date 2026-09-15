@@ -115,6 +115,17 @@ public sealed class PurchaseOrder : AggregateRoot<Guid>
         => _lines.Find(l => l.Id == lineId)
            ?? throw new NotFoundException($"Purchase order line {lineId} was not found.");
 
+    public void EnsureCanRecordQualityCheck()
+    {
+        if (Status is not PurchaseOrderStatus.Receiving)
+        {
+            throw new CustomException(
+                "Quality checks can only be recorded while the purchase order is receiving.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
+    }
+
     public QualityCheck RecordQualityCheck(
         Guid lineId,
         Guid inspectorUserId,
@@ -126,14 +137,7 @@ public sealed class PurchaseOrder : AggregateRoot<Guid>
         string? note,
         IReadOnlyList<Guid>? photoFileIds)
     {
-        if (Status is not PurchaseOrderStatus.Receiving)
-        {
-            throw new CustomException(
-                "Quality checks can only be recorded while the purchase order is receiving.",
-                (IEnumerable<string>?)null,
-                HttpStatusCode.Conflict);
-        }
-
+        EnsureCanRecordQualityCheck();
         var line = RequireLine(lineId);
         var check = QualityCheck.Create(
             Id,

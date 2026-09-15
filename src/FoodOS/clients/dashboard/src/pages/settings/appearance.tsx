@@ -82,7 +82,7 @@ export function AppearanceSettings() {
                 active={active}
                 onClick={() => setMode(value)}
                 aria-pressed={active}
-                aria-label={label}
+                aria-label={t("settings.themeAria").replace("{mode}", label)}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <Icon

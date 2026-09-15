@@ -110,6 +110,36 @@ public sealed class ProcurementInboundTests
         afterPass.Available.ShouldBe(7m);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DraftPurchaseOrder_QualityCheck_Should_NotCreateInventory(bool pass)
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var supplierId = await CreateSupplierAsync(client, Guid.NewGuid().ToString("N")[..8]);
+        var productId = Guid.CreateVersion7();
+        using var create = await client.PostAsJsonAsync(
+            $"{TestConstants.ProcurementBasePath}/purchase-orders",
+            new { supplierId, warehouseId = warehouse.Id, expectedAt = DateTimeOffset.UtcNow.AddDays(1),
+                lines = new[] { new { productId, zone = "Ambient", quantity = 4m } } });
+        create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
+        var id = await create.DeserializeAsync<Guid>();
+        using var get = await client.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{id}");
+        var po = await get.DeserializeAsync<PurchaseOrderDto>();
+        using var response = await client.PostAsJsonAsync(QcUrl(id, po.Lines[0].Id, pass), QcBody("DRAFT-QC", 4m));
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict, await response.Content.ReadAsStringAsync());
+
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var inventory = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+        (await inventory.InventoryTransactions.AnyAsync(t => t.ProductId == productId)).ShouldBeFalse();
+        (await inventory.Lots.AnyAsync(l => l.ProductId == productId)).ShouldBeFalse();
+    }
+
     private static string QcUrl(Guid purchaseOrderId, Guid lineId, bool pass)
         => $"{TestConstants.ProcurementBasePath}/purchase-orders/{purchaseOrderId}/lines/{lineId}/qc/{(pass ? "pass" : "fail")}";
 

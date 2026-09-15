@@ -50,6 +50,7 @@ public sealed class WarehouseOpsTests
             $"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}/lines/{po.Lines[0].Id}/qc/pass",
             QcBody("LOT-PUT", 8m));
         qc.StatusCode.ShouldBe(HttpStatusCode.OK, await qc.Content.ReadAsStringAsync());
+        Guid qualityCheckId = await qc.DeserializeAsync<Guid>();
         Guid lotId = (await (await client.GetAsync(
             $"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}")).DeserializeAsync<PurchaseOrderDto>())
             .QualityChecks[0].LotId!.Value;
@@ -92,6 +93,23 @@ public sealed class WarehouseOpsTests
             new { locationId });
         confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
         (await confirm.DeserializeAsync<PutawayTaskDto>()).Status.ShouldBe("Completed");
+
+        using var replay = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks",
+            new
+            {
+                warehouseId = warehouse.Id,
+                zone = "Chilled",
+                productId,
+                lotId,
+                quantity = 8m,
+                source = "QcPass",
+                refId = qualityCheckId
+            });
+        replay.StatusCode.ShouldBe(HttpStatusCode.OK, await replay.Content.ReadAsStringAsync());
+        var replayedTask = await replay.DeserializeAsync<PutawayTaskDto>();
+        replayedTask.Id.ShouldBe(task.Id);
+        replayedTask.Status.ShouldBe("Completed");
 
         using var trace = await client.GetAsync($"{TestConstants.OpsBasePath}/lots/{lotId}/trace");
         var events = (await trace.DeserializeAsync<LotTraceDto>()).Events;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,23 +23,22 @@ import {
 import { Field } from "@/components/list";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
-const schema = z.object({
-  url: z
-    .string()
-    .trim()
-    .url("Must be a valid http(s) URL.")
-    .refine((u) => u.startsWith("https://") || u.startsWith("http://"), {
-      message: "Use http:// or https://",
-    }),
-  secret: z
-    .string()
-    .trim()
-    .max(256)
-    .optional(),
-});
+function makeSchema(t: (key: string, fallback?: string) => string) {
+  return z.object({
+    url: z
+      .string()
+      .trim()
+      .url(t("webhooks.validUrl"))
+      .refine((u) => u.startsWith("https://") || u.startsWith("http://"), {
+        message: t("webhooks.httpScheme"),
+      }),
+    secret: z.string().trim().max(256).optional(),
+  });
+}
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<ReturnType<typeof makeSchema>>;
 
 export function CreateWebhookDialog({
   open,
@@ -50,6 +49,8 @@ export function CreateWebhookDialog({
   onOpenChange: (open: boolean) => void;
   onCreated?: (id: string) => void;
 }) {
+  const t = useT();
+  const schema = useMemo(() => makeSchema(t), [t]);
   const [events, setEvents] = useState<string[]>([]);
   const [draftEvent, setDraftEvent] = useState("");
 
@@ -77,8 +78,8 @@ export function CreateWebhookDialog({
         events,
       }),
     onSuccess: (id) => {
-      toast.success("Subscription created", {
-        description: "Use the Test button on the row to verify the endpoint accepts events.",
+      toast.success(t("webhooks.createdToast"), {
+        description: t("webhooks.createdToastBody"),
       });
       onCreated?.(id);
       reset_();
@@ -89,14 +90,14 @@ export function CreateWebhookDialog({
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : (err as Error).message;
-      toast.error("Create failed", { description: detail });
+      toast.error(t("webhooks.createFailed"), { description: detail });
     },
   });
 
   const onSubmit = handleSubmit((values) => {
     if (events.length === 0) {
-      toast.warning("Pick at least one event", {
-        description: "Subscriptions with no events would never fire.",
+      toast.warning(t("webhooks.pickEvent"), {
+        description: t("webhooks.pickEventBody"),
       });
       return;
     }
@@ -117,6 +118,7 @@ export function CreateWebhookDialog({
 
   const submitting = isSubmitting || mutation.isPending;
   const suggestionsToShow = SUGGESTED_EVENT_TYPES.filter((s) => !events.includes(s));
+  const descParts = t("webhooks.createDesc").split("{header}");
 
   return (
     <Dialog
@@ -135,18 +137,18 @@ export function CreateWebhookDialog({
             >
               <Webhook className="h-4 w-4" />
             </span>
-            <DialogTitle>New webhook subscription</DialogTitle>
+            <DialogTitle>{t("webhooks.dialogTitle")}</DialogTitle>
           </div>
           <DialogDescription>
-            Your endpoint receives a JSON payload with the event details. We sign each request
-            with HMAC-SHA256 in the <code className="code-chip">X-FSH-Signature</code> header
-            using the secret below — store it on your side and verify before trusting the body.
+            {descParts[0]}
+            <code className="code-chip">X-FSH-Signature</code>
+            {descParts[1]}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit}>
           <DialogBody className="space-y-5">
-            <Field id="webhook-url" label="Endpoint URL" required error={errors.url?.message}>
+            <Field id="webhook-url" label={t("webhooks.endpointUrl")} required error={errors.url?.message}>
               <Input
                 id="webhook-url"
                 type="url"
@@ -160,15 +162,15 @@ export function CreateWebhookDialog({
 
             <Field
               id="webhook-secret"
-              label="Signing secret"
-              hint="Optional but recommended. At least 32 random characters. Used to compute the HMAC."
+              label={t("webhooks.signingSecret")}
+              hint={t("webhooks.secretHint")}
               error={errors.secret?.message}
             >
               <Input
                 id="webhook-secret"
                 type="password"
                 autoComplete="new-password"
-                placeholder="Leave blank to skip signing"
+                placeholder={t("webhooks.secretPlaceholder")}
                 className="font-mono"
                 {...register("secret")}
               />
@@ -176,7 +178,7 @@ export function CreateWebhookDialog({
 
             <div className="space-y-2">
               <div className="meta text-[var(--color-muted-foreground)]">
-                Events ({events.length})
+                {t("webhooks.eventsCount").replace("{n}", String(events.length))}
                 <span className="text-[var(--color-destructive)]" aria-hidden> ·</span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--color-input)] bg-transparent p-2 min-h-10">
@@ -189,7 +191,7 @@ export function CreateWebhookDialog({
                     <button
                       type="button"
                       onClick={() => removeEvent(e)}
-                      aria-label={`Remove ${e}`}
+                      aria-label={t("webhooks.removeEvent").replace("{name}", e)}
                       className="text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)]"
                     >
                       <X className="h-3 w-3" />
@@ -207,13 +209,13 @@ export function CreateWebhookDialog({
                       setEvents((prev) => prev.slice(0, -1));
                     }
                   }}
-                  placeholder={events.length === 0 ? "type an event name then Enter…" : "add another…"}
+                  placeholder={events.length === 0 ? t("webhooks.typeEvent") : t("webhooks.addAnother")}
                   className="min-w-[10rem] flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-[var(--color-muted-foreground)]/70"
                 />
               </div>
               {suggestionsToShow.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="meta text-[var(--color-muted-foreground)]">suggested</span>
+                  <span className="meta text-[var(--color-muted-foreground)]">{t("webhooks.suggested")}</span>
                   {suggestionsToShow.map((s) => (
                     <button
                       key={s}
@@ -235,10 +237,10 @@ export function CreateWebhookDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-              Cancel
+              {t("chrome.cancel")}
             </Button>
             <Button type="submit" variant="signal" disabled={submitting}>
-              {submitting ? "Creating…" : "Create subscription"}
+              {submitting ? t("webhooks.creating") : t("webhooks.createSubscription")}
             </Button>
           </DialogFooter>
         </form>

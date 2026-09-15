@@ -5,6 +5,10 @@ using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Warehouse.Contracts.Dtos;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
+using FSH.Modules.Logistics.Data;
+using FSH.Modules.Logistics.Domain;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Integration.Tests.Tests.Logistics;
 
@@ -15,10 +19,12 @@ namespace Integration.Tests.Tests.Logistics;
 public sealed class LogisticsShipmentTests
 {
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public LogisticsShipmentTests(FshWebApplicationFactory factory)
     {
         _auth = new AuthHelper(factory);
+        _factory = factory;
     }
 
     [Fact]
@@ -128,8 +134,10 @@ public sealed class LogisticsShipmentTests
         (await afterClaim.DeserializeAsync<SalesOrderDto>()).Lines[0].ReturnedQty.ShouldBe(1m);
     }
 
-    [Fact]
-    public async Task PartialReject_Should_WriteReturnOnTruck_And_RestoreOnHand()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PartialReject_Should_WriteReturnOnTruck_And_RestoreOnHand(bool failBeforeCompletion)
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var packed = await PackOrderAsync(client, orderQty: 5m);
@@ -163,9 +171,8 @@ public sealed class LogisticsShipmentTests
             new { });
         depart.StatusCode.ShouldBe(HttpStatusCode.OK, await depart.Content.ReadAsStringAsync());
 
-        using var pod = await client.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/stops/{shipment.Stops[0].Id}/pod",
-            new
+        string podUrl = $"{TestConstants.LogisticsBasePath}/stops/{shipment.Stops[0].Id}/pod";
+        var signature = new
             {
                 lines = new[]
                 {
@@ -174,7 +181,32 @@ public sealed class LogisticsShipmentTests
                 signerName = "Chef Lee",
                 photoFileIds = Array.Empty<Guid>(),
                 geo = (string?)null
+            };
+        if (failBeforeCompletion)
+        {
+            var fault = new FailCompletionInterceptor();
+            using var jobStorage = new JobStorageScope();
+            using var failingFactory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
+                services => services.AddDbContext<LogisticsDbContext>(options => options.AddInterceptors(fault))));
+            using var failingClient = failingFactory.CreateClient();
+            failingClient.DefaultRequestHeaders.Authorization = client.DefaultRequestHeaders.Authorization;
+            failingClient.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+            using var failed = await failingClient.PostAsJsonAsync(podUrl, signature);
+            failed.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+            fault.Triggered.ShouldBeTrue();
+            (await GetAvailableAsync(client, packed.WarehouseId, packed.ProductId)).ShouldBe(availableBefore + 2m);
+
+            using var changed = await client.PostAsJsonAsync(podUrl, new
+            {
+                lines = new[] { new { orderLineId = lot.OrderLineId, lotId = lot.LotId, signedQty = 4m } },
+                signature.signerName,
+                signature.photoFileIds,
+                signature.geo
             });
+            changed.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        }
+
+        using var pod = await client.PostAsJsonAsync(podUrl, signature);
         pod.StatusCode.ShouldBe(HttpStatusCode.OK, await pod.Content.ReadAsStringAsync());
         var signed = await pod.DeserializeAsync<ShipmentDto>();
         signed.Returns.ShouldHaveSingleItem().Quantity.ShouldBe(2m);
@@ -236,6 +268,24 @@ public sealed class LogisticsShipmentTests
         Guid LotId,
         DateOnly BusinessDate,
         decimal Quantity);
+
+    private sealed class FailCompletionInterceptor : SaveChangesInterceptor
+    {
+        public bool Triggered { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (!Triggered && eventData.Context!.ChangeTracker.Entries<Shipment>()
+                .Any(entry => entry.Entity.Status == ShipmentStatus.Completed))
+            {
+                Triggered = true;
+                throw new InvalidOperationException("Injected failure before shipment completion.");
+            }
+
+            return ValueTask.FromResult(result);
+        }
+    }
 
     private static async Task<PackedOrder> PackOrderAsync(HttpClient client, decimal orderQty)
     {

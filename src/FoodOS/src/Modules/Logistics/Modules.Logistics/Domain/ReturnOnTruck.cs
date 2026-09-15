@@ -19,7 +19,8 @@ public sealed class ReturnOnTruck : BaseEntity<Guid>
         Guid productId,
         Guid lotId,
         decimal quantity,
-        string reason)
+        string reason,
+        Guid? returnId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
         if (orderId == Guid.Empty || productId == Guid.Empty || lotId == Guid.Empty)
@@ -34,7 +35,7 @@ public sealed class ReturnOnTruck : BaseEntity<Guid>
 
         return new ReturnOnTruck
         {
-            Id = Guid.CreateVersion7(),
+            Id = returnId ?? Guid.CreateVersion7(),
             ShipmentId = shipmentId,
             OrderId = orderId,
             ProductId = productId,

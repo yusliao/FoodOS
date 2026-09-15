@@ -21,6 +21,19 @@ public sealed class CreatePutawayTaskCommandHandler(WarehouseDbContext dbContext
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        if (command.RefId is not null)
+        {
+            var replay = await dbContext.PutawayTasks.FirstOrDefaultAsync(
+                    t => t.RefId == command.RefId && t.Source == command.Source
+                        && t.WarehouseId == command.WarehouseId && t.LotId == command.LotId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (replay is not null)
+            {
+                return replay.ToDto();
+            }
+        }
+
         if (await mediator.Send(new GetLotIsolationQuery(command.LotId), cancellationToken).ConfigureAwait(false))
         {
             throw new CustomException(

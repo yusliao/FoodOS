@@ -4,6 +4,7 @@ import { AlertCircle, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthHeadline, AuthShell } from "@/components/auth/auth-shell";
 import { confirmEmail } from "@/api/identity";
+import { useT } from "@/i18n/locale-provider";
 import { ApiRequestError } from "@/lib/api-client";
 
 /**
@@ -24,6 +25,7 @@ type Status =
   | { kind: "error"; message: string };
 
 export function ConfirmEmailPage() {
+  const t = useT();
   const [params] = useSearchParams();
   const userId = params.get("userId") ?? "";
   const code = params.get("code") ?? "";
@@ -40,8 +42,7 @@ export function ConfirmEmailPage() {
     if (malformed) {
       setStatus({
         kind: "error",
-        message:
-          "This confirmation link is missing required parameters. It may have been clipped by your email client.",
+        message: t("auth.confirmMalformed"),
       });
       return;
     }
@@ -55,7 +56,7 @@ export function ConfirmEmailPage() {
           message:
             typeof message === "string" && message.length > 0
               ? message
-              : "Your email is confirmed. You can now sign in.",
+              : t("auth.emailConfirmedDefault"),
         });
       })
       .catch((err: unknown) => {
@@ -70,7 +71,7 @@ export function ConfirmEmailPage() {
     return () => {
       cancelled = true;
     };
-  }, [userId, code, tenant, malformed]);
+  }, [userId, code, tenant, malformed, t]);
 
   return (
     <AuthShell
@@ -79,7 +80,7 @@ export function ConfirmEmailPage() {
           to="/login"
           className="text-[var(--color-foreground)] underline-offset-4 hover:underline"
         >
-          ← Back to sign in
+          {t("auth.backToSignInFooter")}
         </Link>
       }
     >
@@ -94,9 +95,9 @@ export function ConfirmEmailPage() {
             </span>
           </div>
           <div>
-            <AuthHeadline lead="Verifying your" accent="email…" />
+            <AuthHeadline lead={t("auth.verifyingLead")} accent={t("auth.verifyingAccent")} />
             <p className="text-[13px] leading-relaxed text-[var(--color-muted-foreground)]">
-              One moment — checking the confirmation token with the server.
+              {t("auth.verifyingBody")}
             </p>
           </div>
         </div>
@@ -113,14 +114,14 @@ export function ConfirmEmailPage() {
             </span>
           </div>
           <div>
-            <AuthHeadline lead="Email" accent="confirmed" />
+            <AuthHeadline lead={t("auth.emailConfirmedLead")} accent={t("auth.emailConfirmedAccent")} />
             <p className="text-[13px] leading-relaxed text-[var(--color-muted-foreground)]">
               {status.message}
             </p>
           </div>
           <Link to="/login" className="block">
             <Button type="button" className="group h-11 w-full text-[14px] font-semibold">
-              <span>Continue to sign in</span>
+              <span>{t("auth.continueToSignIn")}</span>
               <ArrowRight className="size-[14px] opacity-60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100" />
             </Button>
           </Link>
@@ -138,24 +139,27 @@ export function ConfirmEmailPage() {
             </span>
           </div>
           <div>
-            <AuthHeadline lead="Couldn't" accent="confirm" trail=" your email" />
+            <AuthHeadline
+              lead={t("auth.couldntConfirmLead")}
+              accent={t("auth.couldntConfirmAccent")}
+              trail={t("auth.couldntConfirmTail")}
+            />
             <p className="text-[13px] leading-relaxed text-[var(--color-muted-foreground)]">
               {status.message}
             </p>
             <p className="mt-2 text-[12px] leading-relaxed text-[var(--color-muted-foreground)]">
-              The link may have expired or been used already. If you've signed
-              in since this email was sent, you can ignore it.
+              {t("auth.confirmExpiredHint")}
             </p>
           </div>
           <div className="flex items-center justify-center gap-2 pt-1">
             <Link to="/login">
               <Button type="button" variant="outline">
-                Back to sign in
+                {t("auth.backToSignIn")}
               </Button>
             </Link>
             <Link to="/forgot-password">
               <Button type="button" variant="ghost">
-                Reset password instead
+                {t("auth.resetInstead")}
               </Button>
             </Link>
           </div>

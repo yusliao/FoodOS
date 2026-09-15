@@ -42,6 +42,7 @@ internal static class QualityCheckRecording
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Purchase order {purchaseOrderId} not found.");
 
+        po.EnsureCanRecordQualityCheck();
         var line = po.RequireLine(lineId);
         var zone = ZoneKinds.Parse(line.Zone);
 

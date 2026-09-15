@@ -20,6 +20,7 @@ import {
   SheetContent,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 // ─────────────────────────────────────────────────────────────────────────
 // AuditDetailSheet — side sheet shown when an audit row is clicked on the
@@ -68,6 +69,7 @@ export function AuditDetailSheetBody({
     staleTime: 60_000,
   });
 
+  const t = useT();
   const event = query.data;
 
   return (
@@ -80,16 +82,18 @@ export function AuditDetailSheetBody({
           </span>
           <div>
             <div className="text-[13px] font-semibold leading-tight tracking-tight text-[var(--color-foreground)]">
-              {event ? `${formatEventType(event.eventType)} event` : "Audit event"}
+              {event
+                ? t("audits.eventTitle").replace("{type}", eventTypeLabel(event.eventType, t))
+                : t("audits.eventFallback")}
             </div>
             <div className="mt-0.5 font-mono text-[10.5px] text-[var(--color-muted-foreground)]">
-              {event ? formatTimestamp(event.occurredAtUtc) : "Loading…"}
+              {event ? formatTimestamp(event.occurredAtUtc) : t("audits.loadingEllipsis")}
             </div>
           </div>
         </div>
         <button
           type="button"
-          aria-label="Close"
+          aria-label={t("common.close")}
           onClick={onClose}
           className={cn(
             "grid h-7 w-7 shrink-0 place-items-center rounded-md",
@@ -106,7 +110,7 @@ export function AuditDetailSheetBody({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {query.isLoading && !event && (
           <div className="p-6">
-            <LoadingRow label="Loading event" />
+            <LoadingRow label={t("audits.loadingEvent")} />
           </div>
         )}
 
@@ -116,7 +120,7 @@ export function AuditDetailSheetBody({
               message={
                 query.error instanceof ApiRequestError
                   ? query.error.problem?.detail ?? query.error.message
-                  : "Failed to load event."
+                  : t("audits.loadEventFailed")
               }
             />
           </div>
@@ -140,16 +144,17 @@ export function AuditDetailSheetBody({
 // ─────────────────────────────────────────────────────────────────────────
 
 function IdentityBand({ event }: { event: AuditDetailDto }) {
+  const t = useT();
   const sev = severityTone(event.severity);
-  const eventLabel = formatEventType(event.eventType);
+  const eventLabel = eventTypeLabel(event.eventType, t);
   return (
-    <div className="px-6 py-4" aria-label="Event identity">
+    <div className="px-6 py-4" aria-label={t("audits.identity")}>
       <div className="mb-2 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-        Identity
+        {t("audits.identity")}
       </div>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <Badge
-          variant={eventTypeVariant(eventLabel)}
+          variant={eventTypeVariant(event.eventType)}
           className="font-mono uppercase tracking-[0.16em]"
         >
           {eventLabel}
@@ -158,11 +163,11 @@ function IdentityBand({ event }: { event: AuditDetailDto }) {
           variant={sev.variant}
           className="font-mono uppercase tracking-[0.16em]"
         >
-          {event.severity}
+          {severityLabel(event.severity, t)}
         </Badge>
         {event.source && (
           <span className="min-w-0 truncate font-mono text-[12px] text-[var(--color-muted-foreground)]">
-            <span className="opacity-60">source · </span>
+            <span className="opacity-60">{t("audits.sourcePrefix")}</span>
             <span className="text-[var(--color-foreground)]">{event.source}</span>
           </span>
         )}
@@ -179,11 +184,12 @@ function IdentityBand({ event }: { event: AuditDetailDto }) {
 // ─────────────────────────────────────────────────────────────────────────
 
 function CorrelationBand({ event }: { event: AuditDetailDto }) {
+  const t = useT();
   const slots: Array<{ label: string; value: string | null | undefined }> = [
-    { label: "Trace id", value: event.traceId },
-    { label: "Span id", value: event.spanId },
-    { label: "Correlation id", value: event.correlationId },
-    { label: "Request id", value: event.requestId },
+    { label: t("audits.traceId"), value: event.traceId },
+    { label: t("audits.spanId"), value: event.spanId },
+    { label: t("audits.correlationId"), value: event.correlationId },
+    { label: t("audits.requestId"), value: event.requestId },
   ];
 
   return (
@@ -191,10 +197,10 @@ function CorrelationBand({ event }: { event: AuditDetailDto }) {
       <div className="mb-2 flex items-center gap-1.5">
         <Fingerprint className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
         <span className="font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-          Correlation
+          {t("audits.correlation")}
         </span>
         <span className="ml-1 text-[10.5px] text-[var(--color-muted-foreground)]">
-          — paste into your observability stack
+          {t("audits.correlationHint")}
         </span>
       </div>
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
@@ -207,6 +213,7 @@ function CorrelationBand({ event }: { event: AuditDetailDto }) {
 }
 
 function CorrelationChip({ label, value }: { label: string; value: string | null }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const hasValue = Boolean(value && value !== "—");
 
@@ -232,7 +239,11 @@ function CorrelationChip({ label, value }: { label: string; value: string | null
           ? "hover:bg-[var(--color-muted)]/50"
           : "opacity-60",
       )}
-      aria-label={hasValue ? `Copy ${label}` : `${label} not available`}
+      aria-label={
+        hasValue
+          ? t("audits.copyAria").replace("{label}", label)
+          : t("audits.unavailableAria").replace("{label}", label)
+      }
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]">
@@ -263,19 +274,20 @@ function CorrelationChip({ label, value }: { label: string; value: string | null
 // ─────────────────────────────────────────────────────────────────────────
 
 function ContextGrid({ event }: { event: AuditDetailDto }) {
+  const t = useT();
   const userLine = event.userName
     ? `${event.userName} (${event.userId})`
     : event.userId ?? "—";
 
-  const tags = renderTagsInline(event.tags as number);
+  const tags = renderTagsInline(event.tags as number, t);
 
   const tiles: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
-    { label: "Occurred at", value: formatTimestamp(event.occurredAtUtc), mono: true },
-    { label: "Received at", value: formatTimestamp(event.receivedAtUtc), mono: true },
-    { label: "Tenant", value: event.tenantId ?? "—", mono: true },
-    { label: "User", value: userLine, mono: true },
-    { label: "Source", value: event.source ?? "—", mono: true },
-    { label: "Tags", value: tags },
+    { label: t("audits.occurredAt"), value: formatTimestamp(event.occurredAtUtc), mono: true },
+    { label: t("audits.receivedAt"), value: formatTimestamp(event.receivedAtUtc), mono: true },
+    { label: t("audits.tenant"), value: event.tenantId ?? "—", mono: true },
+    { label: t("audits.user"), value: userLine, mono: true },
+    { label: t("audits.source"), value: event.source ?? "—", mono: true },
+    { label: t("audits.tags"), value: tags },
   ];
 
   return (
@@ -283,7 +295,7 @@ function ContextGrid({ event }: { event: AuditDetailDto }) {
       <div className="mb-2 flex items-center gap-1.5">
         <AlertTriangle className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
         <span className="font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-          Context
+          {t("audits.context")}
         </span>
       </div>
       <div
@@ -329,6 +341,7 @@ function FactTile({
 // ─────────────────────────────────────────────────────────────────────────
 
 function PayloadPanel({ payload }: { payload: unknown }) {
+  const t = useT();
   const json = useMemo(() => JSON.stringify(payload ?? null, null, 2), [payload]);
   const [copied, setCopied] = useState(false);
 
@@ -350,20 +363,20 @@ function PayloadPanel({ payload }: { payload: unknown }) {
         <div className="flex items-center gap-1.5">
           <FileText className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
           <span className="font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
-            Payload
+            {t("audits.payload")}
           </span>
           <span className="text-[10.5px] text-[var(--color-muted-foreground)]">
-            · {lineCount} lines
+            {t("audits.payloadLines").replace("{n}", String(lineCount))}
           </span>
         </div>
         <Button variant="ghost" size="sm" onClick={copy} className="h-6 px-2 text-[11px]">
           {copied ? (
             <>
-              <ClipboardCheck className="mr-1 h-3 w-3" /> Copied
+              <ClipboardCheck className="mr-1 h-3 w-3" /> {t("audits.copied")}
             </>
           ) : (
             <>
-              <Copy className="mr-1 h-3 w-3" /> Copy
+              <Copy className="mr-1 h-3 w-3" /> {t("audits.copy")}
             </>
           )}
         </Button>
@@ -379,8 +392,42 @@ function PayloadPanel({ payload }: { payload: unknown }) {
 // helpers
 // ─────────────────────────────────────────────────────────────────────────
 
-function formatEventType(raw: unknown): string {
-  return typeof raw === "string" && raw.length > 0 ? raw : "Event";
+type Translate = (key: string, fallback?: string) => string;
+
+function eventTypeLabel(raw: unknown, t: Translate): string {
+  switch (raw) {
+    case "EntityChange":
+      return t("audits.typeEntityChange");
+    case "Security":
+      return t("audits.typeSecurity");
+    case "Activity":
+      return t("audits.typeActivity");
+    case "Exception":
+      return t("audits.typeException");
+    case "None":
+      return t("audits.typeNone");
+    default:
+      return typeof raw === "string" && raw.length > 0 ? raw : t("audits.event");
+  }
+}
+
+function severityLabel(severity: string, t: Translate): string {
+  switch (severity) {
+    case "Trace":
+      return t("audits.sevTrace");
+    case "Debug":
+      return t("audits.sevDebug");
+    case "Information":
+      return t("audits.sevInformation");
+    case "Warning":
+      return t("audits.sevWarning");
+    case "Error":
+      return t("audits.sevError");
+    case "Critical":
+      return t("audits.sevCritical");
+    default:
+      return severity;
+  }
 }
 
 function eventTypeVariant(eventType: string): "info" | "warning" | "danger" | "muted" {
@@ -421,29 +468,29 @@ function formatTimestamp(value: string | undefined | null): string {
   return d.toISOString();
 }
 
-const TAG_NAMES: ReadonlyArray<{ bit: number; label: string }> = [
-  { bit: 1 << 0, label: "PiiMasked" },
-  { bit: 1 << 1, label: "OutOfQuota" },
-  { bit: 1 << 2, label: "Sampled" },
-  { bit: 1 << 3, label: "RetainedLong" },
-  { bit: 1 << 4, label: "HealthCheck" },
-  { bit: 1 << 5, label: "Authentication" },
-  { bit: 1 << 6, label: "Authorization" },
+const TAG_NAMES: ReadonlyArray<{ bit: number; key: string }> = [
+  { bit: 1 << 0, key: "audits.tagPiiMasked" },
+  { bit: 1 << 1, key: "audits.tagOutOfQuota" },
+  { bit: 1 << 2, key: "audits.tagSampled" },
+  { bit: 1 << 3, key: "audits.tagRetainedLong" },
+  { bit: 1 << 4, key: "audits.tagHealthCheck" },
+  { bit: 1 << 5, key: "audits.tagAuthentication" },
+  { bit: 1 << 6, key: "audits.tagAuthorization" },
 ];
 
-function renderTagsInline(tags: number): React.ReactNode {
+function renderTagsInline(tags: number, t: Translate): React.ReactNode {
   if (!tags || tags === 0) {
     return <span className="text-[var(--color-muted-foreground)]">—</span>;
   }
-  const set = TAG_NAMES.filter((t) => (tags & t.bit) === t.bit);
+  const set = TAG_NAMES.filter((item) => (tags & item.bit) === item.bit);
   if (set.length === 0) {
     return <span className="text-[var(--color-muted-foreground)]">—</span>;
   }
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      {set.map((t) => (
-        <code key={t.label} className="code-chip text-[11px]">
-          {t.label}
+      {set.map((item) => (
+        <code key={item.key} className="code-chip text-[11px]">
+          {t(item.key)}
         </code>
       ))}
     </span>

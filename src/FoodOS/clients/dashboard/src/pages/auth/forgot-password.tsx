@@ -19,6 +19,7 @@ import { requestPasswordReset } from "@/api/identity";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { env } from "@/env";
+import { useT } from "@/i18n/locale-provider";
 
 /**
  * Forgot-password — step 1 of the reset flow. Collects (email, tenant)
@@ -30,6 +31,7 @@ import { env } from "@/env";
  * inbox" success state after a 2xx.
  */
 export function ForgotPasswordPage() {
+  const t = useT();
   const { isAuthenticated } = useAuth();
   const [email, setEmail] = useState("");
   const [tenant, setTenant] = useState(env.defaultTenant);
@@ -65,12 +67,12 @@ export function ForgotPasswordPage() {
     <AuthShell
       footer={
         <span>
-          Remembered it?{" "}
+          {t("auth.remembered")}{" "}
           <Link
             to="/login"
             className="text-[var(--color-foreground)] underline-offset-4 hover:underline"
           >
-            Sign in
+            {t("auth.signIn")}
           </Link>
         </span>
       }
@@ -86,23 +88,23 @@ export function ForgotPasswordPage() {
             </span>
           </div>
           <div>
-            <AuthHeadline lead="Check your" accent="inbox" />
+            <AuthHeadline lead={t("auth.checkInboxLead")} accent={t("auth.checkInboxAccent")} />
             <p className="text-[13px] leading-relaxed text-[var(--color-muted-foreground)]">
-              If an account exists for{" "}
-              <span className="text-[var(--color-foreground)]">{email}</span> in
-              tenant{" "}
-              <span className="text-[var(--color-foreground)]">{tenant}</span>,
-              a one-time reset link is on its way. The link expires in 30 minutes.
+              {t("auth.inboxBodyBefore")}{" "}
+              <span className="text-[var(--color-foreground)]">{email}</span>{" "}
+              {t("auth.inboxBodyMid")}{" "}
+              <span className="text-[var(--color-foreground)]">{tenant}</span>
+              {t("auth.inboxBodyAfter")}
             </p>
           </div>
           <ul className="space-y-1.5 text-left text-[12.5px] text-[var(--color-muted-foreground)]">
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 size-3.5 shrink-0 text-[var(--color-success)]" />
-              Didn't get it? Wait a minute, then check spam.
+              {t("auth.inboxTipSpam")}
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 size-3.5 shrink-0 text-[var(--color-success)]" />
-              Still nothing? Confirm the email + tenant and try again.
+              {t("auth.inboxTipRetry")}
             </li>
           </ul>
           <div className="flex items-center gap-2 pt-1">
@@ -114,11 +116,11 @@ export function ForgotPasswordPage() {
                 setError(null);
               }}
             >
-              Try a different address
+              {t("auth.tryDifferent")}
             </Button>
             <Link to="/login" className="ml-auto">
               <Button type="button" variant="outline">
-                Back to sign in
+                {t("auth.backToSignIn")}
               </Button>
             </Link>
           </div>
@@ -126,9 +128,9 @@ export function ForgotPasswordPage() {
       ) : (
         <>
           <div className="mb-6 sm:mb-8">
-            <AuthHeadline lead="Reset your" accent="password" />
+            <AuthHeadline lead={t("auth.resetTitleLead")} accent={t("auth.resetTitleAccent")} />
             <p className="text-[13px] text-[var(--color-muted-foreground)]">
-              Enter the email you sign in with. We'll send a one-time link.
+              {t("auth.resetSubtitle")}
             </p>
           </div>
 
@@ -138,7 +140,7 @@ export function ForgotPasswordPage() {
                 htmlFor="reset-tenant"
                 className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
               >
-                Tenant
+                {t("auth.tenant")}
               </Label>
               <div className="relative">
                 <Building2 className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.6)]" />
@@ -161,7 +163,7 @@ export function ForgotPasswordPage() {
                 htmlFor="reset-email"
                 className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
               >
-                Email
+                {t("auth.email")}
               </Label>
               <div className="relative">
                 <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.6)]" />
@@ -206,11 +208,11 @@ export function ForgotPasswordPage() {
                 {mutation.isPending ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    <span>Sending link…</span>
+                    <span>{t("auth.sendingLink")}</span>
                   </>
                 ) : (
                   <>
-                    <span>Send reset link</span>
+                    <span>{t("auth.sendResetLink")}</span>
                     <ArrowRight className="size-[14px] opacity-60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100" />
                   </>
                 )}

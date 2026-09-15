@@ -53,6 +53,13 @@ public sealed class ConfirmPodCommandHandler(
                 HttpStatusCode.Conflict);
         }
 
+        if (command.Lines.Count != expectedLots.Count
+            || command.Lines.Select(l => (l.OrderLineId, l.LotId)).Distinct().Count() != command.Lines.Count)
+        {
+            throw new CustomException("Signature lines must match the shipped lots exactly.",
+                (IEnumerable<string>?)null, HttpStatusCode.BadRequest);
+        }
+
         var signed = command.Lines.ToDictionary(l => (l.OrderLineId, l.LotId));
         foreach (var lot in expectedLots)
         {
@@ -63,12 +70,38 @@ public sealed class ConfirmPodCommandHandler(
                     (IEnumerable<string>?)null,
                     HttpStatusCode.BadRequest);
             }
+
+            if (signed[(lot.OrderLineId, lot.LotId)].SignedQty < 0
+                || signed[(lot.OrderLineId, lot.LotId)].SignedQty > lot.Quantity)
+            {
+                throw new CustomException("Signed quantity must be between zero and shipped quantity.",
+                    (IEnumerable<string>?)null, HttpStatusCode.BadRequest);
+            }
         }
 
-        string signedJson = JsonSerializer.Serialize(command.Lines);
-        var photoIds = command.PhotoFileIds ?? [];
-        var pod = shipment.ConfirmStop(command.StopId, signedJson, photoIds, command.SignerName, command.Geo);
-        dbContext.ProofOfDeliveries.Add(pod);
+        string signedJson = JsonSerializer.Serialize(command.Lines.OrderBy(l => l.OrderLineId).ThenBy(l => l.LotId));
+        var photoIds = (command.PhotoFileIds ?? []).OrderBy(id => id).ToArray();
+        bool isNewSignature = stop.ProofOfDelivery is null;
+        var pod = shipment.PrepareStopSignature(command.StopId, signedJson, photoIds, command.SignerName, command.Geo);
+        if (isNewSignature)
+        {
+            dbContext.ProofOfDeliveries.Add(pod);
+            foreach (var line in stopLines)
+            {
+                foreach (var lot in line.Lots)
+                {
+                    decimal quantity = lot.Quantity - signed[(lot.OrderLineId, lot.LotId)].SignedQty;
+                    if (quantity > 0)
+                    {
+                        // The shipment-lot identity remains stable across retries.
+                        dbContext.ReturnsOnTruck.Add(shipment.RecordReturn(
+                            line.OrderId, lot.ProductId, lot.LotId, quantity, "partial-reject", lot.Id));
+                    }
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         string actor = currentUser.GetUserId().ToString("N");
         var receiptsByOrder = new Dictionary<Guid, List<OrderLineReceipt>>();
@@ -79,14 +112,6 @@ public sealed class ConfirmPodCommandHandler(
             foreach (var lot in line.Lots)
             {
                 var sign = signed[(lot.OrderLineId, lot.LotId)];
-                if (sign.SignedQty > lot.Quantity)
-                {
-                    throw new CustomException(
-                        "Signed quantity cannot exceed shipped quantity.",
-                        (IEnumerable<string>?)null,
-                        HttpStatusCode.BadRequest);
-                }
-
                 decimal returnedQty = lot.Quantity - sign.SignedQty;
                 string? reason = returnedQty > 0 ? "partial-reject" : null;
 
@@ -118,9 +143,7 @@ public sealed class ConfirmPodCommandHandler(
 
                 if (returnedQty > 0)
                 {
-                    var ret = shipment.RecordReturn(
-                        line.OrderId, lot.ProductId, lot.LotId, returnedQty, reason ?? "partial-reject");
-                    dbContext.ReturnsOnTruck.Add(ret);
+                    var ret = shipment.Returns.Single(r => r.Id == lot.Id);
 
                     await mediator.Send(
                             new ReturnInTransitStockCommand(
@@ -162,7 +185,13 @@ public sealed class ConfirmPodCommandHandler(
                     lot.OrderLineId, lot.LotId, sign.SignedQty, returnedQty, reason));
             }
 
-            receiptsByOrder[line.OrderId] = receipts;
+            if (!receiptsByOrder.TryGetValue(line.OrderId, out var orderReceipts))
+            {
+                orderReceipts = [];
+                receiptsByOrder.Add(line.OrderId, orderReceipts);
+            }
+
+            orderReceipts.AddRange(receipts);
         }
 
         foreach (var (orderId, receipts) in receiptsByOrder)
@@ -171,6 +200,7 @@ public sealed class ConfirmPodCommandHandler(
                 .ConfigureAwait(false);
         }
 
+        shipment.ConfirmStop(command.StopId, signedJson, photoIds, command.SignerName, command.Geo);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         await eventBus.PublishAsync(

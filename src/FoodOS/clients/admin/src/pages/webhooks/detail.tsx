@@ -36,10 +36,12 @@ import {
 } from "@/components/list";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 const PAGE_SIZE = 25;
 
 export function WebhookDetailPage() {
+  const t = useT();
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -66,33 +68,40 @@ export function WebhookDetailPage() {
     mutationFn: () => testWebhookSubscription(id),
     onSuccess: (data) => {
       toast[data.success ? "success" : "warning"](
-        data.success ? "Test event delivered" : "Endpoint rejected the test event",
+        data.success ? t("webhooks.testDelivered") : t("webhooks.rejected"),
       );
       deliveries.refetch();
     },
-    onError: (err) => toast.error("Test failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("webhooks.testFailed"), { description: describe(err) }),
   });
 
   const remove = useMutation({
     mutationFn: () => deleteWebhookSubscription(id),
     onSuccess: () => {
-      toast.success("Subscription deleted");
+      toast.success(t("webhooks.deleted"));
       queryClient.invalidateQueries({ queryKey: ["webhooks", "subscriptions"] });
       navigate("/webhooks");
     },
-    onError: (err) => toast.error("Delete failed", { description: describe(err) }),
+    onError: (err) => toast.error(t("webhooks.deleteFailed"), { description: describe(err) }),
   });
 
   return (
     <div className="space-y-8">
       <PageHeader
-        crumbs={[{ label: "\\ Webhooks" }, { label: sub?.url ?? "…", muted: true }]}
-        trailing={sub ? (sub.isActive ? "ACTIVE" : "INACTIVE") : "—"}
-        title={sub?.url ?? "Subscription"}
-        description={sub ? `Subscribed to ${sub.events.length} ${sub.events.length === 1 ? "event" : "events"}.` : "Loading subscription…"}
+        crumbs={[{ label: t("webhooks.crumb") }, { label: sub?.url ?? "…", muted: true }]}
+        trailing={sub ? (sub.isActive ? t("webhooks.active").toUpperCase() : t("webhooks.inactive").toUpperCase()) : "—"}
+        title={sub?.url ?? t("webhooks.fallbackTitle")}
+        description={
+          sub
+            ? t(sub.events.length === 1 ? "webhooks.subscribedOne" : "webhooks.subscribedMany").replace(
+                "{n}",
+                String(sub.events.length),
+              )
+            : t("webhooks.loadingSub")
+        }
         actions={
           <Button variant="ghost" size="sm" onClick={() => navigate("/webhooks")}>
-            <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Subscriptions
+            <ArrowLeft className="mr-1 h-3.5 w-3.5" /> {t("webhooks.subscriptions")}
           </Button>
         }
       />
@@ -102,34 +111,34 @@ export function WebhookDetailPage() {
           message={
             subsQuery.error instanceof ApiRequestError
               ? subsQuery.error.problem?.detail ?? subsQuery.error.message
-              : "Failed to load subscription."
+              : t("webhooks.loadSubFailed")
           }
         />
       )}
 
-      {subsQuery.isLoading && <LoadingRow label="Loading subscription" />}
+      {subsQuery.isLoading && <LoadingRow label={t("webhooks.loadingSub")} />}
 
       {!subsQuery.isLoading && !sub && !subsQuery.isError && (
-        <ErrorBand message="Subscription not found. It may have been deleted." />
+        <ErrorBand message={t("webhooks.notFound")} />
       )}
 
       {sub && (
         <div className="space-y-4">
           <SettingsSection
             icon={Link2}
-            title="Endpoint"
-            description="Where we POST event payloads."
+            title={t("webhooks.endpoint")}
+            description={t("webhooks.endpointDesc")}
             footer={
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => test.mutate()} disabled={test.isPending}>
                   <Send className="mr-1.5 h-3.5 w-3.5" />
-                  {test.isPending ? "Sending…" : "Send test event"}
+                  {test.isPending ? t("webhooks.sending") : t("webhooks.sendTest")}
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (window.confirm(`Delete subscription to ${sub.url}?`)) {
+                    if (window.confirm(t("webhooks.deleteConfirm").replace("{url}", sub.url))) {
                       remove.mutate();
                     }
                   }}
@@ -137,45 +146,47 @@ export function WebhookDetailPage() {
                   className="text-[var(--color-destructive)] hover:bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.08)]"
                 >
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  {remove.isPending ? "Deleting…" : "Delete subscription"}
+                  {remove.isPending ? t("webhooks.deleting") : t("webhooks.deleteSubscription")}
                 </Button>
               </div>
             }
           >
             <dl className="grid grid-cols-1 gap-y-3 sm:grid-cols-2">
-              <FieldRow label="URL" mono value={sub.url} />
-              <FieldRow label="Status" value={
+              <FieldRow label={t("webhooks.url")} mono value={sub.url} />
+              <FieldRow label={t("webhooks.status")} value={
                 <Badge variant={sub.isActive ? "success" : "muted"} className="font-mono uppercase tracking-[0.14em]">
-                  {sub.isActive ? "Active" : "Inactive"}
+                  {sub.isActive ? t("webhooks.active") : t("webhooks.inactive")}
                 </Badge>
               } />
-              <FieldRow label="Subscription id" mono value={sub.id} />
-              <FieldRow label="Created" mono value={new Date(sub.createdAtUtc).toLocaleString()} />
+              <FieldRow label={t("webhooks.subscriptionId")} mono value={sub.id} />
+              <FieldRow label={t("webhooks.created")} mono value={new Date(sub.createdAtUtc).toLocaleString()} />
             </dl>
           </SettingsSection>
 
           <SettingsSection
             icon={List}
-            title="Events"
-            description="Event types this endpoint subscribes to."
+            title={t("webhooks.events")}
+            description={t("webhooks.eventsDesc")}
           >
             <div className="flex flex-wrap gap-1.5">
               {sub.events.map((e) => (
                 <code key={e} className="code-chip">{e}</code>
               ))}
               {sub.events.length === 0 && (
-                <span className="text-sm text-[var(--color-muted-foreground)]">— no events; subscription would never fire</span>
+                <span className="text-sm text-[var(--color-muted-foreground)]">{t("webhooks.noEvents")}</span>
               )}
             </div>
           </SettingsSection>
 
           <SettingsSection
-            title="Deliveries"
-            description="Recent attempts to POST events to this endpoint. Auto-refreshes every 10s."
+            title={t("webhooks.deliveries")}
+            description={t("webhooks.deliveriesDesc")}
             footer={
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]">
-                  {deliveries.data ? `${deliveries.data.totalCount} attempts` : "—"}
+                  {deliveries.data
+                    ? t("webhooks.attempts").replace("{n}", String(deliveries.data.totalCount))
+                    : "—"}
                 </span>
                 <Button
                   variant="outline"
@@ -184,7 +195,7 @@ export function WebhookDetailPage() {
                   disabled={deliveries.isFetching}
                 >
                   <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", deliveries.isFetching && "animate-spin")} />
-                  Refresh
+                  {t("webhooks.refresh")}
                 </Button>
               </div>
             }
@@ -192,10 +203,10 @@ export function WebhookDetailPage() {
             {deliveries.isError ? (
               <ErrorBand message={describe(deliveries.error)} />
             ) : deliveries.isLoading ? (
-              <LoadingRow label="Loading deliveries" />
+              <LoadingRow label={t("webhooks.loadingDeliveries")} />
             ) : (deliveries.data?.items.length ?? 0) === 0 ? (
               <p className="text-sm text-[var(--color-muted-foreground)]">
-                No deliveries yet. Try the test button above, or wait for matching events to fire.
+                {t("webhooks.noDeliveries")}
               </p>
             ) : (
               <>
@@ -230,6 +241,7 @@ export function WebhookDetailPage() {
 }
 
 function DeliveryRow({ delivery }: { delivery: WebhookDeliveryDto }) {
+  const t = useT();
   const Icon = delivery.success ? CheckCircle2 : XCircle;
   const tone = delivery.success ? "text-[var(--color-success)]" : "text-[var(--color-destructive)]";
   return (
@@ -240,16 +252,16 @@ function DeliveryRow({ delivery }: { delivery: WebhookDeliveryDto }) {
       </span>
       <code className="code-chip">{delivery.eventType}</code>
       <span className="truncate text-[11.5px] text-[var(--color-muted-foreground)]">
-        {delivery.errorMessage ?? (delivery.success ? "OK" : "Failed")}
+        {delivery.errorMessage ?? (delivery.success ? t("webhooks.ok") : t("webhooks.failed"))}
       </span>
       <Badge
         variant={delivery.success ? "success" : "danger"}
         className="font-mono uppercase tracking-[0.14em]"
       >
-        HTTP {delivery.httpStatusCode || "—"}
+        {t("webhooks.http").replace("{code}", String(delivery.httpStatusCode || "—"))}
       </Badge>
       <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]">
-        try {delivery.attemptCount}
+        {t("webhooks.try").replace("{n}", String(delivery.attemptCount))}
       </span>
     </li>
   );

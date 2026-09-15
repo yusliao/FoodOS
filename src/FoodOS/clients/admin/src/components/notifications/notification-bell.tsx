@@ -13,6 +13,7 @@ import {
 import { useRealtimeEvent } from "@/realtime/realtime-context";
 import { useAuth } from "@/auth/use-auth";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 /**
  * NotificationBell — topbar trigger with unread badge and a popover preview
@@ -21,6 +22,7 @@ import { cn } from "@/lib/cn";
  * /notifications.
  */
 export function NotificationBell() {
+  const t = useT();
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -78,7 +80,12 @@ export function NotificationBell() {
   const markAll = useMutation({
     mutationFn: markAllNotificationsRead,
     onSuccess: (data) => {
-      toast.success(`${data.updated} ${data.updated === 1 ? "notification" : "notifications"} marked read`);
+      toast.success(
+        (data.updated === 1 ? t("notifications.markedOne") : t("notifications.markedMany")).replace(
+          "{n}",
+          String(data.updated),
+        ),
+      );
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
@@ -93,7 +100,7 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label={count > 0 ? `${count} unread notifications` : "Notifications"}
+        aria-label={count > 0 ? t("notifications.unreadCount").replace("{n}", String(count)) : t("notifications.title")}
         aria-haspopup="true"
         aria-expanded={open}
         className={cn(
@@ -124,11 +131,11 @@ export function NotificationBell() {
             className="fixed inset-0 z-40 cursor-default bg-transparent"
           />
           <div
-            aria-label="Notifications"
+            aria-label={t("notifications.title")}
             className="absolute right-0 z-50 mt-2 w-[22rem] overflow-hidden rounded-xl card-shell shadow-[0_24px_64px_-24px_oklch(0_0_0/0.30)]"
           >
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2.5">
-              <div className="meta text-[var(--color-muted-foreground)]">// Notifications</div>
+              <div className="meta text-[var(--color-muted-foreground)]">{t("notifications.kicker")}</div>
               {count > 0 && (
                 <button
                   type="button"
@@ -137,7 +144,7 @@ export function NotificationBell() {
                   className="inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)]"
                 >
                   <CheckCheck className="h-3 w-3" />
-                  Mark all read
+                  {t("notifications.markAll")}
                 </button>
               )}
             </div>
@@ -148,13 +155,13 @@ export function NotificationBell() {
                   role="status"
                   className="px-3 py-6 text-center font-mono text-xs uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]"
                 >
-                  Loading<span className="caret text-[var(--color-accent-signal)]" />
+                  {t("notifications.loadingShort")}<span className="caret text-[var(--color-accent-signal)]" />
                 </p>
               )}
 
               {!recent.isLoading && items.length === 0 && (
                 <p className="px-3 py-8 text-center text-sm text-[var(--color-muted-foreground)]">
-                  You're all caught up.
+                  {t("notifications.caughtUp")}
                 </p>
               )}
 
@@ -165,6 +172,7 @@ export function NotificationBell() {
                     notif={n}
                     onMarkRead={() => markOne.mutate(n.id)}
                     onClick={() => setOpen(false)}
+                    t={t}
                   />
                 ))}
               </ul>
@@ -176,7 +184,7 @@ export function NotificationBell() {
                 onClick={() => setOpen(false)}
                 className="inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-foreground)] hover:underline"
               >
-                View all
+                {t("notifications.viewAll")}
               </Link>
             </div>
           </div>
@@ -190,10 +198,12 @@ function Row({
   notif,
   onMarkRead,
   onClick,
+  t,
 }: {
   notif: NotificationDto;
   onMarkRead: () => void;
   onClick: () => void;
+  t: (key: string, fallback?: string) => string;
 }) {
   const unread = !notif.readAtUtc;
   const body = (
@@ -201,7 +211,7 @@ function Row({
       <div className="flex flex-wrap items-baseline gap-x-2">
         <span className="truncate font-medium">{notif.title}</span>
         <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]">
-          {formatRelative(notif.createdAtUtc)}
+          {formatRelative(notif.createdAtUtc, t)}
         </span>
       </div>
       {notif.body && (
@@ -242,7 +252,7 @@ function Row({
             e.stopPropagation();
             onMarkRead();
           }}
-          aria-label="Mark as read"
+          aria-label={t("notifications.markReadAria")}
           className="invisible mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] group-hover/notif:visible"
         >
           <CheckCheck className="h-3 w-3" />
@@ -252,17 +262,17 @@ function Row({
   );
 }
 
-function formatRelative(value: string): string {
+function formatRelative(value: string, t: (key: string, fallback?: string) => string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   const diff = Date.now() - d.getTime();
   const sec = Math.round(diff / 1000);
-  if (sec < 60) return `${sec}s`;
+  if (sec < 60) return t("notifications.relSeconds").replace("{n}", String(sec));
   const min = Math.round(sec / 60);
-  if (min < 60) return `${min}m`;
+  if (min < 60) return t("notifications.relMinutes").replace("{n}", String(min));
   const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h`;
+  if (hr < 24) return t("notifications.relHours").replace("{n}", String(hr));
   const day = Math.round(hr / 24);
-  if (day < 14) return `${day}d`;
+  if (day < 14) return t("notifications.relDays").replace("{n}", String(day));
   return d.toLocaleDateString();
 }

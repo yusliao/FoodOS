@@ -66,7 +66,7 @@ export function AuthShell({
 
       {/* Card column */}
       <div className="relative z-10 w-full max-w-[420px] fsh-enter fsh-enter-1">
-        {/* Brand lockup — FSH logo + Outfit wordmark + .NET 10 caption */}
+        {/* Brand lockup — FSH logo + Outfit wordmark + workspace caption */}
         <div className="mb-8 flex flex-col items-center">
           <div className="flex items-center gap-2.5">
             <img

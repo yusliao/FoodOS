@@ -1,5 +1,15 @@
 using FSH.Modules.Inventory.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.Dtos;
+using FSH.Modules.Ordering.Contracts.v1.Orders;
+using FSH.Modules.Ordering.Data;
+using FSH.Modules.Ordering.Domain;
+using FSH.Modules.Ordering.Features.v1.Orders.PlaceOrder;
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
+using Mediator;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
@@ -12,10 +22,70 @@ namespace Integration.Tests.Tests.Ordering;
 public sealed class OrderingShopTests
 {
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public OrderingShopTests(FshWebApplicationFactory factory)
     {
         _auth = new AuthHelper(factory);
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task CancelledPlacement_Should_ReleaseStock_And_PreserveCart()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var productId = await CreateProductAsync(client);
+        await ReceiveAsync(client, warehouse.Id, productId, "LOT-CANCEL", 10m);
+        var orgId = await CreateCustomerOrgAsync(client);
+        var storeId = await CreateStoreAsync(client, orgId, warehouse.Id);
+        using var putCart = await client.PutAsJsonAsync(
+            $"{TestConstants.OrderingBasePath}/carts/{storeId}",
+            new { storeId, lines = new[] { new { productId, quantity = 6m } } });
+        putCart.EnsureSuccessStatusCode();
+
+        using var cancellation = new CancellationTokenSource();
+        var interceptor = new CancelPlacementInterceptor(cancellation);
+        using var jobStorage = new JobStorageScope();
+        using var failingFactory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
+            services => services.AddDbContext<OrderingDbContext>(options => options.AddInterceptors(interceptor))));
+        using var scope = failingFactory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+        var handler = new PlaceOrderCommandHandler(db, scope.ServiceProvider.GetRequiredService<IMediator>(), TimeProvider.System);
+        await Should.ThrowAsync<OperationCanceledException>(async () =>
+            await handler.Handle(new PlaceOrderCommand(storeId), cancellation.Token));
+
+        interceptor.Triggered.ShouldBeTrue();
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(10m);
+        using var getCart = await client.GetAsync($"{TestConstants.OrderingBasePath}/carts/{storeId}");
+        (await getCart.DeserializeAsync<CartDto>()).Lines.ShouldHaveSingleItem().Quantity.ShouldBe(6m);
+        db.ChangeTracker.Clear();
+        var order = await db.SalesOrders.SingleAsync(o => o.StoreId == storeId);
+        order.Status.ShouldBe(SalesOrderStatus.Cancelled);
+        order.Lines.ShouldAllBe(line => line.ReservationId == null);
+    }
+
+    private sealed class CancelPlacementInterceptor(CancellationTokenSource cancellation) : SaveChangesInterceptor
+    {
+        public bool Triggered { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (!Triggered && eventData.Context!.ChangeTracker.Entries<SalesOrder>()
+                .Any(entry => entry.Entity.Status == SalesOrderStatus.Reserved))
+            {
+                Triggered = true;
+                await cancellation.CancelAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return result;
+        }
     }
 
     [Fact]

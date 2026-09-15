@@ -30,6 +30,7 @@ import { ApiRequestError } from "@/lib/api-client";
 import { AuditingPermissions } from "@/lib/permissions";
 import { AuditDetailSheet } from "@/pages/audits/detail";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 const PAGE_SIZE = 25;
 
@@ -38,6 +39,7 @@ const PAGE_SIZE = 25;
 const SEARCH_DEBOUNCE_MS = 250;
 
 export function AuditsListPage() {
+  const t = useT();
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
@@ -128,10 +130,10 @@ export function AuditsListPage() {
     <div className="space-y-8">
       <EntityPageHeader
         icon={ScrollText}
-        title="Audit trail"
+        title={t("audits.title")}
         total={data?.totalCount ?? null}
-        unit="event"
-        description="Every security action, entity change, and exception captured by the auditing pipeline. Filter by event type, severity, or correlation id to follow a request end-to-end."
+        unit={t("audits.unit")}
+        description={t("audits.description")}
       >
         <Button
           variant="outline"
@@ -141,22 +143,22 @@ export function AuditsListPage() {
           className="flex-1 sm:flex-none"
         >
           <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", query.isFetching && "animate-spin")} />
-          Refresh
+          {t("audits.refresh")}
         </Button>
       </EntityPageHeader>
 
       <StatStrip cols={4}>
-        <Stat label="Total events" value={summary.isLoading ? "—" : summaryStats.total.toLocaleString()} hint="across all event types" />
-        <Stat label="Errors + critical" value={summary.isLoading ? "—" : summaryStats.errors.toLocaleString()} hint="severity ≥ Error" tone={summaryStats.errors > 0 ? "danger" : "default"} />
-        <Stat label="Security events" value={summary.isLoading ? "—" : summaryStats.security.toLocaleString()} hint="logins, role grants, tokens" tone={summaryStats.security > 0 ? "info" : "default"} />
-        <Stat label="Exceptions" value={summary.isLoading ? "—" : summaryStats.exceptions.toLocaleString()} hint="unhandled / classified" tone={summaryStats.exceptions > 0 ? "warning" : "default"} />
+        <Stat label={t("audits.statTotal")} value={summary.isLoading ? "—" : summaryStats.total.toLocaleString()} hint={t("audits.statTotalHint")} />
+        <Stat label={t("audits.statErrors")} value={summary.isLoading ? "—" : summaryStats.errors.toLocaleString()} hint={t("audits.statErrorsHint")} tone={summaryStats.errors > 0 ? "danger" : "default"} />
+        <Stat label={t("audits.statSecurity")} value={summary.isLoading ? "—" : summaryStats.security.toLocaleString()} hint={t("audits.statSecurityHint")} tone={summaryStats.security > 0 ? "info" : "default"} />
+        <Stat label={t("audits.statExceptions")} value={summary.isLoading ? "—" : summaryStats.exceptions.toLocaleString()} hint={t("audits.statExceptionsHint")} tone={summaryStats.exceptions > 0 ? "warning" : "default"} />
       </StatStrip>
 
       <FilterBar
         trailing={
           activeFilters > 0 ? (
             <Button variant="ghost" size="sm" onClick={clearAll} className="text-xs">
-              <X className="mr-1 h-3.5 w-3.5" /> Clear all ({activeFilters})
+              <X className="mr-1 h-3.5 w-3.5" /> {t("audits.clearAll").replace("{n}", String(activeFilters))}
             </Button>
           ) : undefined
         }
@@ -165,23 +167,23 @@ export function AuditsListPage() {
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search user, source, correlation…"
-            aria-label="Search audit trail"
+            placeholder={t("audits.searchPlaceholder")}
+            aria-label={t("audits.searchAria")}
             className="h-8"
           />
         </div>
         <Select
           value={eventType}
           onValueChange={(v) => setParam("type", v || null)}
-          options={AUDIT_EVENT_TYPES.map((t) => ({ value: t, label: t }))}
-          emptyLabel="All event types"
+          options={AUDIT_EVENT_TYPES.map((type) => ({ value: type, label: eventTypeLabel(type, t) }))}
+          emptyLabel={t("audits.allEventTypes")}
           className="min-w-[10rem]"
         />
         <Select
           value={severity}
           onValueChange={(v) => setParam("sev", v || null)}
-          options={AUDIT_SEVERITIES.map((s) => ({ value: s, label: s }))}
-          emptyLabel="All severities"
+          options={AUDIT_SEVERITIES.map((s) => ({ value: s, label: severityLabel(s, t) }))}
+          emptyLabel={t("audits.allSeverities")}
           className="min-w-[10rem]"
         />
         {canCrossTenant && (
@@ -189,8 +191,8 @@ export function AuditsListPage() {
             <Input
               value={tenantId}
               onChange={(e) => setParam("tenant", e.target.value || null)}
-              placeholder="Tenant id (cross-tenant)"
-              aria-label="Filter by tenant id"
+              placeholder={t("audits.tenantPlaceholder")}
+              aria-label={t("audits.tenantAria")}
               className="h-8 font-mono text-xs"
             />
           </div>
@@ -199,8 +201,8 @@ export function AuditsListPage() {
           <Input
             value={correlationId}
             onChange={(e) => setParam("corr", e.target.value || null)}
-            placeholder="Correlation id"
-            aria-label="Filter by correlation id"
+            placeholder={t("audits.corrPlaceholder")}
+            aria-label={t("audits.corrAria")}
             className="h-8 font-mono text-xs"
           />
         </div>
@@ -211,27 +213,27 @@ export function AuditsListPage() {
           message={
             query.error instanceof ApiRequestError
               ? query.error.problem?.detail ?? query.error.message
-              : "Failed to load audit events."
+              : t("audits.loadFailed")
           }
         />
       )}
 
-      {query.isLoading && <LoadingRow label="Loading events" />}
+      {query.isLoading && <LoadingRow label={t("audits.loading")} />}
 
       {!query.isLoading && items.length === 0 && !query.isError && (
         <EmptyState
           icon={ScrollText}
-          kicker="// no events"
-          title="No audit events match your filters."
+          kicker={t("audits.emptyKicker")}
+          title={t("audits.emptyTitle")}
           description={
             activeFilters > 0
-              ? "Try clearing or relaxing a filter — the trail is broad by default."
-              : "The audit pipeline hasn't recorded anything for this tenant yet."
+              ? t("audits.emptyFiltered")
+              : t("audits.emptyDefault")
           }
           action={
             activeFilters > 0 ? (
               <Button variant="outline" onClick={clearAll}>
-                Clear filters
+                {t("audits.clearFilters")}
               </Button>
             ) : undefined
           }
@@ -257,7 +259,7 @@ export function AuditsListPage() {
           hasNext={data.hasNext}
           onPrev={() => setPage(Math.max(1, pageNumber - 1))}
           onNext={() => setPage(pageNumber + 1)}
-          noun="events"
+          noun={t("common.events")}
         />
       )}
 
@@ -268,6 +270,7 @@ export function AuditsListPage() {
 }
 
 function AuditRow({ event, onClick }: { event: AuditSummaryDto; onClick: () => void }) {
+  const t = useT();
   return (
     <li>
       <button
@@ -283,7 +286,7 @@ function AuditRow({ event, onClick }: { event: AuditSummaryDto; onClick: () => v
           variant={eventTypeVariant(event.eventType)}
           className="justify-self-start font-mono uppercase tracking-[0.14em]"
         >
-          {event.eventType}
+          {eventTypeLabel(event.eventType, t)}
         </Badge>
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-2">
@@ -301,7 +304,7 @@ function AuditRow({ event, onClick }: { event: AuditSummaryDto; onClick: () => v
           </div>
           {event.correlationId && (
             <div className="mt-0.5 truncate font-mono text-[10.5px] text-[var(--color-muted-foreground)]">
-              corr · {event.correlationId}
+              {t("audits.corrLine").replace("{id}", event.correlationId)}
             </div>
           )}
         </div>
@@ -314,6 +317,7 @@ function AuditRow({ event, onClick }: { event: AuditSummaryDto; onClick: () => v
 // ─── helpers ────────────────────────────────────────────────────────────
 
 function SeverityDot({ severity }: { severity: AuditSeverity }) {
+  const t = useT();
   const tone =
     severity === "Critical" || severity === "Error"
       ? "bg-[var(--color-destructive)]"
@@ -322,7 +326,7 @@ function SeverityDot({ severity }: { severity: AuditSeverity }) {
         : severity === "Information"
           ? "bg-[var(--color-info)]"
           : "bg-[var(--color-muted-foreground)]/50";
-  return <span aria-hidden title={severity} className={cn("h-2 w-2 rounded-full", tone)} />;
+  return <span aria-hidden title={severityLabel(severity, t)} className={cn("h-2 w-2 rounded-full", tone)} />;
 }
 
 function eventTypeVariant(type: AuditEventType) {
@@ -337,6 +341,46 @@ function eventTypeVariant(type: AuditEventType) {
       return "muted" as const;
     default:
       return "outline" as const;
+  }
+}
+
+function eventTypeLabel(
+  type: AuditEventType,
+  t: (key: string, fallback?: string) => string,
+): string {
+  switch (type) {
+    case "EntityChange":
+      return t("audits.typeEntityChange");
+    case "Security":
+      return t("audits.typeSecurity");
+    case "Activity":
+      return t("audits.typeActivity");
+    case "Exception":
+      return t("audits.typeException");
+    default:
+      return t("audits.typeNone");
+  }
+}
+
+function severityLabel(
+  severity: AuditSeverity,
+  t: (key: string, fallback?: string) => string,
+): string {
+  switch (severity) {
+    case "Trace":
+      return t("audits.sevTrace");
+    case "Debug":
+      return t("audits.sevDebug");
+    case "Information":
+      return t("audits.sevInformation");
+    case "Warning":
+      return t("audits.sevWarning");
+    case "Error":
+      return t("audits.sevError");
+    case "Critical":
+      return t("audits.sevCritical");
+    default:
+      return t("audits.sevNone");
   }
 }
 

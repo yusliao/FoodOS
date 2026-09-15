@@ -44,8 +44,33 @@ public sealed class ShipmentStop : BaseEntity<Guid>
         string signerName,
         string? geo)
     {
-        if (Status == StopStatus.Delivered && ProofOfDelivery is not null)
+        var pod = PreparePod(signedQtyJson, photoFileIds, signerName, geo);
+        Status = StopStatus.Delivered;
+        return pod;
+    }
+
+    internal ProofOfDelivery PreparePod(
+        string signedQtyJson,
+        IReadOnlyList<Guid> photoFileIds,
+        string signerName,
+        string? geo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(signedQtyJson);
+        ArgumentException.ThrowIfNullOrWhiteSpace(signerName);
+        ArgumentNullException.ThrowIfNull(photoFileIds);
+        if (ProofOfDelivery is not null)
         {
+            if (ProofOfDelivery.SignedQtyJson != signedQtyJson.Trim()
+                || !ProofOfDelivery.GetPhotoIds().SequenceEqual(photoFileIds)
+                || ProofOfDelivery.SignerName != signerName.Trim()
+                || ProofOfDelivery.Geo != (string.IsNullOrWhiteSpace(geo) ? null : geo.Trim()))
+            {
+                throw new CustomException(
+                    "A pending signature must be retried with the original details.",
+                    (IEnumerable<string>?)null,
+                    HttpStatusCode.Conflict);
+            }
+
             return ProofOfDelivery;
         }
 
@@ -60,7 +85,6 @@ public sealed class ShipmentStop : BaseEntity<Guid>
         var pod = global::FSH.Modules.Logistics.Domain.ProofOfDelivery.Capture(
             Id, signedQtyJson, photoFileIds, signerName, geo);
         ProofOfDelivery = pod;
-        Status = StopStatus.Delivered;
         return pod;
     }
 }

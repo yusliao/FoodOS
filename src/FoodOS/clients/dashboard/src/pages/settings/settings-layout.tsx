@@ -11,20 +11,21 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { EntityPageHeader } from "@/components/list";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 type Tab = {
   to: string;
-  label: string;
-  hint: string;
+  labelKey: string;
+  hintKey: string;
   icon: LucideIcon;
 };
 
 const TABS: Tab[] = [
-  { to: "/settings/profile", label: "Profile", hint: "Your identity across the tenant", icon: UserRound },
-  { to: "/settings/security", label: "Security", hint: "Password and active sessions", icon: Shield },
-  { to: "/settings/appearance", label: "Appearance", hint: "Theme and visual preferences", icon: Palette },
-  { to: "/settings/notifications", label: "Notifications", hint: "How we reach you", icon: Bell },
-  { to: "/settings/api-keys", label: "API keys", hint: "Personal access tokens", icon: KeyRound },
+  { to: "/settings/profile", labelKey: "settings.tabProfile", hintKey: "settings.tabProfileHint", icon: UserRound },
+  { to: "/settings/security", labelKey: "settings.tabSecurity", hintKey: "settings.tabSecurityHint", icon: Shield },
+  { to: "/settings/appearance", labelKey: "settings.tabAppearance", hintKey: "settings.tabAppearanceHint", icon: Palette },
+  { to: "/settings/notifications", labelKey: "settings.tabNotifications", hintKey: "settings.tabNotificationsHint", icon: Bell },
+  { to: "/settings/api-keys", labelKey: "settings.tabApiKeys", hintKey: "settings.tabApiKeysHint", icon: KeyRound },
 ];
 
 const pad2 = (n: number) => n.toString().padStart(2, "0");
@@ -36,10 +37,11 @@ const pad2 = (n: number) => n.toString().padStart(2, "0");
  * masthead at the top of the content, sections rendered as warm-paper cards.
  */
 export function SettingsLayout() {
+  const t = useT();
   const location = useLocation();
   const activeIndex = Math.max(
     0,
-    TABS.findIndex((t) => location.pathname.startsWith(t.to)),
+    TABS.findIndex((tab) => location.pathname.startsWith(tab.to)),
   );
   const active = TABS[activeIndex] ?? TABS[0];
 
@@ -52,7 +54,7 @@ export function SettingsLayout() {
         icon={SettingsIcon}
         title={
           <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-            <span>Settings</span>
+            <span>{t("settings.title")}</span>
             <span
               aria-hidden
               className="text-[oklch(from_var(--color-border-strong)_l_c_h_/_0.7)]"
@@ -60,20 +62,20 @@ export function SettingsLayout() {
               ·
             </span>
             <span className="font-display text-[20px] font-semibold tracking-tight text-[var(--color-foreground)]">
-              {active.label}
+              {t(active.labelKey)}
             </span>
           </span>
         }
-        description={active.hint}
+        description={t(active.hintKey)}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr] lg:gap-10">
         {/* ─── Editorial left nav ─── */}
-        <nav aria-label="Settings sections">
+        <nav aria-label={t("settings.sectionsAria")}>
           {/* Desktop: vertical numbered list */}
           <div className="sticky top-6 hidden lg:block">
             <p className="mb-4 pl-5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.6)]">
-              Sections
+              {t("settings.sections")}
             </p>
             <ul className="relative space-y-px">
               {/* Faint vertical rail tying the numbers together */}
@@ -81,12 +83,12 @@ export function SettingsLayout() {
                 aria-hidden
                 className="absolute left-[14px] top-1 bottom-1 w-px bg-[oklch(from_var(--color-border)_l_c_h_/_0.6)]"
               />
-              {TABS.map((t, i) => {
+              {TABS.map((tab, i) => {
                 const num = pad2(i + 1);
                 return (
-                  <li key={t.to}>
+                  <li key={tab.to}>
                     <NavLink
-                      to={t.to}
+                      to={tab.to}
                       end
                       className={({ isActive }) =>
                         cn(
@@ -124,10 +126,10 @@ export function SettingsLayout() {
                                   : "text-[var(--color-muted-foreground)] group-hover:text-[var(--color-foreground)]",
                               )}
                             >
-                              {t.label}
+                              {t(tab.labelKey)}
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.6)]">
-                              {t.hint}
+                              {t(tab.hintKey)}
                             </span>
                           </span>
                           <ChevronRight
@@ -151,7 +153,7 @@ export function SettingsLayout() {
           {/* Mobile: horizontal scroll tabs */}
           <div className="-mx-2 overflow-x-auto pb-1 lg:hidden">
             <div className="flex gap-1 px-2">
-              {TABS.map(({ to, label, icon: Icon }) => (
+              {TABS.map(({ to, labelKey, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -168,7 +170,7 @@ export function SettingsLayout() {
                   }
                 >
                   <Icon className="size-3.5" aria-hidden />
-                  {label}
+                  {t(labelKey)}
                 </NavLink>
               ))}
             </div>

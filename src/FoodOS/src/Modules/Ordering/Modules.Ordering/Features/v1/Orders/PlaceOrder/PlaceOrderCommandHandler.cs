@@ -131,6 +131,18 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
         }
         catch (Exception)
         {
+            // Compensation must survive request cancellation and discard unsaved cart/order changes.
+            using var compensation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            dbContext.ChangeTracker.Clear();
+            var persistedOrder = await dbContext.SalesOrders
+                .FirstAsync(o => o.Id == order.Id, compensation.Token)
+                .ConfigureAwait(false);
+            if (persistedOrder.Status != SalesOrderStatus.Draft)
+            {
+                // A committed placement must not have its reservations released.
+                throw;
+            }
+
             foreach (var (lineId, reservationId) in reserved)
             {
                 await InventoryStockOps.UnreserveAsync(
@@ -140,12 +152,12 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
                         lineId,
                         order.Revision,
                         "place-compensate",
-                        cancellationToken)
+                        compensation.Token)
                     .ConfigureAwait(false);
             }
 
-            order.FailPlace();
-            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            persistedOrder.FailPlace();
+            await dbContext.SaveChangesAsync(compensation.Token).ConfigureAwait(false);
             throw;
         }
     }
