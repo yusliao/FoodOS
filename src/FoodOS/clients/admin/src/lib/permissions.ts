@@ -25,6 +25,21 @@ export const InventoryPermissions = Object.freeze({
   Warehouses: { View: "Permissions.Inventory.Warehouses.View" },
 });
 
+export const CatalogPermissions = Object.freeze({
+  Brands: {
+    View: "Permissions.Catalog.Brands.View", Create: "Permissions.Catalog.Brands.Create",
+    Update: "Permissions.Catalog.Brands.Update", Delete: "Permissions.Catalog.Brands.Delete",
+  },
+  Categories: {
+    View: "Permissions.Catalog.Categories.View", Create: "Permissions.Catalog.Categories.Create",
+    Update: "Permissions.Catalog.Categories.Update", Delete: "Permissions.Catalog.Categories.Delete",
+  },
+  Products: {
+    View: "Permissions.Catalog.Products.View", Create: "Permissions.Catalog.Products.Create",
+    Update: "Permissions.Catalog.Products.Update", Delete: "Permissions.Catalog.Products.Delete",
+  },
+} as const);
+
 export const IdentityPermissions = Object.freeze({
   Users: {
     View: "Permissions.Users.View",
@@ -128,6 +143,24 @@ export type PermissionGroup = {
 };
 
 export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
+  {
+    category: "Catalog",
+    blurb: "Maintain operator-owned brands, categories, products, and pricing.",
+    entries: [
+      { name: CatalogPermissions.Brands.View, description: "View brands", basic: true },
+      { name: CatalogPermissions.Brands.Create, description: "Create brands" },
+      { name: CatalogPermissions.Brands.Update, description: "Update brands" },
+      { name: CatalogPermissions.Brands.Delete, description: "Delete brands" },
+      { name: CatalogPermissions.Categories.View, description: "View categories", basic: true },
+      { name: CatalogPermissions.Categories.Create, description: "Create categories" },
+      { name: CatalogPermissions.Categories.Update, description: "Update categories" },
+      { name: CatalogPermissions.Categories.Delete, description: "Delete categories" },
+      { name: CatalogPermissions.Products.View, description: "View products", basic: true },
+      { name: CatalogPermissions.Products.Create, description: "Create products" },
+      { name: CatalogPermissions.Products.Update, description: "Update products and base list prices" },
+      { name: CatalogPermissions.Products.Delete, description: "Delete products" },
+    ],
+  },
   {
     category: "Tenants",
     blurb: "Provision and operate tenants. Reserved for the root-tenant operator.",

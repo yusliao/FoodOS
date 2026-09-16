@@ -2,11 +2,14 @@ import {
   Activity,
   Bell,
   Building2,
+  FolderTree,
   LayoutDashboard,
+  Package,
   Receipt,
   ScrollText,
   Settings,
   ShieldCheck,
+  Tags,
   UserCog,
   UsersRound,
   Webhook,
@@ -15,6 +18,7 @@ import {
 import {
   AuditingPermissions,
   BillingPermissions,
+  CatalogPermissions,
   NotificationPermissions,
   OrderingPermissions,
   IdentityPermissions,
@@ -52,6 +56,14 @@ export const topNavBottom: NavSpec[] = [
 // ─── Section accordions ──────────────────────────────────────────────────────
 
 export const sections: NavSection[] = [
+  {
+    id: "catalog", caption: "Catalog", icon: Package,
+    items: [
+      { to: "/catalog/products", label: "Products", icon: Package, perms: [CatalogPermissions.Products.View] },
+      { to: "/catalog/brands", label: "Brands", icon: Tags, perms: [CatalogPermissions.Brands.View] },
+      { to: "/catalog/categories", label: "Categories", icon: FolderTree, perms: [CatalogPermissions.Categories.View] },
+    ],
+  },
   {
     id: "partners", caption: "Customers and stores", icon: Building2,
     items: [

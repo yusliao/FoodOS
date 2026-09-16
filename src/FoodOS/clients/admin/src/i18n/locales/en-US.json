@@ -1,4 +1,66 @@
 {
+  "catalog": {
+    "search": "Search catalog",
+    "loading": "Loading catalog…",
+    "loadFailed": "Catalog data could not be loaded.",
+    "requestFailed": "The catalog request failed. Check the details and try again.",
+    "name": "Name",
+    "description": "Description",
+    "noDescription": "No description",
+    "logoUrl": "Logo URL",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "saving": "Saving…",
+    "created": "Catalog item created.",
+    "updated": "Catalog item updated.",
+    "deleted": "Catalog item deleted.",
+    "deleteConfirm": "Delete {name}? This uses the existing server delete operation.",
+    "brands": {
+      "title": "Brands",
+      "description": "Maintain operator-owned product brands.",
+      "new": "New brand",
+      "empty": "No brands match this search.",
+      "editTitle": "Edit brand",
+      "deleteTitle": "Delete brand",
+      "formHint": "The server derives the slug from the brand name."
+    },
+    "categories": {
+      "title": "Categories",
+      "description": "Maintain the product taxonomy and parent relationships.",
+      "new": "New category",
+      "empty": "No categories match this search.",
+      "editTitle": "Edit category",
+      "deleteTitle": "Delete category",
+      "formHint": "Choose an optional parent; the server prevents invalid category trees.",
+      "parent": "Parent category",
+      "noParent": "No parent (root)",
+      "root": "Root category",
+      "child": "Child category"
+    },
+    "products": {
+      "title": "Products and base prices",
+      "description": "Maintain operator products and their base catalog price. Customer agreements, price lists, and locks are handled separately.",
+      "new": "New product",
+      "empty": "No products match this search.",
+      "editTitle": "Edit product",
+      "deleteTitle": "Delete product",
+      "formHint": "Stock is managed by Inventory. New products start with catalog stock zero and currency USD.",
+      "sku": "SKU",
+      "brand": "Brand ID",
+      "category": "Category ID",
+      "chooseBrand": "Choose a brand",
+      "chooseCategory": "Choose a category",
+      "priceUsd": "Base price (USD)",
+      "active": "Active",
+      "hidden": "Hidden",
+      "changePrice": "Change base price",
+      "newPrice": "New base price",
+      "priceUpdated": "Base catalog price updated.",
+      "loadingForm": "Loading product choices…",
+      "lookupFailed": "Brand or category choices could not be loaded. Retry before editing the product."
+    }
+  },
   "partners": {
     "customerCreated": "Partner customer created.",
     "storeCreated": "Store created for the selected customer. Your list filter is unchanged.",
@@ -86,6 +148,7 @@
   "nav": {
     "sections": {
       "partners": "Customers and stores",
+      "catalog": "Product catalog",
       "multitenancy": "Tenants",
       "identity": "Operator team",
       "system": "System administration",
@@ -94,6 +157,11 @@
     "items": {
       "customers": "Partner customers",
       "stores": "Restaurant stores",
+      "catalog": {
+        "products": "Products and base prices",
+        "brands": "Brands",
+        "categories": "Categories"
+      },
       "home": "Workbench",
       "settings": "Settings",
       "tenants": "Customer identity domains",

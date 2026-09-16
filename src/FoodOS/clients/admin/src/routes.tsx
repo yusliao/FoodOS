@@ -10,6 +10,7 @@ import { NotFoundPage } from "@/pages/not-found";
 import {
   AuditingPermissions,
   BillingPermissions,
+  CatalogPermissions,
   IdentityPermissions,
   MultitenancyPermissions,
   NotificationPermissions,
@@ -32,6 +33,9 @@ const lazyNamed = <T extends string>(
 const TenantsListPage = lazyNamed(() => import("@/pages/tenants/list"), "TenantsListPage");
 const CustomersPage = lazyNamed(() => import("@/pages/customers/list"), "CustomersPage");
 const StoresPage = lazyNamed(() => import("@/pages/customers/stores"), "StoresPage");
+const BrandsPage = lazyNamed(() => import("@/pages/catalog/brands"), "BrandsPage");
+const CategoriesPage = lazyNamed(() => import("@/pages/catalog/categories"), "CategoriesPage");
+const ProductsPage = lazyNamed(() => import("@/pages/catalog/products"), "ProductsPage");
 const TenantDetailPage = lazyNamed(() => import("@/pages/tenants/detail"), "TenantDetailPage");
 const UsersListPage = lazyNamed(() => import("@/pages/users/list"), "UsersListPage");
 const UserDetailPage = lazyNamed(() => import("@/pages/users/detail"), "UserDetailPage");
@@ -85,6 +89,10 @@ export const router = createBrowserRouter([
           { index: true, element: <DashboardPage /> },
           { path: "customers", element: <RouteGuard perms={[OrderingPermissions.Customers.View]}><CustomersPage /></RouteGuard> },
           { path: "stores", element: <RouteGuard perms={[OrderingPermissions.Stores.View]}><StoresPage /></RouteGuard> },
+          { path: "catalog", element: <Navigate to="/catalog/products" replace /> },
+          { path: "catalog/products", element: <RouteGuard perms={[CatalogPermissions.Products.View]}><ProductsPage /></RouteGuard> },
+          { path: "catalog/brands", element: <RouteGuard perms={[CatalogPermissions.Brands.View]}><BrandsPage /></RouteGuard> },
+          { path: "catalog/categories", element: <RouteGuard perms={[CatalogPermissions.Categories.View]}><CategoriesPage /></RouteGuard> },
 
           // Tenants — root-only
           {

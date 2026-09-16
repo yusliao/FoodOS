@@ -1,4 +1,66 @@
 {
+  "catalog": {
+    "search": "搜索目录",
+    "loading": "正在加载商品目录…",
+    "loadFailed": "商品目录加载失败。",
+    "requestFailed": "目录请求失败，请查看错误后重试。",
+    "name": "名称",
+    "description": "描述",
+    "noDescription": "暂无描述",
+    "logoUrl": "标志 URL",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存",
+    "saving": "保存中…",
+    "created": "目录项目已创建。",
+    "updated": "目录项目已更新。",
+    "deleted": "目录项目已删除。",
+    "deleteConfirm": "确定删除 {name}？该操作调用现有服务端删除能力。",
+    "brands": {
+      "title": "品牌",
+      "description": "维护运营方拥有的商品品牌。",
+      "new": "新建品牌",
+      "empty": "没有符合搜索条件的品牌。",
+      "editTitle": "编辑品牌",
+      "deleteTitle": "删除品牌",
+      "formHint": "别名由服务端根据品牌名称生成。"
+    },
+    "categories": {
+      "title": "分类",
+      "description": "维护商品分类体系及上下级关系。",
+      "new": "新建分类",
+      "empty": "没有符合搜索条件的分类。",
+      "editTitle": "编辑分类",
+      "deleteTitle": "删除分类",
+      "formHint": "可选择上级分类，服务端会阻止无效分类树。",
+      "parent": "上级分类",
+      "noParent": "无上级（根分类）",
+      "root": "根分类",
+      "child": "子分类"
+    },
+    "products": {
+      "title": "商品与基础目录价",
+      "description": "维护运营方商品及基础目录价。客户协议、价盘和锁价另行处理。",
+      "new": "新建商品",
+      "empty": "没有符合搜索条件的商品。",
+      "editTitle": "编辑商品",
+      "deleteTitle": "删除商品",
+      "formHint": "库存由库存模块维护；新商品的目录库存为零，默认币种为 USD。",
+      "sku": "SKU",
+      "brand": "品牌 ID",
+      "category": "分类 ID",
+      "chooseBrand": "请选择品牌",
+      "chooseCategory": "请选择分类",
+      "priceUsd": "基础价格（USD）",
+      "active": "上架",
+      "hidden": "下架",
+      "changePrice": "修改基础价格",
+      "newPrice": "新基础价格",
+      "priceUpdated": "基础目录价已更新。",
+      "loadingForm": "正在加载商品选项…",
+      "lookupFailed": "品牌或分类选项加载失败，请重试后再编辑商品。"
+    }
+  },
   "partners": {
     "customerCreated": "合作客户已创建。",
     "storeCreated": "已为所选客户创建门店，列表筛选条件保持不变。",
@@ -86,6 +148,7 @@
   "nav": {
     "sections": {
       "partners": "客户与门店",
+      "catalog": "商品目录",
       "multitenancy": "租户",
       "identity": "运营团队",
       "system": "系统管理",
@@ -94,6 +157,11 @@
     "items": {
       "customers": "合作客户",
       "stores": "饭店门店",
+      "catalog": {
+        "products": "商品与基础目录价",
+        "brands": "品牌",
+        "categories": "分类"
+      },
       "home": "工作台",
       "settings": "设置",
       "tenants": "客户身份域",
