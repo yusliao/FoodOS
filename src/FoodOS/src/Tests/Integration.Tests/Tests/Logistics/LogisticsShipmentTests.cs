@@ -7,6 +7,11 @@ using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 using FSH.Modules.Logistics.Data;
 using FSH.Modules.Logistics.Domain;
+using FSH.Modules.Logistics.Contracts.Authorization;
+using FSH.Modules.Identity.Domain;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -132,6 +137,88 @@ public sealed class LogisticsShipmentTests
 
         using var afterClaim = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{packed.OrderId}");
         (await afterClaim.DeserializeAsync<SalesOrderDto>()).Lines[0].ReturnedQty.ShouldBe(1m);
+    }
+
+    [Fact]
+    public async Task Driver_Should_Only_View_And_Confirm_AssignedShipment()
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        var role = await CreateRoleAsync(admin, $"DriverScope-{suffix}");
+        await SetRolePermissionsAsync(
+            admin,
+            role.Id,
+            LogisticsPermissions.Shipments.ViewAssigned,
+            LogisticsPermissions.ProofOfDelivery.Confirm);
+
+        var driverAUser = await CreateActiveUserAsync($"driver-a-{suffix}");
+        var driverBUser = await CreateActiveUserAsync($"driver-b-{suffix}");
+        await AssignRoleAsync(admin, driverAUser.UserId, role.Name);
+        await AssignRoleAsync(admin, driverBUser.UserId, role.Name);
+        using var driverA = await _auth.CreateAuthenticatedClientAsync(driverAUser.Email, driverAUser.Password);
+        using var driverB = await _auth.CreateAuthenticatedClientAsync(driverBUser.Email, driverBUser.Password);
+
+        var packed = await PackOrderAsync(admin, orderQty: 2m);
+        var vehicleId = await CreateVehicleAsync(admin);
+        var driverId = await CreateDriverAsync(admin, Guid.Parse(driverAUser.UserId));
+        var routeId = await CreateRouteAsync(admin, packed.WarehouseId, packed.StoreId);
+        using var create = await admin.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/shipments", new
+        {
+            routeId,
+            warehouseId = packed.WarehouseId,
+            vehicleId,
+            driverId,
+            businessDate = packed.BusinessDate,
+        });
+        var shipment = await create.DeserializeAsync<ShipmentDto>();
+        var lot = shipment.Lines.ShouldHaveSingleItem().Lots.ShouldHaveSingleItem();
+        var stop = shipment.Stops.ShouldHaveSingleItem();
+
+        using var load = await admin.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/load",
+            new { orderIds = new[] { packed.OrderId } });
+        load.StatusCode.ShouldBe(HttpStatusCode.OK, await load.Content.ReadAsStringAsync());
+        using var depart = await admin.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/depart",
+            new { });
+        depart.StatusCode.ShouldBe(HttpStatusCode.OK, await depart.Content.ReadAsStringAsync());
+
+        using var assignedList = await driverA.GetAsync($"{TestConstants.LogisticsBasePath}/shipments/mine");
+        assignedList.StatusCode.ShouldBe(HttpStatusCode.OK, await assignedList.Content.ReadAsStringAsync());
+        (await assignedList.DeserializeAsync<IReadOnlyList<ShipmentDto>>()).ShouldContain(item => item.Id == shipment.Id);
+
+        using var assignedDetail = await driverA.GetAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/mine/{shipment.Id}");
+        assignedDetail.StatusCode.ShouldBe(HttpStatusCode.OK, await assignedDetail.Content.ReadAsStringAsync());
+
+        using var allShipmentDetail = await driverA.GetAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}");
+        allShipmentDetail.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        using var foreignList = await driverB.GetAsync($"{TestConstants.LogisticsBasePath}/shipments/mine");
+        foreignList.StatusCode.ShouldBe(HttpStatusCode.OK, await foreignList.Content.ReadAsStringAsync());
+        (await foreignList.DeserializeAsync<IReadOnlyList<ShipmentDto>>()).ShouldNotContain(item => item.Id == shipment.Id);
+
+        using var foreignDetail = await driverB.GetAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/mine/{shipment.Id}");
+        foreignDetail.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignDetail.Content.ReadAsStringAsync());
+
+        var signature = new
+        {
+            lines = new[] { new { orderLineId = lot.OrderLineId, lotId = lot.LotId, signedQty = packed.Quantity } },
+            signerName = "Assigned driver",
+            photoFileIds = Array.Empty<Guid>(),
+            geo = (string?)null,
+        };
+        using var foreignPod = await driverB.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/stops/{stop.Id}/pod",
+            signature);
+        foreignPod.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignPod.Content.ReadAsStringAsync());
+
+        using var assignedPod = await driverA.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/stops/{stop.Id}/pod",
+            signature);
+        assignedPod.StatusCode.ShouldBe(HttpStatusCode.OK, await assignedPod.Content.ReadAsStringAsync());
     }
 
     [Theory]
@@ -349,13 +436,65 @@ public sealed class LogisticsShipmentTests
         return await response.DeserializeAsync<Guid>();
     }
 
-    private static async Task<Guid> CreateDriverAsync(HttpClient client)
+    private static async Task<Guid> CreateDriverAsync(HttpClient client, Guid? userId = null)
     {
         using var response = await client.PostAsJsonAsync(
             $"{TestConstants.LogisticsBasePath}/drivers",
-            new { userId = Guid.CreateVersion7(), phone = "+16175550100" });
+            new { userId = userId ?? Guid.CreateVersion7(), phone = "+16175550100" });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.DeserializeAsync<Guid>();
+    }
+
+    private static async Task<RoleDto> CreateRoleAsync(HttpClient adminClient, string name)
+    {
+        using var response = await adminClient.PostAsJsonAsync($"{TestConstants.IdentityBasePath}/roles", new
+        {
+            id = string.Empty,
+            name,
+            description = "driver assignment isolation test role",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return await response.DeserializeAsync<RoleDto>();
+    }
+
+    private static async Task SetRolePermissionsAsync(HttpClient adminClient, string roleId, params string[] permissions)
+    {
+        using var response = await adminClient.PutAsJsonAsync(
+            $"{TestConstants.IdentityBasePath}/{roleId}/permissions",
+            new { roleId, permissions });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static async Task AssignRoleAsync(HttpClient adminClient, string userId, string roleName)
+    {
+        using var response = await adminClient.PostAsJsonAsync(
+            $"{TestConstants.IdentityBasePath}/users/{userId}/roles",
+            new { userId, userRoles = new[] { new { roleName, enabled = true } } });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task<(string Email, string Password, string UserId)> CreateActiveUserAsync(string handle)
+    {
+        const string password = TestConstants.DefaultPassword;
+        string email = $"{handle}@example.com";
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<FshUser>>();
+        var user = new FshUser
+        {
+            FirstName = "Driver",
+            LastName = "Scope",
+            Email = email,
+            UserName = handle,
+            EmailConfirmed = true,
+            IsActive = true,
+        };
+        var result = await userManager.CreateAsync(user, password);
+        result.Succeeded.ShouldBeTrue(string.Join(", ", result.Errors.Select(error => error.Description)));
+        return (email, password, user.Id);
     }
 
     private static async Task<Guid> CreateRouteAsync(HttpClient client, Guid warehouseId, Guid storeId)

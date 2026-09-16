@@ -3,12 +3,14 @@ using FSH.Modules.Tickets.Contracts.Dtos;
 using FSH.Modules.Tickets.Contracts.v1.Tickets;
 using FSH.Modules.Tickets.Data;
 using FSH.Modules.Tickets.Domain;
+using FSH.Framework.Core.Context;
+using FSH.Modules.Tickets.Features.v1.Internal;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Tickets.Features.v1.Tickets.SearchTickets;
 
-public sealed class SearchTicketsQueryHandler(TicketsDbContext dbContext)
+public sealed class SearchTicketsQueryHandler(TicketsDbContext dbContext, ICurrentUser currentUser)
     : IQueryHandler<SearchTicketsQuery, PagedResponse<TicketDto>>
 {
     public async ValueTask<PagedResponse<TicketDto>> Handle(SearchTicketsQuery query, CancellationToken cancellationToken)
@@ -18,7 +20,7 @@ public sealed class SearchTicketsQueryHandler(TicketsDbContext dbContext)
         int page = query.PageNumber < 1 ? 1 : query.PageNumber;
         int size = query.PageSize is < 1 or > 200 ? 20 : query.PageSize;
 
-        var q = dbContext.Tickets.AsNoTracking().AsQueryable();
+        var q = dbContext.Tickets.AsNoTracking().ApplyParticipantScope(currentUser);
 
         if (query.Status is { } status)
         {

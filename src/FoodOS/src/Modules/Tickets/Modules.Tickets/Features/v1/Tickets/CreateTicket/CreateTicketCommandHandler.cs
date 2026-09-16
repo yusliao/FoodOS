@@ -7,6 +7,7 @@ using FSH.Modules.Tickets.Data;
 using FSH.Modules.Tickets.Domain;
 using Mediator;
 using FSH.Framework.Persistence;
+using FSH.Modules.Tickets.Features.v1.Internal;
 using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Tickets.Features.v1.Tickets.CreateTicket;
@@ -43,7 +44,7 @@ public sealed class CreateTicketCommandHandler(
             description: command.Description,
             priority: command.Priority,
             reporterUserId: reporterId,
-            assignedToUserId: command.AssignedToUserId);
+            assignedToUserId: TicketAccess.IsOperator(currentUser) ? command.AssignedToUserId : null);
 
         dbContext.Tickets.Add(ticket);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

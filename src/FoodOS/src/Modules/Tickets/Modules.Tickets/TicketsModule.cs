@@ -3,6 +3,8 @@ using FSH.Framework.Persistence;
 using FSH.Framework.Shared.Constants;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Tickets.Contracts.Authorization;
+using FSH.Modules.Files.Contracts;
+using FSH.Modules.Tickets.Authorization;
 using FSH.Modules.Tickets.Data;
 using FSH.Modules.Tickets.Features.v1.Tickets.AddTicketComment;
 using FSH.Modules.Tickets.Features.v1.Tickets.AssignTicket;
@@ -38,6 +40,7 @@ public sealed class TicketsModule : IModule
 
         builder.Services.AddHeroDbContext<TicketsDbContext>();
         builder.Services.AddScoped<IDbInitializer, TicketsDbInitializer>();
+        builder.Services.AddScoped<IFileAccessPolicy, TicketFileAccessPolicy>();
 
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<TicketsDbContext>(

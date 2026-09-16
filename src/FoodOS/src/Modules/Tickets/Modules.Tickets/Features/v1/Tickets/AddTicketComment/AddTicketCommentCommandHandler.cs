@@ -3,6 +3,7 @@ using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Tickets.Contracts.v1.Tickets;
 using FSH.Modules.Tickets.Data;
+using FSH.Modules.Tickets.Features.v1.Internal;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,6 +34,8 @@ public sealed class AddTicketCommentCommandHandler(
             .FirstOrDefaultAsync(t => t.Id == command.TicketId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Ticket {command.TicketId} not found.");
+
+        ticket.RequireParticipant(currentUser);
 
         var commentId = ticket.AddComment(authorId, command.Body);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

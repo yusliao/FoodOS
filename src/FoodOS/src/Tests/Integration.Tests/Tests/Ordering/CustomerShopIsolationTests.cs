@@ -1,5 +1,9 @@
 using FSH.Modules.Inventory.Contracts.Dtos;
+using FSH.Modules.Logistics.Data;
+using FSH.Modules.Logistics.Domain;
 using FSH.Modules.Ordering.Contracts.Dtos;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 using System.Text.Json;
@@ -111,6 +115,33 @@ public sealed class CustomerShopIsolationTests
 
         using var foreignOrder = await clientB.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
         foreignOrder.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignOrder.Content.ReadAsStringAsync());
+
+        Guid otherOrderId = Guid.CreateVersion7();
+        Guid shipmentId = await SeedMixedShipmentAsync(
+            warehouse.Id,
+            storeA,
+            orderId,
+            storeB,
+            otherOrderId);
+        using var deliveriesAResponse = await clientA.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
+        deliveriesAResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await deliveriesAResponse.Content.ReadAsStringAsync());
+        var deliveriesA = await deliveriesAResponse.DeserializeAsync<IReadOnlyList<ShopDeliveryDto>>();
+        var deliveryA = deliveriesA.Single(item => item.ShipmentId == shipmentId);
+        deliveryA.StoreId.ShouldBe(storeA);
+        deliveryA.OrderIds.ShouldBe([orderId]);
+        deliveryA.OrderIds.ShouldNotContain(otherOrderId);
+
+        using var deliveriesBResponse = await clientB.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
+        deliveriesBResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await deliveriesBResponse.Content.ReadAsStringAsync());
+        var deliveriesB = await deliveriesBResponse.DeserializeAsync<IReadOnlyList<ShopDeliveryDto>>();
+        var deliveryB = deliveriesB.Single(item => item.ShipmentId == shipmentId);
+        deliveryB.StoreId.ShouldBe(storeB);
+        deliveryB.OrderIds.ShouldBe([otherOrderId]);
+        deliveryB.OrderIds.ShouldNotContain(orderId);
+
+        using var foreignDeliveryFilter = await clientA.GetAsync(
+            $"{TestConstants.ShopBasePath}/deliveries?storeId={storeB}");
+        foreignDeliveryFilter.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         using var foreignAfterSales = await clientB.PostAsJsonAsync(
             $"{TestConstants.ShopBasePath}/after-sales",
@@ -271,5 +302,43 @@ public sealed class CustomerShopIsolationTests
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.DeserializeAsync<Guid>();
+    }
+
+    private async Task<Guid> SeedMixedShipmentAsync(
+        Guid warehouseId,
+        Guid storeA,
+        Guid orderA,
+        Guid storeB,
+        Guid orderB)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var dbContext = scope.ServiceProvider.GetRequiredService<LogisticsDbContext>();
+        string suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var vehicle = Vehicle.Create($"M{suffix[..7]}", "Ambient", 1000m);
+        var driver = Driver.Create(Guid.CreateVersion7(), "+16175550111");
+        var route = Route.Create(warehouseId, $"MIX{suffix}", [storeA, storeB], vehicle.Id);
+        var shipment = Shipment.Create(
+            $"SHP-MIX-{suffix}",
+            route.Id,
+            warehouseId,
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            vehicle.Id,
+            driver.Id);
+        var stopA = shipment.AddStop(storeA, 1, "05:00-06:00");
+        var stopB = shipment.AddStop(storeB, 2, "06:00-07:00");
+        var lineA = shipment.AddLine(orderA, storeA);
+        var lineB = shipment.AddLine(orderB, storeB);
+        dbContext.Vehicles.Add(vehicle);
+        dbContext.Drivers.Add(driver);
+        dbContext.Routes.Add(route);
+        dbContext.Shipments.Add(shipment);
+        dbContext.ShipmentStops.AddRange(stopA, stopB);
+        dbContext.ShipmentLines.AddRange(lineA, lineB);
+        await dbContext.SaveChangesAsync();
+        return shipment.Id;
     }
 }

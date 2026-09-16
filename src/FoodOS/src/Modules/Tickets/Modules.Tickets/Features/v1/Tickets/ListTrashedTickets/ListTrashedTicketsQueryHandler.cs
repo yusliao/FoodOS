@@ -1,15 +1,17 @@
 using FSH.Framework.Persistence;
+using FSH.Framework.Core.Context;
 using FSH.Framework.Shared.Persistence;
 using FSH.Modules.Tickets.Contracts.Dtos;
 using FSH.Modules.Tickets.Contracts.v1.Tickets;
 using FSH.Modules.Tickets.Data;
 using FSH.Modules.Tickets.Domain;
+using FSH.Modules.Tickets.Features.v1.Internal;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Tickets.Features.v1.Tickets.ListTrashedTickets;
 
-public sealed class ListTrashedTicketsQueryHandler(TicketsDbContext dbContext)
+public sealed class ListTrashedTicketsQueryHandler(TicketsDbContext dbContext, ICurrentUser currentUser)
     : IQueryHandler<ListTrashedTicketsQuery, PagedResponse<TicketDto>>
 {
     public async ValueTask<PagedResponse<TicketDto>> Handle(
@@ -24,6 +26,7 @@ public sealed class ListTrashedTicketsQueryHandler(TicketsDbContext dbContext)
             .AsNoTracking()
             .IgnoreQueryFilters([QueryFilters.SoftDelete])
             .Where(t => t.IsDeleted)
+            .ApplyParticipantScope(currentUser)
             .OrderByDescending(t => t.DeletedOnUtc);
 
         long total = await q.LongCountAsync(cancellationToken).ConfigureAwait(false);
