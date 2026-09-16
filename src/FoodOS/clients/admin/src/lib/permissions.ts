@@ -10,6 +10,21 @@
  * Convention follows the server: `Permissions.{Resource}.{Action}`.
  */
 
+export const OrderingPermissions = Object.freeze({
+  Customers: {
+    View: "Permissions.Ordering.Customers.View",
+    Create: "Permissions.Ordering.Customers.Create",
+  },
+  Stores: {
+    View: "Permissions.Ordering.Stores.View",
+    Create: "Permissions.Ordering.Stores.Create",
+  },
+});
+
+export const InventoryPermissions = Object.freeze({
+  Warehouses: { View: "Permissions.Inventory.Warehouses.View" },
+});
+
 export const IdentityPermissions = Object.freeze({
   Users: {
     View: "Permissions.Users.View",

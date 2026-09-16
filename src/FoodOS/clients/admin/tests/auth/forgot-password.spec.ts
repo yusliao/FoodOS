@@ -6,7 +6,7 @@ test.describe("admin forgot-password", () => {
     await page.goto("/forgot-password");
 
     await expect(page.getByRole("heading", { name: /reset your password/i })).toBeVisible();
-    await expect(page.getByText(/dispatch a one-time link/i)).toBeVisible();
+    await expect(page.getByText(/send a one-time link/i)).toBeVisible();
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Tenant")).toBeVisible();
     await expect(page.getByRole("button", { name: /send reset link/i })).toBeVisible();
@@ -41,8 +41,7 @@ test.describe("admin forgot-password", () => {
     await page.getByRole("button", { name: /send reset link/i }).click();
 
     await expect(page.getByRole("heading", { name: /check your inbox/i })).toBeVisible();
-    await expect(page.getByText("alice@acme.com", { exact: true })).toBeVisible();
-    await expect(page.getByText("acme", { exact: true })).toBeVisible();
+    await expect(page.getByText("If an account exists for alice@acme.com in tenant acme, a one-time reset link is on its way. The link expires in 30 minutes.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /try a different address/i })).toBeVisible();
   });
 

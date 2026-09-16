@@ -48,10 +48,10 @@ export function Pagination({
           .replace("{pages}", tp)}
       </span>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" disabled={!hasPrev || fetching} onClick={onPrev}>
+        <Button type="button" variant="outline" size="sm" disabled={!hasPrev || fetching} onClick={onPrev}>
           <ChevronLeft className="mr-1 h-3.5 w-3.5" /> {t("common.previous")}
         </Button>
-        <Button variant="outline" size="sm" disabled={!hasNext || fetching} onClick={onNext}>
+        <Button type="button" variant="outline" size="sm" disabled={!hasNext || fetching} onClick={onNext}>
           {t("common.next")} <ChevronRight className="ml-1 h-3.5 w-3.5" />
         </Button>
       </div>

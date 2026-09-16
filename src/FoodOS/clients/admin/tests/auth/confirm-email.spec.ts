@@ -33,7 +33,10 @@ test.describe("admin confirm-email", () => {
     await page.goto(VALID_LINK);
 
     await expect(page.getByText(/no longer valid/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: "Back to sign in", exact: true })).toBeVisible();
+    const signInAction = page.getByRole("link", { name: "Back to sign in", exact: true })
+      .filter({ has: page.getByRole("button", { name: "Back to sign in", exact: true }) });
+    await expect(signInAction).toBeVisible();
+    await expect(signInAction).toHaveAttribute("href", "/login");
     await expect(page.getByRole("link", { name: /reset password instead/i })).toBeVisible();
   });
 });

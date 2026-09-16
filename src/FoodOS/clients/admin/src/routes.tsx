@@ -13,6 +13,7 @@ import {
   IdentityPermissions,
   MultitenancyPermissions,
   NotificationPermissions,
+  OrderingPermissions,
   WebhooksPermissions,
 } from "@/lib/permissions";
 
@@ -29,6 +30,8 @@ const lazyNamed = <T extends string>(
   });
 
 const TenantsListPage = lazyNamed(() => import("@/pages/tenants/list"), "TenantsListPage");
+const CustomersPage = lazyNamed(() => import("@/pages/customers/list"), "CustomersPage");
+const StoresPage = lazyNamed(() => import("@/pages/customers/stores"), "StoresPage");
 const TenantDetailPage = lazyNamed(() => import("@/pages/tenants/detail"), "TenantDetailPage");
 const UsersListPage = lazyNamed(() => import("@/pages/users/list"), "UsersListPage");
 const UserDetailPage = lazyNamed(() => import("@/pages/users/detail"), "UserDetailPage");
@@ -80,6 +83,8 @@ export const router = createBrowserRouter([
         errorElement: <RouteError />,
         children: [
           { index: true, element: <DashboardPage /> },
+          { path: "customers", element: <RouteGuard perms={[OrderingPermissions.Customers.View]}><CustomersPage /></RouteGuard> },
+          { path: "stores", element: <RouteGuard perms={[OrderingPermissions.Stores.View]}><StoresPage /></RouteGuard> },
 
           // Tenants — root-only
           {

@@ -16,6 +16,7 @@ import {
   AuditingPermissions,
   BillingPermissions,
   NotificationPermissions,
+  OrderingPermissions,
   IdentityPermissions,
   MultitenancyPermissions,
   WebhooksPermissions,
@@ -51,6 +52,13 @@ export const topNavBottom: NavSpec[] = [
 // ─── Section accordions ──────────────────────────────────────────────────────
 
 export const sections: NavSection[] = [
+  {
+    id: "partners", caption: "Customers and stores", icon: Building2,
+    items: [
+      { to: "/customers", label: "Partner customers", icon: Building2, perms: [OrderingPermissions.Customers.View] },
+      { to: "/stores", label: "Restaurant stores", icon: Building2, perms: [OrderingPermissions.Stores.View] },
+    ],
+  },
   {
     id: "identity", caption: "Operator team", icon: UsersRound,
     items: [
