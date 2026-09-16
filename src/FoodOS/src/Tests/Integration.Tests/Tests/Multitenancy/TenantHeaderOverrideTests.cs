@@ -7,17 +7,11 @@ using Integration.Tests.Infrastructure;
 namespace Integration.Tests.Tests.Multitenancy;
 
 /// <summary>
-/// Regression coverage for the tenant resolution chain. A root operator must be
-/// able to scope a request to another tenant by sending the `tenant` header
-/// (e.g. for cross-tenant user search before impersonation). A tenant operator
-/// must NOT be able to do the same — that would let them browse other tenants'
-/// data simply by setting a header.
-///
-/// These tests pin the contract enforced by the RootOperatorHeaderOverride
-/// delegate strategy in <c>MultitenancyModule</c>.
+/// Authenticated identity domains cannot be changed by headers or query parameters,
+/// including for root. Operator support uses explicit audited impersonation.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
-public sealed class TenantHeaderOverrideTests : IAsyncLifetime
+public sealed partial class TenantHeaderOverrideTests : IAsyncLifetime
 {
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -62,28 +56,20 @@ public sealed class TenantHeaderOverrideTests : IAsyncLifetime
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task RootOperator_Should_TargetOtherTenant_When_HeaderProvided()
+    public async Task RootOperator_Should_RejectOtherTenant_When_HeaderProvided()
     {
-        // Arrange — root admin is in `root` but sends `tenant: <tenantA>` header
-        // to scope this single request to tenant A.
+        // A root token must not switch its identity domain using a request header.
         var rootToken = await _auth.GetRootAdminTokenAsync();
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", rootToken.AccessToken);
         client.DefaultRequestHeaders.Add("tenant", _tenantA);
 
-        // Act — search users with no filter. Should return tenant A's admin user.
+        // Root is an operator identity, not permission to rebind this request to a customer.
         var response = await client.GetAsync($"{TestConstants.IdentityBasePath}/users/search?PageNumber=1&PageSize=50");
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var page = await response.Content.ReadFromJsonAsync<PagedResult<SearchUserDto>>(Json);
-        page.ShouldNotBeNull();
-        // Tenant A's admin should be visible.
-        page.Items.ShouldContain(u => u.Email == _tenantAAdminEmail);
-        // Root-tenant users (admin@root.com) must NOT leak through.
-        page.Items.ShouldNotContain(u => u.Email == TestConstants.RootAdminEmail);
-        // Tenant B's users must NOT leak through.
-        page.Items.ShouldNotContain(u => u.Email == _tenantBAdminEmail);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await response.Content.ReadAsStringAsync()).ShouldNotContain(_tenantAAdminEmail);
     }
 
     [Fact]
@@ -105,10 +91,9 @@ public sealed class TenantHeaderOverrideTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task TenantAdmin_HeaderOverride_Should_BeIgnored()
+    public async Task TenantAdmin_HeaderOverride_Should_BeRejected()
     {
-        // Arrange — tenant A's admin sends a `tenant: B` header; the override is gated by claim==root,
-        // so it must fail closed and the query stays in tenant A.
+        // A conflicting header is rejected, not silently used as another identity domain.
         var tenantAToken = await GetTokenWithRetryAsync(_tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", tenantAToken.AccessToken);
@@ -117,13 +102,8 @@ public sealed class TenantHeaderOverrideTests : IAsyncLifetime
         // Act
         var response = await client.GetAsync($"{TestConstants.IdentityBasePath}/users/search?PageNumber=1&PageSize=50");
 
-        // Assert — still resolves to tenant A (claim wins): A's admin present, B's absent. This flips
-        // if the override ever leaked to non-root callers.
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var page = await response.Content.ReadFromJsonAsync<PagedResult<SearchUserDto>>(Json);
-        page.ShouldNotBeNull();
-        page.Items.ShouldContain(u => u.Email == _tenantAAdminEmail);
-        page.Items.ShouldNotContain(u => u.Email == _tenantBAdminEmail);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await response.Content.ReadAsStringAsync()).ShouldNotContain(_tenantBAdminEmail);
     }
 
     [Fact]
@@ -186,11 +166,13 @@ public sealed class TenantHeaderOverrideTests : IAsyncLifetime
             if (statusResponse.IsSuccessStatusCode)
             {
                 var content = await statusResponse.Content.ReadAsStringAsync();
-                if (content.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+                using var document = JsonDocument.Parse(content);
+                var state = document.RootElement.GetProperty("status").GetString();
+                if (string.Equals(state, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
-                if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(state, "Failed", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException($"Tenant {tenantId} provisioning failed: {content}");
                 }

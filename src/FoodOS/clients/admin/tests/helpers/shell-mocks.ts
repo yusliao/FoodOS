@@ -3,6 +3,8 @@ import { mockJsonResponse } from "./api-mocks";
 
 /** The full root-operator permission set — enough to satisfy every RouteGuard. */
 export const ADMIN_PERMS = [
+  "Permissions.Notifications.Inbox.View",
+  "Permissions.Notifications.Inbox.MarkRead",
   "Permissions.Tenants.View",
   "Permissions.Tenants.Create",
   "Permissions.Tenants.Update",

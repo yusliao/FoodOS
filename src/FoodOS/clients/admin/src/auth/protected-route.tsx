@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/auth/use-auth";
 import { ForbiddenView } from "@/components/forbidden-view";
+import { useT } from "@/i18n/locale-provider";
 
 type ProtectedRouteProps = {
   /**
@@ -12,20 +13,21 @@ type ProtectedRouteProps = {
 };
 
 export function ProtectedRoute({ permissions = [] }: ProtectedRouteProps) {
-  const { isAuthenticated, isInitializing, user } = useAuth();
+  const { isAuthenticated, isInitializing, permissionsHydrated, user } = useAuth();
+  const t = useT();
   const location = useLocation();
 
   // Resolving a stored session (silent token refresh) — hold rendering so we
   // neither flash a protected surface with a stale/expired token nor bounce to
   // /login before the refresh has had a chance to restore the session.
-  if (isInitializing) {
+  if (isInitializing || (isAuthenticated && !permissionsHydrated)) {
     return (
       <div
         className="flex min-h-screen items-center justify-center text-sm text-[var(--color-muted-foreground)]"
         role="status"
         aria-busy="true"
       >
-        <span className="sr-only">Restoring your session…</span>
+        <span className="sr-only">{t("workbench.resolving")}</span>
         <span
           className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent"
           aria-hidden

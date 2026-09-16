@@ -10,8 +10,9 @@ public static class Extensions
     public static IServiceCollection AddHeroSse(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.AddMemoryCache();
         services.AddSingleton<SseConnectionManager>();
-        services.AddScoped<ISseTokenService, SseTokenService>();
+        services.AddSingleton<ISseTokenService, SseTokenService>();
         return services;
     }
 }

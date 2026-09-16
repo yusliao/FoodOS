@@ -9,6 +9,11 @@ export type JwtClaims = {
   [key: string]: unknown;
 };
 
+/** UI admission only; the API remains responsible for signature and permission validation. */
+export function isOperatorIdentity(claims: JwtClaims | null): boolean {
+  return Boolean(claims?.sub && claims.tenant === "root" && claims.business_actor !== "customer");
+}
+
 export function decodeJwt(token: string | null | undefined): JwtClaims | null {
   if (!token) return null;
   const parts = token.split(".");

@@ -13,12 +13,13 @@ public static class SearchOrdersEndpoint
     internal static RouteHandlerBuilder MapSearchOrdersEndpoint(this IEndpointRouteBuilder endpoints)
     {
         return endpoints.MapGet("/orders",
-                (Guid? storeId, int pageNumber, int pageSize, IMediator mediator, CancellationToken ct) =>
+                (Guid? storeId, int? pageNumber, int? pageSize, string? status, IMediator mediator, CancellationToken ct) =>
                     mediator.Send(
-                        new SearchOrdersQuery(storeId, pageNumber == 0 ? 1 : pageNumber, pageSize == 0 ? 20 : pageSize),
+                        new SearchOrdersQuery(storeId, pageNumber is null or 0 ? 1 : pageNumber.Value,
+                            pageSize is null or 0 ? 20 : pageSize.Value, status),
                         ct))
             .WithName("SearchOrders")
-            .WithSummary("Search sales orders")
+            .WithSummary("Search sales orders; Received is pending operational reconciliation, Reconciled is closed")
             .RequirePermission(OrderingPermissions.Orders.View);
     }
 }

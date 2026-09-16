@@ -1,10 +1,11 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { tokenStore } from "@/auth/token-store";
-import { decodeJwt, isTokenExpired, type JwtClaims } from "@/auth/jwt";
+import { decodeJwt, isTokenExpired, isOperatorIdentity, type JwtClaims } from "@/auth/jwt";
 import { issueToken } from "@/auth/api";
 import { refreshAccessToken } from "@/lib/api-client";
 import { getMyPermissions } from "@/api/users";
+import { useT } from "@/i18n/locale-provider";
 
 export type AuthUser = {
   id: string;
@@ -31,6 +32,7 @@ export type AuthContextValue = {
    * permissions request is still in flight.
    */
   permissionsHydrated: boolean;
+  permissionsError: boolean;
   login: (input: { email: string; password: string; tenant: string }) => Promise<void>;
   logout: () => void;
   /** Re-fetch the permission set for the signed-in user. Call after a role
@@ -41,7 +43,7 @@ export type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 function claimsToUser(claims: JwtClaims | null, permissions: string[]): AuthUser | null {
-  if (!claims?.sub) return null;
+  if (!claims?.sub || !isOperatorIdentity(claims) || isTokenExpired(claims)) return null;
   return {
     id: claims.sub,
     email: claims.email,
@@ -60,18 +62,17 @@ function readStoredSession(): { claims: JwtClaims | null; usable: boolean } {
   return {
     claims,
     usable:
-      claims !== null &&
-      claims.tenant === "root" &&
-      claims.business_actor !== "customer" &&
+      isOperatorIdentity(claims) &&
       !isTokenExpired(claims),
   };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(() => {
     const { claims, usable } = readStoredSession();
-    return usable ? claimsToUser(claims, tokenStore.getPermissions()) : null;
+    return usable ? claimsToUser(claims, []) : null;
   });
   // When the stored access token is missing/expired but a refresh token is
   // present, attempt one silent refresh at boot before rendering — keeps
@@ -80,13 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isInitializing, setIsInitializing] = useState<boolean>(
     () => !readStoredSession().usable && tokenStore.getRefreshToken() !== null,
   );
-  // Cold-start: if we already have a cached permissions list, treat as hydrated
-  // so route guards don't flash 403. Otherwise, wait for the effect.
+  // Stored permissions are not authoritative after a reload or role change.
   const [permissionsHydrated, setPermissionsHydrated] = useState<boolean>(() => {
     if (!tokenStore.getAccessToken()) return true;
-    return tokenStore.getPermissions().length > 0;
+    return false;
   });
-  const lastHydratedSubject = useRef<string | null>(user?.id ?? null);
+  const lastHydratedSubject = useRef<string | null>(null);
+  const [permissionsError, setPermissionsError] = useState(false);
 
   useEffect(() => {
     if (!isInitializing) return;
@@ -126,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const perms = await getMyPermissions();
         if (cancelled) return;
+        setPermissionsError(false);
         tokenStore.setPermissions(perms);
         // setPermissions emits, the subscribe listener will rebuild `user`
         // with the new list.
@@ -133,7 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Permissions fetch failure shouldn't sign the user out — the route
         // guards will treat them as zero-permission until the next refresh.
-        if (!cancelled) setPermissionsHydrated(true);
+        if (!cancelled) {
+          setPermissionsError(true);
+          tokenStore.setPermissions([]);
+          setPermissionsHydrated(true);
+        }
       }
     })();
     return () => {
@@ -144,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return tokenStore.subscribe(() => {
       const next = claimsToUser(decodeJwt(tokenStore.getAccessToken()), tokenStore.getPermissions());
+      if (next && lastHydratedSubject.current !== next.id) setPermissionsHydrated(false);
       setUser(next);
     });
   }, []);
@@ -162,29 +169,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ) {
         return;
       }
-      setUser(claimsToUser(decodeJwt(tokenStore.getAccessToken()), tokenStore.getPermissions()));
+      queryClient.clear();
+      lastHydratedSubject.current = null;
+      setPermissionsHydrated(false);
+      setPermissionsError(false);
+      setUser(claimsToUser(decodeJwt(tokenStore.getAccessToken()), []));
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [queryClient]);
 
   const login = useCallback(
     async (input: { email: string; password: string; tenant: string }) => {
+      if (input.tenant !== "root") throw new Error(t("workbench.operatorOnly"));
+      queryClient.clear();
       tokenStore.setTenant(input.tenant);
       // Stale permissions from a previous user must not leak into the new
       // session — clear before issuing the token so the hydration effect
       // re-fetches from scratch.
       tokenStore.setPermissions([]);
       setPermissionsHydrated(false);
+      setPermissionsError(false);
       const tokens = await issueToken(input);
       const claims = decodeJwt(tokens.accessToken);
-      if (claims?.tenant !== "root" || claims.business_actor === "customer") {
+      if (!isOperatorIdentity(claims) || isTokenExpired(claims)) {
         tokenStore.clear();
-        throw new Error("Restaurant tenant accounts must use the dashboard app.");
+        throw new Error(t("workbench.operatorOnly"));
       }
       tokenStore.setTokens(tokens.accessToken, tokens.refreshToken);
     },
-    [],
+    [queryClient, t],
   );
 
   const logout = useCallback(() => {
@@ -195,9 +209,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshPermissions = useCallback(async () => {
     try {
       const perms = await getMyPermissions();
+      setPermissionsError(false);
       tokenStore.setPermissions(perms);
     } catch {
-      /* swallow — see hydration effect */
+      setPermissionsError(true);
+      tokenStore.setPermissions([]);
     }
   }, []);
 
@@ -207,11 +223,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: user !== null,
       isInitializing,
       permissionsHydrated,
+      permissionsError,
       login,
       logout,
       refreshPermissions,
     }),
-    [user, isInitializing, permissionsHydrated, login, logout, refreshPermissions],
+    [user, isInitializing, permissionsHydrated, permissionsError, login, logout, refreshPermissions],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

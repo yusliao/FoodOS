@@ -249,7 +249,7 @@ public sealed class InventoryStockTests
     }
 
     [Fact]
-    public async Task GetWarehouseById_Should_Return404_When_OwnedByDifferentTenant()
+    public async Task GetWarehouseById_Should_Return403_When_CustomerRequestsOperatorWarehouse()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(rootClient);
@@ -259,7 +259,8 @@ public sealed class InventoryStockTests
 
         using var crossGet = await otherClient.GetAsync(
             $"{TestConstants.InventoryBasePath}/warehouses/{warehouse.Id}");
-        crossGet.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // Warehouses belong to the operator; customers have no internal warehouse read permission.
+        crossGet.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         using var ownGet = await rootClient.GetAsync(
             $"{TestConstants.InventoryBasePath}/warehouses/{warehouse.Id}");

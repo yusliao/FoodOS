@@ -49,12 +49,13 @@ public static class SearchShopOrdersEndpoint
 {
     internal static RouteHandlerBuilder MapSearchShopOrdersEndpoint(this IEndpointRouteBuilder endpoints)
         => endpoints.MapGet("/orders",
-                (Guid? storeId, int pageNumber, int pageSize, IMediator mediator, CancellationToken ct) =>
+                (Guid? storeId, int? pageNumber, int? pageSize, string? status, IMediator mediator, CancellationToken ct) =>
                     mediator.Send(new SearchShopOrdersQuery(
                         storeId,
-                        pageNumber == 0 ? 1 : pageNumber,
-                        pageSize == 0 ? 20 : pageSize), ct))
+                        pageNumber is null or 0 ? 1 : pageNumber.Value,
+                        pageSize is null or 0 ? 20 : pageSize.Value, status), ct))
             .WithName("SearchShopOrders")
+            .WithSummary("Search authorized store orders, including Received and Reconciled; not a payment statement")
             .RequirePermission(OrderingPermissions.Shop.View);
 }
 

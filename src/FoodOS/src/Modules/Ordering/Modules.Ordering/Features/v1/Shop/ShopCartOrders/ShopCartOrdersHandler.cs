@@ -60,10 +60,17 @@ public sealed class ShopCartOrdersHandler(
             .AsNoTracking()
             .Where(order =>
                 order.CustomerTenantId == access.CustomerTenantId
+                && order.CustomerOrgId == access.CustomerOrgId
                 && access.StoreIds.Contains(order.StoreId));
         if (query.StoreId is { } selectedStoreId)
         {
             orders = orders.Where(order => order.StoreId == selectedStoreId);
+        }
+
+        if (query.Status is not null)
+        {
+            var status = Enum.Parse<SalesOrderStatus>(query.Status, ignoreCase: true);
+            orders = orders.Where(order => order.Status == status);
         }
 
         int page = query.PageNumber;
@@ -145,6 +152,7 @@ public sealed class ShopCartOrdersHandler(
             .SingleOrDefaultAsync(order =>
                 order.Id == orderId
                 && order.CustomerTenantId == access.CustomerTenantId
+                && order.CustomerOrgId == access.CustomerOrgId
                 && access.StoreIds.Contains(order.StoreId),
                 cancellationToken)
             .ConfigureAwait(false)

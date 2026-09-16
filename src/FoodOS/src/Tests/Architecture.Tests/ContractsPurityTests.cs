@@ -20,7 +20,10 @@ public class ContractsPurityTests
         typeof(AuditingContractsMarker).Assembly,
         typeof(ChatContractsMarker).Assembly,
         typeof(IdentityContractsMarker).Assembly,
-        typeof(MultitenancyContractsMarker).Assembly
+        typeof(MultitenancyContractsMarker).Assembly,
+        typeof(FSH.Modules.Tickets.Contracts.TicketsContractsMarker).Assembly,
+        typeof(FSH.Modules.Notifications.Contracts.NotificationsContractsMarker).Assembly,
+        typeof(FSH.Modules.Ordering.Contracts.OrderingContractsMarker).Assembly
     ];
 
     [Fact]

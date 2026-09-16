@@ -26,7 +26,13 @@ public sealed class SearchOrdersQueryHandler(OrderingDbContext dbContext)
             q = q.Where(o => o.StoreId == storeId);
         }
 
-        q = q.OrderByDescending(o => o.CreatedAt);
+        if (query.Status is not null)
+        {
+            var status = Enum.Parse<SalesOrderStatus>(query.Status, ignoreCase: true);
+            q = q.Where(order => order.Status == status);
+        }
+
+        q = q.OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id);
         long total = await q.LongCountAsync(cancellationToken).ConfigureAwait(false);
         var items = await q.Skip((page - 1) * size).Take(size).ToListAsync(cancellationToken).ConfigureAwait(false);
 

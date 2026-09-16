@@ -39,6 +39,7 @@ public sealed class NotificationsModule : IModule
         // Subscribe to cross-module integration events handled by this assembly.
         builder.Services.AddIntegrationEventHandlers(typeof(NotificationsModule).Assembly);
         builder.Services.AddScoped<FSH.Modules.Notifications.IntegrationEventHandlers.OperationalInboxWriter>();
+        builder.Services.AddScoped<FSH.Modules.Notifications.IntegrationEventHandlers.IdempotentInboxWriter>();
 
         builder.Services.AddHealthChecks().AddDbContextCheck<NotificationsDbContext>(
             name: "db:notifications",

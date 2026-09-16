@@ -1,5 +1,6 @@
 using FluentValidation;
 using FSH.Modules.Ordering.Contracts.v1.Shop;
+using FSH.Modules.Ordering.Domain;
 
 namespace FSH.Modules.Ordering.Features.v1.Shop.ShopCartOrders;
 
@@ -23,6 +24,8 @@ public sealed class SearchShopOrdersQueryValidator : AbstractValidator<SearchSho
     {
         RuleFor(query => query.PageNumber).GreaterThan(0);
         RuleFor(query => query.PageSize).InclusiveBetween(1, 100);
+        RuleFor(query => query.Status).Must(status => status is null
+            || Enum.GetNames<SalesOrderStatus>().Contains(status, StringComparer.OrdinalIgnoreCase));
     }
 }
 

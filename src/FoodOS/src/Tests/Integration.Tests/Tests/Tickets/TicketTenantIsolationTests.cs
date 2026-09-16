@@ -25,7 +25,7 @@ namespace Integration.Tests.Tests.Tickets;
 /// coverage lives in <see cref="TicketsEndpointTests"/>.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
-public sealed class TicketTenantIsolationTests
+public sealed partial class TicketTenantIsolationTests
 {
     private readonly AuthHelper _auth;
     private readonly FshWebApplicationFactory _factory;

@@ -94,7 +94,7 @@ public sealed class MultitenancyModule : IModule
             })
             // ── Strategy chain — first non-null identifier wins (registration order) ──
             // ClaimStrategy no-ops here: UseMultiTenant() runs BEFORE UseAuthentication(), so User is
-            // anonymous at resolution. Tenant stays header-driven; root override is post-auth middleware below.
+            // anonymous at resolution. Authenticated requests are bound to their token below.
             .WithClaimStrategy(ClaimConstants.Tenant)
             .WithHeaderStrategy(MultitenancyConstants.Identifier)
             .WithDelegateStrategy(async context =>
@@ -123,26 +123,26 @@ public sealed class MultitenancyModule : IModule
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        // ── Root-operator header override ──────────────────────────────
-        // A "root"-claim caller scopes one request to another tenant via the `tenant` header (post-auth, since
-        // Finbuckle's pre-auth chain has no User). Gated on claim==root + header set != root + target exists.
+        // Authentication determines the identity domain. A header/query is not authority to switch it,
+        // even for root; operator support uses the explicit audited impersonation flow.
         app.Use(async (ctx, next) =>
         {
-            var callerTenant = ctx.User?.FindFirstValue(ClaimConstants.Tenant);
-            if (string.Equals(callerTenant, MultitenancyConstants.Root.Id, StringComparison.Ordinal))
+            if (ctx.User.Identity?.IsAuthenticated == true)
             {
-                var headerValue = ctx.Request.Headers[MultitenancyConstants.Identifier].FirstOrDefault();
-                if (!string.IsNullOrEmpty(headerValue) &&
-                    !string.Equals(headerValue, MultitenancyConstants.Root.Id, StringComparison.Ordinal))
+                var callerTenant = ctx.User.FindFirstValue(ClaimConstants.Tenant);
+                if (string.IsNullOrWhiteSpace(callerTenant)) throw new UnauthorizedException("missing tenant context");
+                var headerValues = ctx.Request.Headers[MultitenancyConstants.Identifier];
+                var queryValues = ctx.Request.Query["tenant"];
+                if (headerValues.Any(value => !string.Equals(value, callerTenant, StringComparison.Ordinal))
+                    || queryValues.Any(value => !string.Equals(value, callerTenant, StringComparison.Ordinal)))
                 {
-                    var store = ctx.RequestServices.GetRequiredService<IMultiTenantStore<AppTenantInfo>>();
-                    var target = await store.GetAsync(headerValue).ConfigureAwait(false);
-                    if (target is not null)
-                    {
-                        var setter = ctx.RequestServices.GetRequiredService<IMultiTenantContextSetter>();
-                        setter.MultiTenantContext = new MultiTenantContext<AppTenantInfo>(target);
-                    }
+                    throw new ForbiddenException("The requested tenant does not match the authenticated identity.");
                 }
+                var store = ctx.RequestServices.GetRequiredService<IMultiTenantStore<AppTenantInfo>>();
+                var tenant = await store.GetAsync(callerTenant).ConfigureAwait(false)
+                    ?? throw new UnauthorizedException("tenant not found");
+                var setter = ctx.RequestServices.GetRequiredService<IMultiTenantContextSetter>();
+                setter.MultiTenantContext = new MultiTenantContext<AppTenantInfo>(tenant);
             }
             await next(ctx).ConfigureAwait(false);
         });

@@ -197,6 +197,27 @@ public sealed class TenantService : ITenantService
         };
     }
 
+    public async Task<string?> FindSharedCustomerTenantIdAsync(string customerTenantId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerTenantId);
+        var normalized = customerTenantId.Trim().ToUpperInvariant();
+        if (string.Equals(normalized, MultitenancyConstants.Root.Id, StringComparison.OrdinalIgnoreCase)) return null;
+        // Do not guess casing: business ownership is normalized, while identity rows use the original ID.
+        // Check uniqueness before activation so an inactive case-collision cannot select another identity.
+        var pattern = normalized.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal);
+        var candidates = await _dbContext.TenantInfo.AsNoTracking()
+            .Where(tenant => EF.Functions.ILike(tenant.Id, pattern, "\\"))
+            .Select(tenant => new { tenant.Id, tenant.IsActive, tenant.ConnectionString, tenant.ValidUpto })
+            .Take(2).ToListAsync(cancellationToken).ConfigureAwait(false);
+        if (candidates.Count != 1) return null;
+        var candidate = candidates[0];
+        return string.Equals(candidate.Id, normalized, StringComparison.OrdinalIgnoreCase)
+            && candidate.IsActive && string.IsNullOrWhiteSpace(candidate.ConnectionString)
+            && candidate.ValidUpto.AddDays(_billingOptions.GraceWindowDays) >= _timeProvider.GetUtcNow().UtcDateTime
+                ? candidate.Id : null;
+    }
+
     public async Task<(DateTime PeriodStartUtc, DateTime ValidUpto, bool PlanChanged)> RenewAsync(
         string id, string newPlanKey, int termMonths, CancellationToken cancellationToken = default)
     {

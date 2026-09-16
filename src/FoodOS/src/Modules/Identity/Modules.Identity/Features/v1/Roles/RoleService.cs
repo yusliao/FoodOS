@@ -20,6 +20,13 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
     ICurrentUser currentUser,
     IUserPermissionService userPermissionService) : IRoleService
 {
+    private string ExpectedAudience => multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id
+        ? RoleAudiences.Operator : RoleAudiences.Customer;
+
+    private void EnsureRoleAudience(FshRole role)
+    {
+        if (role.Audience != ExpectedAudience) throw new NotFoundException("role not found");
+    }
     // Invalidate every user whose effective permissions may have shifted from a role mutation:
     // direct holders (AspNetUserRoles) and group-derived holders (members of groups carrying this role).
     private async Task InvalidateAffectedUsersAsync(string roleId, CancellationToken cancellationToken)
@@ -65,7 +72,8 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
         var page = Math.Max(1, pageNumber);
         var size = Math.Clamp(pageSize, 1, 200);
 
-        var query = roleManager.Roles.AsNoTracking();
+        var audience = ExpectedAudience;
+        var query = roleManager.Roles.AsNoTracking().Where(role => role.Audience == audience);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var needle = search.Trim().ToLowerInvariant();
@@ -77,6 +85,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
         var total = await query.LongCountAsync(cancellationToken).ConfigureAwait(false);
         var rows = await query
             .OrderBy(r => r.Name)
+            .ThenBy(r => r.Id)
             .Skip((page - 1) * size)
             .Take(size)
             .Select(r => new RoleDto { Id = r.Id, Name = r.Name!, Description = r.Description, Audience = r.Audience })
@@ -99,6 +108,8 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
 
         _ = role ?? throw new NotFoundException("role not found");
 
+        EnsureRoleAudience(role);
+
         return new RoleDto { Id = role.Id, Name = role.Name!, Description = role.Description, Audience = role.Audience };
     }
 
@@ -110,6 +121,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
 
         if (role != null)
         {
+            EnsureRoleAudience(role);
             // System roles cannot be modified — neither renamed nor re-described.
             EnsureNotSystemRole(role.Name, "System roles cannot be modified.");
             // And no custom role can be renamed to a system role's name.
@@ -121,6 +133,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
         }
         else
         {
+            if (!string.IsNullOrEmpty(roleId)) throw new NotFoundException("role not found");
             // No new role can be created using a system role's name.
             EnsureNotSystemRole(name, "Cannot create a role using a system role's name.");
 
@@ -139,6 +152,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
         FshRole? role = await roleManager.FindByIdAsync(id);
 
         _ = role ?? throw new NotFoundException("role not found");
+        EnsureRoleAudience(role);
 
         EnsureNotSystemRole(role.Name, "System roles cannot be deleted.");
 
@@ -160,6 +174,10 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
             .Select(c => c.ClaimValue!)
             .ToListAsync(cancellationToken);
 
+        var visiblePermissions = role.Permissions.ToList();
+        FilterUnavailablePermissions(visiblePermissions);
+        role.Permissions = visiblePermissions;
+
         return role;
     }
 
@@ -169,6 +187,8 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
 
         var role = await roleManager.FindByIdAsync(roleId)
             ?? throw new NotFoundException("role not found");
+
+        EnsureRoleAudience(role);
 
         EnsureNotSystemRole(role.Name, "System role permissions are managed by the framework and cannot be modified.");
         FilterUnavailablePermissions(permissions);

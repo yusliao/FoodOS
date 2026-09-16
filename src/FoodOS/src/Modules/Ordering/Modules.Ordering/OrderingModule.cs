@@ -52,6 +52,7 @@ public sealed class OrderingModule : IModule
 
         builder.Services.AddHeroDbContext<OrderingDbContext>();
         builder.Services.AddScoped<ICustomerAccessScopeResolver, CustomerAccessScopeResolver>();
+        builder.Services.AddScoped<ICustomerDeliveryNotificationAudience, CustomerDeliveryNotificationAudience>();
         builder.Services.AddScoped<IDbInitializer, OrderingDbInitializer>();
         builder.Services.AddTransient<ReconcileReminderJob>();
 

@@ -37,16 +37,18 @@ public sealed class Notification : AggregateRoot<Guid>
         string? body,
         string? link,
         string source,
-        object? metadata)
+        object? metadata,
+        Guid? notificationId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         ArgumentException.ThrowIfNullOrWhiteSpace(type);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        if (notificationId == Guid.Empty) throw new ArgumentException("Notification ID cannot be empty.", nameof(notificationId));
 
         return new Notification
         {
-            Id = Guid.CreateVersion7(),
+            Id = notificationId ?? Guid.CreateVersion7(),
             UserId = userId,
             Type = type,
             Title = title,

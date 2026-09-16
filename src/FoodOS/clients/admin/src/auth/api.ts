@@ -16,7 +16,7 @@ export function issueToken(input: {
     method: "POST",
     body: JSON.stringify({ email: input.email, password: input.password }),
     // X-FSH-App marks this client as the platform-admin app. Used by the
-    // API to enforce the SuperAdmin / dashboard boundary.
+    // API to enforce the operator / customer application boundary.
     headers: { tenant: input.tenant, "X-FSH-App": "admin" },
     skipAuth: true,
   });

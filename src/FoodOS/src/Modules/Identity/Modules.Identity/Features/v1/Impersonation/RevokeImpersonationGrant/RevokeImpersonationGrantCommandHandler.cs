@@ -33,19 +33,11 @@ public sealed class RevokeImpersonationGrantCommandHandler(
         var callerTenantId = currentUser.GetTenant()
             ?? throw new UnauthorizedException("missing tenant context");
         var isRoot = string.Equals(callerTenantId, MultitenancyConstants.Root.Id, StringComparison.Ordinal);
+        if (!isRoot) throw new ForbiddenException("impersonation management is restricted to platform operators");
 
-        // Enforce visibility before revoking: tenant admins may only revoke grants in their own
-        // tenant. Cross-tenant grants return 404 (not 403) so existence isn't confirmed out of scope.
+        // Only the authorized operator management surface can resolve a global grant.
         var grant = await grantService.GetByIdAsync(request.GrantId, cancellationToken).ConfigureAwait(false)
             ?? throw new NotFoundException("impersonation grant not found");
-
-        var withinTenant = string.Equals(grant.ImpersonatedTenantId, callerTenantId, StringComparison.Ordinal)
-            || string.Equals(grant.ActorTenantId, callerTenantId, StringComparison.Ordinal);
-
-        if (!isRoot && !withinTenant)
-        {
-            throw new NotFoundException("impersonation grant not found");
-        }
 
         var updated = await grantService.RevokeAsync(
             id: request.GrantId,

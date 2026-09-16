@@ -8,6 +8,8 @@ using FSH.Modules.Identity.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
 
 namespace FSH.Modules.Identity.Services;
 
@@ -15,7 +17,8 @@ internal sealed class UserPermissionService(
     UserManager<FshUser> userManager,
     RoleManager<FshRole> roleManager,
     IdentityDbContext db,
-    HybridCache cache) : IUserPermissionService
+    HybridCache cache,
+    IMultiTenantContextAccessor<AppTenantInfo> tenantAccessor) : IUserPermissionService
 {
     // Hoisted to avoid per-call allocations. Small payload (< 4 KB after base64), so compression
     // CPU beats the marginal network savings — disable it for this hot path.
@@ -46,16 +49,25 @@ internal sealed class UserPermissionService(
     }
 
     public Task InvalidatePermissionCacheAsync(string userId, CancellationToken cancellationToken)
-        => cache.RemoveAsync(CacheKeys.UserPermissions(userId), cancellationToken).AsTask();
+        => cache.RemoveAsync(PermissionCacheKey(userId), cancellationToken).AsTask();
+
+    private string PermissionCacheKey(string userId)
+    {
+        var tenantId = tenantAccessor.MultiTenantContext.TenantInfo?.Id;
+        if (string.IsNullOrWhiteSpace(tenantId)) throw new UnauthorizedException("missing tenant context");
+        return $"{CacheKeys.UserPermissions(userId)}:identity-v2:{tenantId}";
+    }
 
     private ValueTask<PermissionSet> GetOrLoadAsync(string userId, CancellationToken cancellationToken)
     {
         // Stateless factory overload — the factory is a static method group, so the runtime
         // reuses a cached delegate and no closure is allocated per call (including L1 hits).
-        var state = new FactoryState(userManager, roleManager, db, userId);
+        var audience = tenantAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id
+            ? RoleAudiences.Operator : RoleAudiences.Customer;
+        var state = new FactoryState(userManager, roleManager, db, userId, audience);
 
         return cache.GetOrCreateAsync(
-            CacheKeys.UserPermissions(userId),
+            PermissionCacheKey(userId),
             state,
             LoadPermissionsAsync,
             options: EntryOptions,
@@ -71,7 +83,7 @@ internal sealed class UserPermissionService(
         var userRoles = await s.UserManager.GetRolesAsync(user).ConfigureAwait(false);
 
         var directRoleIds = await s.RoleManager.Roles
-            .Where(r => userRoles.Contains(r.Name!))
+            .Where(r => userRoles.Contains(r.Name!) && r.Audience == s.Audience)
             .Select(r => r.Id)
             .ToListAsync(ct).ConfigureAwait(false);
 
@@ -87,7 +99,9 @@ internal sealed class UserPermissionService(
             .Distinct()
             .ToListAsync(ct).ConfigureAwait(false);
 
-        var roleIds = directRoleIds.Union(groupRoleIds, StringComparer.Ordinal).ToList();
+        var candidateRoleIds = directRoleIds.Union(groupRoleIds, StringComparer.Ordinal).ToList();
+        var roleIds = await s.RoleManager.Roles.Where(role => candidateRoleIds.Contains(role.Id) && role.Audience == s.Audience)
+            .Select(role => role.Id).ToListAsync(ct).ConfigureAwait(false);
 
         if (roleIds.Count == 0)
         {
@@ -101,6 +115,12 @@ internal sealed class UserPermissionService(
             .Distinct()
             .ToListAsync(ct).ConfigureAwait(false);
 
+        if (s.Audience == RoleAudiences.Customer)
+        {
+            var allowed = PermissionConstants.CustomerAdmin.Select(permission => permission.Name).ToHashSet(StringComparer.Ordinal);
+            perms.RemoveAll(permission => !allowed.Contains(permission));
+        }
+
         return perms.Count == 0
             ? PermissionSet.Empty
             : new PermissionSet([.. perms]);
@@ -111,5 +131,6 @@ internal sealed class UserPermissionService(
         UserManager<FshUser> UserManager,
         RoleManager<FshRole> RoleManager,
         IdentityDbContext Db,
-        string UserId);
+        string UserId,
+        string Audience);
 }

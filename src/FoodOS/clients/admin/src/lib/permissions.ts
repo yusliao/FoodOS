@@ -86,6 +86,13 @@ export const OpsPermissions = Object.freeze({
   },
 } as const);
 
+export const NotificationPermissions = Object.freeze({
+  Inbox: {
+    View: "Permissions.Notifications.Inbox.View",
+    MarkRead: "Permissions.Notifications.Inbox.MarkRead",
+  },
+} as const);
+
 // ─── Catalog (drives the Role editor) ───────────────────────────────────
 
 export type PermissionEntry = {

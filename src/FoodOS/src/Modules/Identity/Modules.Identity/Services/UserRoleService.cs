@@ -46,7 +46,9 @@ internal sealed class UserRoleService(
         var user = await userManager.FindByIdAsync(userId)
             ?? throw new NotFoundException("user not found");
 
-        var roles = await roleManager.Roles.AsNoTracking().ToListAsync(cancellationToken)
+        var audience = multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id
+            ? RoleAudiences.Operator : RoleAudiences.Customer;
+        var roles = await roleManager.Roles.AsNoTracking().Where(role => role.Audience == audience).ToListAsync(cancellationToken)
             ?? throw new NotFoundException("roles not found");
 
         // Single membership query instead of one IsInRoleAsync round-trip per role.

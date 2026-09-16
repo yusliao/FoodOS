@@ -20,11 +20,13 @@ public static class SseEndpoints
         ArgumentNullException.ThrowIfNull(endpoints);
 
         endpoints.MapPost("/api/v1/sse/token", async (
+            HttpContext context,
             ICurrentUser currentUser,
             ISseTokenService tokens,
             CancellationToken cancellationToken) =>
         {
-            if (!currentUser.IsAuthenticated())
+            if (!currentUser.IsAuthenticated() || currentUser.GetUserId() == Guid.Empty
+                || string.IsNullOrWhiteSpace(currentUser.GetTenant()))
             {
                 return Results.Unauthorized();
             }
@@ -32,6 +34,7 @@ public static class SseEndpoints
             var userId = currentUser.GetUserId().ToString();
             var tenantId = currentUser.GetTenant();
             var token = await tokens.IssueAsync(userId, tenantId, cancellationToken).ConfigureAwait(false);
+            context.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new { token });
         })
         .WithName("SseToken")
@@ -47,20 +50,21 @@ public static class SseEndpoints
             CancellationToken cancellationToken) =>
         {
             var principal = await tokens.ConsumeAsync(token, cancellationToken).ConfigureAwait(false);
-            if (principal is null)
+            if (principal is null || string.IsNullOrWhiteSpace(principal.TenantId)
+                || !Guid.TryParse(principal.UserId, out var userId) || userId == Guid.Empty)
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return;
             }
 
             context.Response.ContentType = "text/event-stream";
-            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers.CacheControl = "no-store";
             // No `Connection: keep-alive` — it's a hop-by-hop header forbidden on HTTP/2+ (RFC 9113 §8.2.2),
             // so Kestrel strips it and warns on every SSE connect (the feed serves over HTTP/2 via ALPN).
             // It was redundant anyway: HTTP/1.1 keeps connections alive by default.
             context.Response.Headers["X-Accel-Buffering"] = "no"; // disable nginx buffering
 
-            var (connectionId, reader) = connectionManager.Connect(principal.UserId, principal.TenantId);
+            var (connectionId, reader) = connectionManager.Connect(userId.ToString(), principal.TenantId);
 
             // Flush the response headers + an initial comment immediately. Kestrel buffers
             // response headers until the first body write, and our first write would otherwise
@@ -68,29 +72,38 @@ public static class SseEndpoints
             // promise (which resolves on response headers) would sit pending and the UI would
             // show "connecting" for up to 15s on every connect/reconnect. Writing a no-op SSE
             // comment now sends the headers and lets the client flip to "connected" at once.
-            await context.Response.WriteAsync(":connected\n\n", cancellationToken).ConfigureAwait(false);
-            await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
-
             using var heartbeat = new PeriodicTimer(HeartbeatInterval);
+            using var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var streamToken = streamCancellation.Token;
 
             try
             {
+                await context.Response.WriteAsync(":connected\n\n", streamToken).ConfigureAwait(false);
+                await context.Response.Body.FlushAsync(streamToken).ConfigureAwait(false);
+                Task<bool>? waitTask = null;
+                Task<bool>? tickTask = null;
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var waitTask = reader.WaitToReadAsync(cancellationToken).AsTask();
-                    var tickTask = heartbeat.WaitForNextTickAsync(cancellationToken).AsTask();
+                    // Keep the losing wait: PeriodicTimer permits only one pending consumer.
+                    waitTask ??= reader.WaitToReadAsync(streamToken).AsTask();
+                    tickTask ??= heartbeat.WaitForNextTickAsync(streamToken).AsTask();
 
                     var completed = await Task.WhenAny(waitTask, tickTask).ConfigureAwait(false);
 
                     if (completed == tickTask)
                     {
-                        _ = await tickTask.ConfigureAwait(false);
+                        if (!await tickTask.ConfigureAwait(false))
+                        {
+                            break;
+                        }
+                        tickTask = null;
                         await context.Response.WriteAsync(":heartbeat\n\n", cancellationToken).ConfigureAwait(false);
                         await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
                         continue;
                     }
 
                     var hasData = await waitTask.ConfigureAwait(false);
+                    waitTask = null;
                     if (!hasData)
                     {
                         break;
@@ -108,6 +121,7 @@ public static class SseEndpoints
             }
             finally
             {
+                await streamCancellation.CancelAsync().ConfigureAwait(false);
                 connectionManager.Disconnect(connectionId);
             }
         })
@@ -115,6 +129,7 @@ public static class SseEndpoints
         .WithSummary("Server-Sent Events stream (authenticates via ?token= issued from /sse/token)")
         .WithTags("SSE")
         .AllowAnonymous()
+        .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
         .ExcludeFromDescription();
 
         return endpoints;

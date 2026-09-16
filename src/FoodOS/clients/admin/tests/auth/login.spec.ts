@@ -24,7 +24,7 @@ test.describe("admin login", () => {
     // "Platform Admin" divider label that marks this as the operator app.
     await expect(page.getByRole("img", { name: /fullstackhero/i }).first()).toBeVisible();
     await expect(page.getByText("fullstackhero").first()).toBeVisible();
-    await expect(page.getByText("Platform Admin").first()).toBeVisible();
+    await expect(page.getByText("Operator workbench").first()).toBeVisible();
 
     // Card heading.
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -48,7 +48,8 @@ test.describe("admin login", () => {
     await page.goto("/login");
 
     // Tenant pre-fills from env.defaultTenant ("root"); set email + password.
-    await page.getByLabel("Tenant").fill("root");
+    await expect(page.getByLabel("Tenant")).toHaveValue("root");
+    await expect(page.getByLabel("Tenant")).toHaveAttribute("readonly");
     await page.getByLabel("Email").fill("operator@root.example");
     await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
 
@@ -76,7 +77,7 @@ test.describe("admin login", () => {
     });
 
     await page.goto("/login");
-    await page.getByLabel("Tenant").fill("root");
+    await expect(page.getByLabel("Tenant")).toHaveValue("root");
     await page.getByLabel("Email").fill("operator@root.example");
     await page.getByLabel("Password", { exact: true }).fill("wrong-password");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();

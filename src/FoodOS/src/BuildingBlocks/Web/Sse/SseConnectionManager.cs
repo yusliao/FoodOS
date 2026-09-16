@@ -6,7 +6,7 @@ namespace FSH.Framework.Web.Sse;
 
 /// <summary>
 /// Manages active SSE connections keyed by a per-connection <see cref="Guid"/> so a single user with
-/// multiple tabs keeps every stream open. Supports targeted sends (by userId — fans out to all of the
+/// multiple tabs keeps every stream open. Supports targeted sends (by tenant and user — fans out to all of the
 /// user's active connections) and tenant-wide broadcasts. Thread-safe via ConcurrentDictionary.
 /// </summary>
 public sealed class SseConnectionManager
@@ -23,8 +23,10 @@ public sealed class SseConnectionManager
     /// Registers a new connection and returns a stable connectionId plus the channel reader the
     /// endpoint will consume.
     /// </summary>
-    public (Guid ConnectionId, ChannelReader<SseEvent> Reader) Connect(string userId, string? tenantId = null)
+    public (Guid ConnectionId, ChannelReader<SseEvent> Reader) Connect(string userId, string tenantId)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         var connectionId = Guid.CreateVersion7();
         var channel = Channel.CreateBounded<SseEvent>(new BoundedChannelOptions(100)
         {
@@ -62,15 +64,19 @@ public sealed class SseConnectionManager
     }
 
     /// <summary>
-    /// Sends an event to every connection owned by the given user (all tabs, all devices).
+    /// Sends an event to every connection owned by the given user within the specified tenant.
     /// Returns the number of channels the event was written to.
     /// </summary>
-    public int TrySend(string userId, SseEvent sseEvent)
+    public int TrySend(string tenantId, string userId, SseEvent sseEvent)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        ArgumentNullException.ThrowIfNull(sseEvent);
         var sent = 0;
         foreach (var (_, connection) in _connections)
         {
             if (string.Equals(connection.UserId, userId, StringComparison.Ordinal)
+                && string.Equals(connection.TenantId, tenantId, StringComparison.Ordinal)
                 && connection.Channel.Writer.TryWrite(sseEvent))
             {
                 sent++;
@@ -81,10 +87,12 @@ public sealed class SseConnectionManager
     }
 
     /// <summary>
-    /// Broadcasts an event to all connections in the specified tenant.
+    /// Broadcasts non-sensitive tenant-wide events. Business payloads must use authorized user targeting.
     /// </summary>
     public int Broadcast(string tenantId, SseEvent sseEvent)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        ArgumentNullException.ThrowIfNull(sseEvent);
         var sent = 0;
         foreach (var (_, connection) in _connections)
         {
@@ -98,25 +106,8 @@ public sealed class SseConnectionManager
         return sent;
     }
 
-    /// <summary>
-    /// Broadcasts an event to every connected client (cross-tenant).
-    /// </summary>
-    public int BroadcastAll(SseEvent sseEvent)
-    {
-        var sent = 0;
-        foreach (var (_, connection) in _connections)
-        {
-            if (connection.Channel.Writer.TryWrite(sseEvent))
-            {
-                sent++;
-            }
-        }
-
-        return sent;
-    }
-
     /// <summary>Number of active connections across all users.</summary>
     public int ActiveConnections => _connections.Count;
 
-    private sealed record Connection(string UserId, string? TenantId, Channel<SseEvent> Channel);
+    private sealed record Connection(string UserId, string TenantId, Channel<SseEvent> Channel);
 }

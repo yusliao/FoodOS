@@ -23,9 +23,8 @@ public sealed class GetImpersonationGrantsQueryHandler(
             ?? throw new UnauthorizedException("missing tenant context");
         var isRoot = string.Equals(callerTenant, MultitenancyConstants.Root.Id, StringComparison.Ordinal);
 
-        // Tenant scoping: root operators target any tenant; tenant admins are locked to their
-        // own regardless of input. Mirrors the StartImpersonation cross-tenant rule.
-        var tenantFilter = isRoot ? request.ImpersonatedTenantId : callerTenant;
+        if (!isRoot) throw new ForbiddenException("impersonation management is restricted to platform operators");
+        var tenantFilter = request.ImpersonatedTenantId;
 
         return await grantService.ListAsync(
             status: request.Status,

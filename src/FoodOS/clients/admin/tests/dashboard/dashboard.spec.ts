@@ -1,172 +1,79 @@
 import { expect, test } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
-import { installAdminShellMocks, ADMIN_PERMS, paged } from "../helpers/shell-mocks";
+import { installAdminShellMocks, ADMIN_PERMS } from "../helpers/shell-mocks";
 import { mockJsonResponse } from "../helpers/api-mocks";
-
-// DashboardPage ("/") is protected. The RouteGuard reads the in-memory
-// permission set, which the auth context re-hydrates from
-// /identity/permissions after mount — installAdminShellMocks echoes ADMIN_PERMS
-// from that endpoint, so the seeded perms and the helper's perms must match.
-//
-// On load the page fires three queries:
-//   GET /api/v1/tenants/?PageNumber=1&PageSize=1   (totalCount drives "Tenants")
-//   GET /api/v1/billing/plans?includeInactive=true (array, drives "Plans")
-//   GET /api/v1/billing/invoices?pageNumber=1&pageSize=50 (paged, drives invoices)
-
-const TENANTS_PAGE = paged(
-  [
-    {
-      id: "acme",
-      name: "Acme Corp",
-      adminEmail: "admin@acme.com",
-      isActive: true,
-      validUpto: "2027-01-01T00:00:00Z",
-    },
-  ],
-  { pageNumber: 1, pageSize: 1, totalCount: 12 },
-);
-
-const PLANS = [
-  {
-    id: "p-free",
-    key: "free",
-    name: "Free",
-    currency: "USD",
-    monthlyBasePrice: 0,
-    overageRates: {},
-    isActive: true,
-  },
-  {
-    id: "p-pro",
-    key: "pro",
-    name: "Pro",
-    currency: "USD",
-    monthlyBasePrice: 49,
-    overageRates: {},
-    isActive: true,
-  },
-  {
-    id: "p-legacy",
-    key: "legacy",
-    name: "Legacy",
-    currency: "USD",
-    monthlyBasePrice: 19,
-    overageRates: {},
-    isActive: false,
-  },
-];
-
-const INVOICES_PAGE = paged(
-  [
-    {
-      id: "inv-1",
-      tenantId: "acme",
-      invoiceNumber: "INV-0001",
-      periodYear: 2026,
-      periodMonth: 5,
-      currency: "USD",
-      subtotalAmount: 49,
-      status: "Issued",
-      createdAtUtc: "2026-05-01T00:00:00Z",
-      lineItems: [],
-    },
-    {
-      id: "inv-2",
-      tenantId: "acme",
-      invoiceNumber: "INV-0002",
-      periodYear: 2026,
-      periodMonth: 4,
-      currency: "USD",
-      subtotalAmount: 49,
-      status: "Paid",
-      createdAtUtc: "2026-04-01T00:00:00Z",
-      lineItems: [],
-    },
-  ],
-  { pageNumber: 1, pageSize: 50, totalCount: 134 },
-);
 
 test.beforeEach(async ({ page }) => {
   await seedAuthedSession(page, { ...TEST_USER, permissions: [...ADMIN_PERMS] });
   await installAdminShellMocks(page);
-
-  // Page-specific mocks AFTER the shell mocks so they win.
-  await mockJsonResponse(page, "**/api/v1/tenants**", TENANTS_PAGE);
-  await mockJsonResponse(page, "**/api/v1/billing/plans**", PLANS);
-  await mockJsonResponse(page, "**/api/v1/billing/invoices**", INVOICES_PAGE);
   await mockJsonResponse(page, "**/api/v1/ops/kpis**", {
-    date: "2026-09-12",
-    fulfillmentRate: 0.75,
-    stockoutRate: 0.1,
-    shrinkageRate: 0.05,
-    temperatureComplianceRate: null,
-    committedOrderCount: 4,
-    fulfilledOrderCount: 3,
-    orderedQty: 20,
-    inboundQty: 40,
-    lossQty: 2,
+    date: "2026-09-12", fulfillmentRate: 0.75, stockoutRate: 0.1, shrinkageRate: 0.05,
+    temperatureComplianceRate: null, committedOrderCount: 4, fulfilledOrderCount: 3,
+    orderedQty: 20, inboundQty: 40, lossQty: 2,
   });
 });
 
-test.describe("admin dashboard", () => {
-  test("greets the operator by first name in the hero heading", async ({ page }) => {
-    await page.goto("/");
-
-    // Seeded user is "Root Admin" → first name "Root". The EntityPageHeader h1
-    // renders "Overview" + a muted ", Root" subspan, so match the accessible name.
-    await expect(
-      page.getByRole("heading", { name: /Overview,\s*Root/i }),
-    ).toBeVisible({ timeout: 10_000 });
+test("operator home has authorized entry points, without subscription statistics requests", async ({ page }) => {
+  const irrelevant: string[] = [];
+  page.on("request", request => {
+    if (/\/api\/v1\/(tenants|billing)/.test(new URL(request.url()).pathname)) irrelevant.push(request.url());
   });
+  await page.goto("/");
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { name: "Operator workbench" })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "System administration" })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Employees", exact: true })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Software subscriptions" })).toBeVisible();
+  expect(irrelevant).toEqual([]);
+  await page.screenshot({ path: test.info().outputPath("operator-workbench.png"), fullPage: true });
+});
 
-  test("renders the four KPI tiles with values from the load endpoints", async ({ page }) => {
-    await page.goto("/");
+test("authorized operations KPIs show real rates and unavailable temperature", async ({ page }) => {
+  await page.goto("/");
+  const main = page.getByRole("main");
+  await expect(main.getByText("75.0%", { exact: true })).toBeVisible();
+  await expect(main.getByText("N/A", { exact: true })).toBeVisible();
+});
 
-    // Scope to the page content region — the KPI labels ("Tenants", "Plans")
-    // also appear in the sidebar nav, so an unscoped getByText collides.
-    const main = page.getByRole("main");
-
-    // KPI tile labels render as the Stat component's mono-caps ".meta" crumb.
-    // "Tenants"/"Plans" also appear as pivot-card titles, so target the label
-    // element by its class rather than a bare text match.
-    const kpiLabel = (text: string) =>
-      main.locator("div.meta", { hasText: text });
-    await expect(kpiLabel("Tenants")).toBeVisible({ timeout: 10_000 });
-    await expect(kpiLabel("Plans")).toBeVisible();
-    await expect(kpiLabel("Invoices")).toBeVisible();
-    await expect(kpiLabel("Outstanding")).toBeVisible();
-
-    // Values: tenants totalCount = 12, plans length = 3, invoices on page = 2,
-    // outstanding (status === "Issued") = 1.
-    await expect(main.getByText("12", { exact: true })).toBeVisible();
-    await expect(main.getByText("2 active")).toBeVisible();
-    await expect(main.getByText("134 total ledger")).toBeVisible();
+test("revoked cached permissions do not render links or make unauthorized requests", async ({ page }) => {
+  await installAdminShellMocks(page, []);
+  const denied: string[] = [];
+  page.on("request", request => {
+    if (/\/api\/v1\/(ops|tenants|billing|notifications)/.test(new URL(request.url()).pathname)) denied.push(request.url());
   });
+  await page.goto("/");
+  await expect(page.getByText("No work modules are available for your current permissions.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Employees", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+  expect(denied).toEqual([]);
+  await page.goto("/users");
+  await expect(page.getByRole("main")).toContainText(/Access denied|Forbidden/i);
+});
 
-  test("renders the operations KPI tiles including N/A temperature", async ({ page }) => {
-    await page.goto("/");
+test("report failure is explicit and can be retried", async ({ page }) => {
+  await page.route("**/api/v1/ops/kpis**", route => route.fulfill({ status: 403, contentType: "application/json", body: "{}" }));
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toContainText("Operations data could not be loaded");
+  await expect(page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+});
 
-    const main = page.getByRole("main");
-    const kpiLabel = (text: string) => main.locator("div.meta", { hasText: text });
-    await expect(kpiLabel("Fulfillment")).toBeVisible({ timeout: 10_000 });
-    await expect(kpiLabel("Stockout")).toBeVisible();
-    await expect(kpiLabel("Shrinkage")).toBeVisible();
-    await expect(kpiLabel("Temperature")).toBeVisible();
-    await expect(main.getByText("75.0%").first()).toBeVisible();
-    await expect(main.getByText("N/A", { exact: true })).toBeVisible();
-  });
+test("Chinese workbench labels follow the existing locale setting", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("foodos.culture", "zh-CN"));
+  await page.goto("/");
+  await expect(page.getByRole("main").getByRole("heading", { name: "运营工作台" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "系统管理" })).toBeVisible();
+});
 
-  test("renders the entry-point pivot cards", async ({ page }) => {
-    await page.goto("/");
-
-    // The sidebar nav lives OUTSIDE <main>, so scoping to the content region
-    // isolates the four pivot-card links from the nav's own route links.
-    const main = page.getByRole("main");
-    await expect(main.getByText("Entry points")).toBeVisible({ timeout: 10_000 });
-
-    await expect(main.getByRole("link", { name: /Tenants/ })).toBeVisible();
-    await expect(main.getByRole("link", { name: /Users/ })).toBeVisible();
-    await expect(main.getByRole("link", { name: /Billing/ })).toBeVisible();
-    await expect(main.getByRole("link", { name: /Invoices/ })).toBeVisible();
-  });
+test("mobile navigation uses the same employee permissions and hides system tools", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAdminShellMocks(page, ["Permissions.Users.View"]);
+  await page.goto("/");
+  await expect(page.getByRole("main").getByRole("link", { name: "Employees", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open navigation menu" }).click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByRole("button", { name: "System administration" })).toHaveCount(0);
+  await drawer.getByRole("button", { name: "Operator team" }).click();
+  await expect(drawer.getByRole("link", { name: "Employees", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("link", { name: "Roles", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("operator-mobile-nav.png"), fullPage: true });
 });

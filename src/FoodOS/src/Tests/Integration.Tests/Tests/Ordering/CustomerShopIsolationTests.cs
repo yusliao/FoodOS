@@ -10,7 +10,7 @@ using System.Text.Json;
 namespace Integration.Tests.Tests.Ordering;
 
 [Collection(FshCollectionDefinition.Name)]
-public sealed class CustomerShopIsolationTests
+public sealed partial class CustomerShopIsolationTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -53,6 +53,17 @@ public sealed class CustomerShopIsolationTests
         using var clientB = await CreateDashboardClientAsync(emailB, tenantB);
         await GrantSelfStoreAccessAsync(clientA, storeA);
         await GrantSelfStoreAccessAsync(clientB, storeB);
+
+        var outsideStore = await CreateStoreAsync(rootClient, orgA, warehouse.Id, $"OTHER{suffix}");
+        var outsideMember = await CreateDeliveryMemberAsync(tenantA, true);
+        await SetDeliveryStoreAccessAsync(clientA, outsideMember.Id, outsideStore);
+        using var outsideClient = await CreateDashboardClientAsync(outsideMember.Email, tenantA);
+        var messagesA = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var messagesB = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var outsideMessages = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        await using var hubA = await StartDeliveryHubAsync(clientA, tenantA, messagesA);
+        await using var hubB = await StartDeliveryHubAsync(clientB, tenantB, messagesB);
+        await using var outsideHub = await StartDeliveryHubAsync(outsideClient, tenantA, outsideMessages);
 
         using var storesAResponse = await clientA.GetAsync($"{TestConstants.ShopBasePath}/stores");
         storesAResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await storesAResponse.Content.ReadAsStringAsync());
@@ -158,6 +169,13 @@ public sealed class CustomerShopIsolationTests
             orderId,
             storeB,
             otherOrderId);
+        await AssertCustomerDeliveryNotificationsAsync(clientA, orderId, storeA, otherOrderId, "shop.order-departed");
+        await AssertCustomerDeliveryNotificationsAsync(clientB, otherOrderId, storeB, orderId, "shop.order-departed");
+        await WaitForDeliveryMessageAsync(messagesA, "shop.order-departed");
+        await WaitForDeliveryMessageAsync(messagesB, "shop.order-departed");
+        messagesA.ShouldNotContain(m => m.Contains(otherOrderId.ToString(), StringComparison.Ordinal));
+        messagesB.ShouldNotContain(m => m.Contains(orderId.ToString(), StringComparison.Ordinal));
+        (await ReadCustomerDeliveryNotificationsAsync(outsideClient)).ShouldBeEmpty();
         Guid shipmentId = shipment.Id;
         foreach (var (customer, id) in new[] { (clientA, orderId), (clientB, otherOrderId) })
         {
@@ -214,6 +232,15 @@ public sealed class CustomerShopIsolationTests
         customerPod.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         using var signed = await rootClient.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/stops/{stopA.Id}/pod", signature);
         signed.StatusCode.ShouldBe(HttpStatusCode.OK, await signed.Content.ReadAsStringAsync());
+        await AssertCustomerDeliveryNotificationsAsync(clientA, orderId, storeA, otherOrderId, "shop.order-delivered");
+        (await ReadCustomerDeliveryNotificationsAsync(clientB)).ShouldNotContain(n => n.Type == "shop.order-delivered");
+        await WaitForDeliveryMessageAsync(messagesA, "shop.order-delivered");
+        await Task.Delay(250);
+        messagesB.ShouldNotContain(m => m.Contains("shop.order-delivered", StringComparison.Ordinal));
+        outsideMessages.ShouldBeEmpty();
+        messagesA.ShouldNotContain(m => m.Contains("signer", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("warehouseId", StringComparison.Ordinal) || m.Contains("routeId", StringComparison.Ordinal));
+        await AssertDeliveryRoutingReplayAsync(shipment, storeA, storeB, orderId, otherOrderId, clientA, clientB, tenantB);
         using var afterSignA = await clientA.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
         var signedA = (await afterSignA.DeserializeAsync<List<ShopDeliveryDto>>()).ShouldHaveSingleItem();
         signedA.SignedAt.ShouldNotBeNull();
@@ -244,6 +271,9 @@ public sealed class CustomerShopIsolationTests
             $"{TestConstants.ShopBasePath}/after-sales?orderId={orderId}");
         foreignTickets.StatusCode.ShouldBe(HttpStatusCode.OK, await foreignTickets.Content.ReadAsStringAsync());
         (await foreignTickets.DeserializeAsync<IReadOnlyList<ShopAfterSalesTicketDto>>()).ShouldBeEmpty();
+
+        await AssertReconciliationBoundaryAsync(rootClient, clientA, clientB, outsideClient,
+            tenantA, tenantB, warehouse.Id, storeA, storeB, orderId, otherOrderId);
 
         using var operatorOrder = await rootClient.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
         operatorOrder.StatusCode.ShouldBe(HttpStatusCode.OK, await operatorOrder.Content.ReadAsStringAsync());

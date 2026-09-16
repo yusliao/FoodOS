@@ -7,4 +7,5 @@ namespace FSH.Modules.Ordering.Contracts.v1.Orders;
 public sealed record SearchOrdersQuery(
     Guid? StoreId = null,
     int PageNumber = 1,
-    int PageSize = 20) : IQuery<PagedResponse<SalesOrderDto>>;
+    int PageSize = 20,
+    string? Status = null) : IQuery<PagedResponse<SalesOrderDto>>;

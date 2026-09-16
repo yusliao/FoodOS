@@ -21,7 +21,7 @@ public static class GetImpersonationGrantsEndpoint
                 TypedResults.Ok(await mediator.Send(query, ct)))
             .WithName("GetImpersonationGrants")
             .WithSummary("List impersonation grants")
-            .WithDescription("Lists impersonation sessions scoped to what the caller can see. Tenant admins are limited to grants targeting their own tenant; root operators can filter by any tenant.")
+            .WithDescription("Authorized root operators can inspect impersonation sessions and filter by target tenant. Customer identities cannot list operator support grants.")
             .RequirePermission(IdentityPermissions.Impersonation.View)
             .Produces<IReadOnlyList<ImpersonationGrantDto>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)

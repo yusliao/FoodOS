@@ -157,9 +157,10 @@ public sealed class IdentityService : IIdentityService
 
         if (userRoleIds.Count > 0)
         {
+            var audience = tenantId == MultitenancyConstants.Root.Id ? RoleAudiences.Operator : RoleAudiences.Customer;
             var roleNames = await _dbContext.Roles
                 .IgnoreQueryFilters()
-                .Where(r => userRoleIds.Contains(r.Id) && EF.Property<string>(r, "TenantId") == tenantId)
+                .Where(r => userRoleIds.Contains(r.Id) && EF.Property<string>(r, "TenantId") == tenantId && r.Audience == audience)
                 .Select(r => r.Name!)
                 .ToListAsync(ct);
 
@@ -333,8 +334,12 @@ public sealed class IdentityService : IIdentityService
         var directRoles = await _userManager.GetRolesAsync(user);
         var groupRoles = await _groupRoleService.GetUserGroupRolesAsync(user.Id, ct);
 
-        var allRoles = directRoles.Union(groupRoles).Distinct();
-        claims.AddRange(allRoles.Select(r => new Claim(ClaimTypes.Role, r)));
+        var allRoles = directRoles.Union(groupRoles).Distinct().ToArray();
+        var audience = GetValidatedTenant().Id == MultitenancyConstants.Root.Id ? RoleAudiences.Operator : RoleAudiences.Customer;
+        var validRoles = await _dbContext.Roles.AsNoTracking()
+            .Where(role => allRoles.Contains(role.Name!) && role.Audience == audience)
+            .Select(role => role.Name!).ToListAsync(ct).ConfigureAwait(false);
+        claims.AddRange(validRoles.Select(r => new Claim(ClaimTypes.Role, r)));
     }
 
     private static string HashToken(string token)

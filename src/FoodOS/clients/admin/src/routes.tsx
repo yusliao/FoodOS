@@ -12,6 +12,7 @@ import {
   BillingPermissions,
   IdentityPermissions,
   MultitenancyPermissions,
+  NotificationPermissions,
   WebhooksPermissions,
 } from "@/lib/permissions";
 
@@ -212,11 +213,11 @@ export const router = createBrowserRouter([
             ),
           },
 
-          // Notifications inbox — available to every signed-in user
-          { path: "notifications", element: <NotificationsInboxPage /> },
+          // Inbox uses the same view permission as the server and the navigation.
+          { path: "notifications", element: <RouteGuard perms={[NotificationPermissions.Inbox.View]}><NotificationsInboxPage /></RouteGuard> },
 
-          // Health — public probes; signed-in users only see this from inside the app
-          { path: "health", element: <HealthPage /> },
+          // Public probes remain server-public; their admin UI lives under system administration.
+          { path: "health", element: <RouteGuard perms={[MultitenancyPermissions.Tenants.View]}><HealthPage /></RouteGuard> },
 
           // Settings — account-scoped; any signed-in user can manage their own profile + sessions + 2FA
           {

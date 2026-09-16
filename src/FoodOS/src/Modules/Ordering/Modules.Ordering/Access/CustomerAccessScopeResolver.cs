@@ -46,7 +46,10 @@ public sealed class CustomerAccessScopeResolver(
                 access.CustomerTenantId == normalizedTenantId
                 && access.CustomerOrgId == org.Id
                 && access.UserId == userId
-                && access.IsActive)
+                && access.IsActive
+                && dbContext.Stores.Any(store => store.Id == access.StoreId
+                    && store.CustomerOrgId == org.Id
+                    && store.CustomerTenantId == normalizedTenantId))
             .Select(access => access.StoreId)
             .Distinct()
             .ToListAsync(cancellationToken)

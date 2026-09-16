@@ -1,5 +1,6 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
 
 namespace FSH.Framework.Web.Sse;
 
@@ -16,39 +17,58 @@ public interface ISseTokenService
 /// Short-lived single-use token for authenticating SSE streams. Browsers' EventSource API cannot
 /// attach Authorization headers, so clients exchange their JWT at /sse/token for an opaque token,
 /// then open the stream at /sse/stream?token=&lt;guid&gt;. The token is deleted on first consume and
-/// expires in 30 seconds otherwise. Backed by IDistributedCache (Redis in production) — single-use
-/// tokens don't benefit from HybridCache's L1, and IDistributedCache is the right primitive since
-/// we need true read-or-miss semantics without factory-populated nulls.
+/// expires in 30 seconds otherwise. Redis GETDEL atomically consumes across hosts; without Redis,
+/// a singleton lock protects the in-memory development fallback. No fallback on Redis failure.
 /// </summary>
-internal sealed class SseTokenService(IDistributedCache cache) : ISseTokenService
+internal sealed class SseTokenService(IMemoryCache cache, IConnectionMultiplexer? redis = null) : ISseTokenService
 {
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromSeconds(30);
-
-    private static readonly DistributedCacheEntryOptions EntryOptions = new()
-    {
-        AbsoluteExpirationRelativeToNow = TokenLifetime,
-    };
+    private readonly object _memoryLock = new();
 
     public async Task<Guid> IssueAsync(string userId, string? tenantId, CancellationToken cancellationToken)
     {
-        var token = Guid.CreateVersion7();
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new SsePrincipal(userId, tenantId));
-        await cache.SetAsync(KeyFor(token), payload, EntryOptions, cancellationToken).ConfigureAwait(false);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        if (!Guid.TryParse(userId, out var id) || id == Guid.Empty)
+        {
+            throw new ArgumentException("A valid user identity is required.", nameof(userId));
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var token = Guid.NewGuid();
+        var principal = new SsePrincipal(id.ToString(), tenantId);
+        if (redis is not null)
+        {
+            await redis.GetDatabase().StringSetAsync(KeyFor(token), JsonSerializer.Serialize(principal), TokenLifetime)
+                .WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            cache.Set(KeyFor(token), principal, TokenLifetime);
+        }
         return token;
     }
 
     public async Task<SsePrincipal?> ConsumeAsync(Guid token, CancellationToken cancellationToken)
     {
-        var key = KeyFor(token);
-        var payload = await cache.GetAsync(key, cancellationToken).ConfigureAwait(false);
-        if (payload is null || payload.Length == 0)
+        cancellationToken.ThrowIfCancellationRequested();
+        if (token == Guid.Empty)
         {
             return null;
         }
-
-        await cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
-        return JsonSerializer.Deserialize<SsePrincipal>(payload);
+        var key = KeyFor(token);
+        if (redis is not null)
+        {
+            var payload = await redis.GetDatabase().StringGetDeleteAsync(key)
+                .WaitAsync(cancellationToken).ConfigureAwait(false);
+            return payload.IsNullOrEmpty ? null : JsonSerializer.Deserialize<SsePrincipal>(payload.ToString());
+        }
+        lock (_memoryLock)
+        {
+            cache.TryGetValue<SsePrincipal>(key, out var principal);
+            cache.Remove(key);
+            return principal;
+        }
     }
 
-    private static string KeyFor(Guid token) => $"sse:tok:{token:N}";
+    // Separate Redis string keys from the former IDistributedCache hash representation.
+    private static string KeyFor(Guid token) => $"sse:tok:v2:{token:N}";
 }

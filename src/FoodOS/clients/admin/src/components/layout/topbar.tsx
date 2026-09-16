@@ -37,6 +37,7 @@ import { useTheme } from "@/components/theme/theme-provider";
 import { LanguageSwitcher } from "@/i18n/language-switcher";
 import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
+import { NotificationPermissions } from "@/lib/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -186,7 +187,7 @@ export function Topbar() {
       <LanguageSwitcher />
 
       {/* Notification bell */}
-      <NotificationBell />
+      {user?.permissions.includes(NotificationPermissions.Inbox.View) && <NotificationBell />}
 
       {/* User dropdown — `modal={false}` so the sign-out confirmation
           Dialog doesn't deadlock pointer-events via nested modals. */}

@@ -16,6 +16,8 @@ import {
   LogLevel,
 } from "@microsoft/signalr";
 import { env } from "@/env";
+import { useAuth } from "@/auth/use-auth";
+import { NotificationPermissions } from "@/lib/permissions";
 import { tokenStore } from "@/auth/token-store";
 
 export type RealtimeStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -41,13 +43,15 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<RealtimeStatus>("idle");
   const connectionRef = useRef<HubConnection | null>(null);
   const listenersRef = useRef<Map<string, Set<Listener>>>(new Map());
-  const stoppedRef = useRef(false);
+  const { isAuthenticated, permissionsHydrated, user } = useAuth();
+  const authorized = isAuthenticated && permissionsHydrated && Boolean(user?.permissions.includes(NotificationPermissions.Inbox.View));
   const [tokenEpoch, setTokenEpoch] = useState(0);
 
   useEffect(() => tokenStore.subscribe(() => setTokenEpoch((n) => n + 1)), []);
 
   useEffect(() => {
-    stoppedRef.current = false;
+    if (!authorized) return;
+    let stopped = false;
     const backoffs = [0, 2_000, 5_000, 10_000, 30_000];
 
     const buildConnection = () => {
@@ -93,7 +97,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     };
 
     const connect = async () => {
-      if (stoppedRef.current) return;
+      if (stopped) return;
       if (!tokenStore.getAccessToken()) {
         setStatus("idle");
         return;
@@ -106,10 +110,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       conn.onreconnecting(() => setStatus("reconnecting"));
       conn.onreconnected(() => setStatus("connected"));
       conn.onclose(async () => {
-        if (stoppedRef.current) return;
+        if (stopped) return;
         setStatus("error");
         await new Promise((r) => setTimeout(r, 5_000));
-        if (!stoppedRef.current) void connect();
+        if (!stopped) void connect();
       });
 
       try {
@@ -118,14 +122,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       } catch {
         setStatus("error");
         await new Promise((r) => setTimeout(r, 5_000));
-        if (!stoppedRef.current) void connect();
+        if (!stopped) void connect();
       }
     };
 
     void connect();
 
     return () => {
-      stoppedRef.current = true;
+      stopped = true;
       const conn = connectionRef.current;
       connectionRef.current = null;
       if (conn && conn.state !== HubConnectionState.Disconnected) {
@@ -133,7 +137,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       }
       setStatus("idle");
     };
-  }, [tokenEpoch]);
+  }, [tokenEpoch, authorized]);
 
   const on = useCallback(<T,>(event: string, handler: (payload: T) => void) => {
     let bucket = listenersRef.current.get(event);

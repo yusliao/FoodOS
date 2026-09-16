@@ -7,12 +7,8 @@ namespace Integration.Tests.Tests.Multitenancy;
 
 /// <summary>
 /// End-to-end coverage for the tenant theme feature (get / update / reset) plus
-/// validation and cross-tenant isolation. Theme scoping is driven entirely by the
-/// resolved Finbuckle tenant context: a root operator can target another tenant by
-/// sending the <c>tenant</c> header (root-operator override), while a tenant operator
-/// is always pinned to its own tenant (the override is gated to root). These tests
-/// pin both the happy paths and the isolation contract — tenant B must never be able
-/// to read or mutate tenant A's theme.
+/// validation and cross-tenant isolation. Authenticated theme access is bound to
+/// the signed identity domain; customer roles may read but not modify themes.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
 public sealed class TenantThemeTests : IAsyncLifetime
@@ -85,11 +81,10 @@ public sealed class TenantThemeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpdateTheme_Should_PersistAndReturnUpdatedValues_When_TenantAdminUpdatesOwnTheme()
+    public async Task UpdateTheme_Should_PersistAndReturnUpdatedValues_When_OperatorUpdatesOwnTheme()
     {
         // Arrange
-        using var client = await _auth.CreateAuthenticatedClientAsync(
-            _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
+        using var client = await _auth.CreateRootAdminClientAsync();
         var payload = ValidTheme(primary: "#112233", fontSize: 18, borderRadius: "8px");
 
         // Act
@@ -111,8 +106,7 @@ public sealed class TenantThemeTests : IAsyncLifetime
     public async Task ResetTheme_Should_RestoreDefaults_After_ThemeWasCustomized()
     {
         // Arrange — customize first
-        using var client = await _auth.CreateAuthenticatedClientAsync(
-            _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
+        using var client = await _auth.CreateRootAdminClientAsync();
         var update = await client.PutAsJsonAsync(ThemePath, ValidTheme(primary: "#AABBCC", fontSize: 20));
         update.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
@@ -136,8 +130,7 @@ public sealed class TenantThemeTests : IAsyncLifetime
     public async Task UpdateTheme_Should_Return400_When_PaletteColorIsNotHex()
     {
         // Arrange
-        using var client = await _auth.CreateAuthenticatedClientAsync(
-            _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
+        using var client = await _auth.CreateRootAdminClientAsync();
         var payload = ValidTheme(primary: "not-a-color");
 
         // Act
@@ -151,8 +144,7 @@ public sealed class TenantThemeTests : IAsyncLifetime
     public async Task UpdateTheme_Should_Return400_When_FontSizeOutOfRange()
     {
         // Arrange — FontSizeBase must be between 10 and 24
-        using var client = await _auth.CreateAuthenticatedClientAsync(
-            _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
+        using var client = await _auth.CreateRootAdminClientAsync();
         var payload = ValidTheme(fontSize: 99);
 
         // Act
@@ -166,8 +158,7 @@ public sealed class TenantThemeTests : IAsyncLifetime
     public async Task UpdateTheme_Should_Return400_When_FontFamilyIsNotWebSafe()
     {
         // Arrange
-        using var client = await _auth.CreateAuthenticatedClientAsync(
-            _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
+        using var client = await _auth.CreateRootAdminClientAsync();
         var payload = ValidTheme(fontFamily: "Comic Sans MS, cursive");
 
         // Act
@@ -181,8 +172,7 @@ public sealed class TenantThemeTests : IAsyncLifetime
     public async Task UpdateTheme_Should_Return400_When_BorderRadiusIsInvalidCss()
     {
         // Arrange — BorderRadius must match ^\d+(px|rem|em|%)$
-        using var client = await _auth.CreateAuthenticatedClientAsync(
-            _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
+        using var client = await _auth.CreateRootAdminClientAsync();
         var payload = ValidTheme(borderRadius: "round");
 
         // Act
@@ -231,8 +221,7 @@ public sealed class TenantThemeTests : IAsyncLifetime
     [Fact]
     public async Task UpdateTheme_Should_NotLeakAcrossTenants_When_RootOperatorTargetsTenantA()
     {
-        // Arrange — root operator scopes to tenant A via the header override and
-        // sets a distinctive primary color.
+        // Root cannot switch identity domains through a header.
         var rootToken = await _auth.GetRootAdminTokenAsync();
         const string marker = "#9911AA";
 
@@ -241,13 +230,12 @@ public sealed class TenantThemeTests : IAsyncLifetime
             clientA.DefaultRequestHeaders.Authorization = new("Bearer", rootToken.AccessToken);
             clientA.DefaultRequestHeaders.Add("tenant", _tenantA);
             var update = await clientA.PutAsJsonAsync(ThemePath, ValidTheme(primary: marker));
-            update.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            update.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         }
 
-        // Act — root operator now scopes to tenant B and reads its theme.
-        using var clientB = _factory.CreateClient();
-        clientB.DefaultRequestHeaders.Authorization = new("Bearer", rootToken.AccessToken);
-        clientB.DefaultRequestHeaders.Add("tenant", _tenantB);
+        // Read B using B's own identity; rejected writes must not affect it.
+        using var clientB = await _auth.CreateAuthenticatedClientAsync(
+            _tenantBAdminEmail, TestConstants.DefaultPassword, _tenantB);
         var responseB = await clientB.GetAsync(ThemePath);
 
         // Assert — tenant B must NOT see tenant A's customization.
@@ -259,45 +247,41 @@ public sealed class TenantThemeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetTheme_Should_StayInOwnTenant_When_TenantBAdminSendsTenantAHeader()
+    public async Task GetTheme_Should_Return403_When_TenantBAdminSendsTenantAHeader()
     {
-        // Arrange — give tenant A a distinctive theme (as A's own admin).
+        // Customer A cannot modify the theme even within its own domain.
         const string marker = "#7733EE";
         using (var clientA = await _auth.CreateAuthenticatedClientAsync(
             _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA))
         {
             var update = await clientA.PutAsJsonAsync(ThemePath, ValidTheme(primary: marker));
-            update.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            update.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         }
 
         // Tenant B admin tries to read tenant A's theme by spoofing the header.
         var tokenB = await GetTokenWithRetryAsync(_tenantBAdminEmail, TestConstants.DefaultPassword, _tenantB);
         using var clientB = _factory.CreateClient();
         clientB.DefaultRequestHeaders.Authorization = new("Bearer", tokenB.AccessToken);
-        clientB.DefaultRequestHeaders.Add("tenant", _tenantA); // spoof attempt — must be ignored
+        clientB.DefaultRequestHeaders.Add("tenant", _tenantA); // spoof attempt — must be rejected
 
         // Act
         var response = await clientB.GetAsync(ThemePath);
 
-        // Assert — the override is gated to root, so B stays in B and sees defaults,
-        // never tenant A's marker color.
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var theme = await response.Content.ReadFromJsonAsync<TenantThemeDto>(Json);
-        theme.ShouldNotBeNull();
-        theme.LightPalette.Primary.ShouldNotBe(marker);
-        theme.LightPalette.Primary.ShouldBe("#2563EB");
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     [Fact]
     public async Task UpdateTheme_Should_NotMutateTenantA_When_TenantBAdminSendsTenantAHeader()
     {
-        // Arrange — tenant A's admin sets a known baseline.
-        const string baseline = "#445566";
+        // Customer writes are denied; A retains its seeded theme.
+        const string baseline = "#2563EB";
         using (var clientA = await _auth.CreateAuthenticatedClientAsync(
             _tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA))
         {
             var seed = await clientA.PutAsJsonAsync(ThemePath, ValidTheme(primary: baseline));
-            seed.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            seed.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            var reset = await clientA.PostAsync(ThemeResetPath, content: null);
+            reset.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         }
 
         // Tenant B admin tries to overwrite tenant A's theme by spoofing the header.
@@ -307,8 +291,7 @@ public sealed class TenantThemeTests : IAsyncLifetime
             clientB.DefaultRequestHeaders.Authorization = new("Bearer", tokenB.AccessToken);
             clientB.DefaultRequestHeaders.Add("tenant", _tenantA); // spoof attempt
             var attack = await clientB.PutAsJsonAsync(ThemePath, ValidTheme(primary: "#000000"));
-            // The write is accepted but applies to tenant B (where B is pinned), not A.
-            attack.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            attack.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         }
 
         // Act — re-read tenant A's theme as A's own admin.

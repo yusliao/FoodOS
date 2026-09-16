@@ -1,5 +1,6 @@
 import {
   Activity,
+  Bell,
   Building2,
   LayoutDashboard,
   Receipt,
@@ -14,6 +15,7 @@ import {
 import {
   AuditingPermissions,
   BillingPermissions,
+  NotificationPermissions,
   IdentityPermissions,
   MultitenancyPermissions,
   WebhooksPermissions,
@@ -50,71 +52,27 @@ export const topNavBottom: NavSpec[] = [
 
 export const sections: NavSection[] = [
   {
-    id: "multitenancy",
-    caption: "Tenants",
-    icon: Building2,
+    id: "identity", caption: "Operator team", icon: UsersRound,
     items: [
-      {
-        to: "/tenants",
-        label: "Tenants",
-        icon: Building2,
-        perms: [MultitenancyPermissions.Tenants.View],
-      },
+      { to: "/users", label: "Employees", icon: UsersRound, perms: [IdentityPermissions.Users.View] },
+      { to: "/roles", label: "Roles", icon: ShieldCheck, perms: [IdentityPermissions.Roles.View] },
     ],
   },
   {
-    id: "identity",
-    caption: "Identity",
-    icon: UsersRound,
+    id: "operations", caption: "Operations", icon: Activity,
     items: [
-      {
-        to: "/users",
-        label: "Users",
-        icon: UsersRound,
-        perms: [IdentityPermissions.Users.View],
-      },
-      {
-        to: "/roles",
-        label: "Roles",
-        icon: ShieldCheck,
-        perms: [IdentityPermissions.Roles.View],
-      },
-      {
-        to: "/impersonation",
-        label: "Impersonation",
-        icon: UserCog,
-        perms: [IdentityPermissions.Impersonation.View],
-      },
+      { to: "/notifications", label: "Notifications", icon: Bell, perms: [NotificationPermissions.Inbox.View] },
+      { to: "/audits", label: "Audits", icon: ScrollText, perms: [AuditingPermissions.AuditTrails.View] },
     ],
   },
   {
-    id: "operations",
-    caption: "Operations",
-    icon: Activity,
+    id: "system", caption: "System administration", icon: Settings,
     items: [
-      {
-        to: "/billing",
-        label: "Billing",
-        icon: Receipt,
-        perms: [BillingPermissions.View],
-      },
-      {
-        to: "/webhooks",
-        label: "Webhooks",
-        icon: Webhook,
-        perms: [WebhooksPermissions.Subscriptions.View],
-      },
-      {
-        to: "/audits",
-        label: "Audits",
-        icon: ScrollText,
-        perms: [AuditingPermissions.AuditTrails.View],
-      },
-      {
-        to: "/health",
-        label: "Health",
-        icon: Activity,
-      },
+      { to: "/tenants", label: "Customer identity domains", icon: Building2, perms: [MultitenancyPermissions.Tenants.View] },
+      { to: "/impersonation", label: "Impersonation", icon: UserCog, perms: [IdentityPermissions.Impersonation.View] },
+      { to: "/billing", label: "Software subscriptions", icon: Receipt, perms: [BillingPermissions.View] },
+      { to: "/webhooks", label: "Webhooks", icon: Webhook, perms: [WebhooksPermissions.Subscriptions.View] },
+      { to: "/health", label: "Health", icon: Activity, perms: [MultitenancyPermissions.Tenants.View] },
     ],
   },
 ];
@@ -161,59 +119,7 @@ export function filterNavSpec(items: NavSpec[], granted: readonly string[]): Nav
 export type NavItem = NavSpec & { matchPrefix?: string };
 
 /** @deprecated Flat list kept only for call-sites still importing NAV_ITEMS. */
-export const NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "Overview", icon: LayoutDashboard },
-  {
-    to: "/tenants",
-    label: "Tenants",
-    icon: Building2,
-    matchPrefix: "/tenants",
-    perms: [MultitenancyPermissions.Tenants.View],
-  },
-  {
-    to: "/users",
-    label: "Users",
-    icon: UsersRound,
-    matchPrefix: "/users",
-    perms: [IdentityPermissions.Users.View],
-  },
-  {
-    to: "/roles",
-    label: "Roles",
-    icon: ShieldCheck,
-    matchPrefix: "/roles",
-    perms: [IdentityPermissions.Roles.View],
-  },
-  {
-    to: "/billing",
-    label: "Billing",
-    icon: Receipt,
-    matchPrefix: "/billing",
-    perms: [BillingPermissions.View],
-  },
-  {
-    to: "/impersonation",
-    label: "Impersonation",
-    icon: UserCog,
-    matchPrefix: "/impersonation",
-    perms: [IdentityPermissions.Impersonation.View],
-  },
-  {
-    to: "/audits",
-    label: "Audits",
-    icon: ScrollText,
-    matchPrefix: "/audits",
-    perms: [AuditingPermissions.AuditTrails.View],
-  },
-  {
-    to: "/webhooks",
-    label: "Webhooks",
-    icon: Webhook,
-    matchPrefix: "/webhooks",
-    perms: [WebhooksPermissions.Subscriptions.View],
-  },
-  { to: "/health", label: "Health", icon: Activity, matchPrefix: "/health" },
-];
+export const NAV_ITEMS: NavItem[] = [...topNavTop, ...sections.flatMap(section => section.items)];
 
 /** @deprecated Use filterNavSpec instead. */
 export function filterNavItems(items: NavItem[], grantedPermissions: readonly string[]): NavItem[] {

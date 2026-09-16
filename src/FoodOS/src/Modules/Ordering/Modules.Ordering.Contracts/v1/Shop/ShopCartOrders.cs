@@ -14,7 +14,8 @@ public sealed record UpdateShopCartCommand(
 public sealed record SearchShopOrdersQuery(
     Guid? StoreId = null,
     int PageNumber = 1,
-    int PageSize = 20) : IQuery<PagedResponse<ShopOrderDto>>;
+    int PageSize = 20,
+    string? Status = null) : IQuery<PagedResponse<ShopOrderDto>>;
 
 public sealed record GetShopOrderByIdQuery(Guid OrderId) : IQuery<ShopOrderDto>;
 

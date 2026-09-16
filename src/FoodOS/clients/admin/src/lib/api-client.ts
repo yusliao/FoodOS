@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { tokenStore } from "@/auth/token-store";
+import { decodeJwt, isOperatorIdentity, isTokenExpired } from "@/auth/jwt";
 import { getCulture } from "@/i18n/locale-store";
 
 export type ApiError = {
@@ -34,11 +35,16 @@ export async function refreshAccessToken() {
   if (!refreshToken || !accessToken) {
     throw new ApiRequestError(401, "No refresh token");
   }
+  const previousClaims = decodeJwt(accessToken);
+  if (!isOperatorIdentity(previousClaims)) {
+    tokenStore.clear();
+    throw new ApiRequestError(401, "Operator session required");
+  }
 
   // Server's RefreshTokenCommand requires both `token` (the current, possibly
   // expired access token, used to cross-check the subject) and `refreshToken`.
   // Tenant header must match the token's tenant or refresh fails.
-  const tenant = tokenStore.getTenant() ?? env.defaultTenant;
+  const tenant = "root";
   const response = await fetch(`${env.apiBase}/api/v1/identity/token/refresh`, {
     method: "POST",
     headers: {
@@ -62,6 +68,12 @@ export async function refreshAccessToken() {
     token: string;
     refreshToken: string;
   };
+  const claims = decodeJwt(tokens.token);
+  if (!isOperatorIdentity(claims) || isTokenExpired(claims) || claims?.sub !== previousClaims?.sub) {
+    tokenStore.clear();
+    throw new ApiRequestError(401, "Invalid operator session");
+  }
+  tokenStore.setTenant("root");
   tokenStore.setTokens(tokens.token, tokens.refreshToken);
 }
 
@@ -113,7 +125,7 @@ export async function apiFetch<T = unknown>(
     }
   }
 
-  const tenant = tokenStore.getTenant() ?? env.defaultTenant;
+  const tenant = skipAuth ? tokenStore.getTenant() ?? env.defaultTenant : decodeJwt(tokenStore.getAccessToken())?.tenant;
   if (tenant && !mergedHeaders.has("tenant")) {
     mergedHeaders.set("tenant", tenant);
   }

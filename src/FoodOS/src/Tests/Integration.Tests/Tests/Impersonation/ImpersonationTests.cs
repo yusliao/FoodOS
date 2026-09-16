@@ -21,11 +21,10 @@ namespace Integration.Tests.Tests.Impersonation;
 /// End-to-end coverage of the impersonation flow: start, end, JWT revocation hook,
 /// per-grant persistence, cross-tenant rules, and the duration cap.
 /// One non-root tenant is provisioned per test class via IAsyncLifetime so tests
-/// can exercise both intra-tenant (tenant admin impersonating their own user) and
-/// cross-tenant (root operator impersonating into another tenant) paths.
+/// can exercise operator support, customer rejection and target-domain isolation.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
-public sealed class ImpersonationTests : IAsyncLifetime
+public sealed partial class ImpersonationTests : IAsyncLifetime
 {
     private const string ImpersonationBasePath = TestConstants.IdentityBasePath + "/impersonation";
 
@@ -60,8 +59,7 @@ public sealed class ImpersonationTests : IAsyncLifetime
         await CreateTenantAsync(rootClient, _tenantId, _tenantAdminEmail);
         await WaitForProvisioningAsync(rootClient, _tenantId);
 
-        // Sign in as the seeded tenant admin to capture their userId from the JWT — the search
-        // endpoint would couple these tests to the (currently buggy) cross-tenant search override.
+        // Sign in as the seeded tenant admin to capture their userId without a cross-domain search.
         var tenantToken = await GetTokenWithRetryAsync(_tenantAdminEmail, TestConstants.DefaultPassword, _tenantId);
         _tenantAdminUserId = ReadSubject(tenantToken.AccessToken);
 
@@ -341,7 +339,7 @@ public sealed class ImpersonationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetGrants_Should_ScopeByTenant_When_CallerIsTenantAdmin()
+    public async Task GetGrants_Should_RejectCustomerAdmin_EvenWhenGrantTargetsOwnTenant()
     {
         // Arrange — start a cross-tenant grant as root targeting the test tenant.
         using var rootClient = await _auth.CreateRootAdminClientAsync();
@@ -353,13 +351,8 @@ public sealed class ImpersonationTests : IAsyncLifetime
         // Act
         var response = await tenantClient.GetAsync($"{ImpersonationBasePath}/grants");
 
-        // Assert — tenant admin should see the grant targeting their tenant
-        // (and only grants in their tenant). Verify both presence and scope.
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var grants = await response.Content.ReadFromJsonAsync<List<ImpersonationGrantPayload>>(Json);
-        grants.ShouldNotBeNull();
-        grants.ShouldAllBe(g => g.ImpersonatedTenantId == _tenantId);
-        grants.ShouldContain(g => g.ImpersonatedUserId == _tenantAdminUserId);
+        // Support grants are an operator management capability, not a customer permission.
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     [Fact]
@@ -522,7 +515,7 @@ public sealed class ImpersonationTests : IAsyncLifetime
     #region Cross-tenant revoke
 
     [Fact]
-    public async Task Revoke_Should_Allow_TenantAdmin_When_GrantTargetsTheirTenant()
+    public async Task Revoke_Should_Reject_TenantAdmin_When_GrantTargetsTheirTenant()
     {
         // Arrange — root starts an impersonation into the test tenant.
         using var rootClient = await _auth.CreateRootAdminClientAsync();
@@ -537,12 +530,11 @@ public sealed class ImpersonationTests : IAsyncLifetime
             $"{ImpersonationBasePath}/grants/{grant.Id}/revoke",
             new { reason = "we noticed a session targeting our tenant" });
 
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     [Fact]
-    public async Task Revoke_Should_Return404_When_TenantAdmin_TargetsGrant_OutsideTheirTenant()
+    public async Task Revoke_Should_Return403_When_TenantAdmin_TargetsGrant_OutsideTheirTenant()
     {
         // Arrange — provision a second tenant and create a grant from root into
         // THAT tenant. The first tenant's admin should not be able to see or
@@ -567,9 +559,8 @@ public sealed class ImpersonationTests : IAsyncLifetime
             $"{ImpersonationBasePath}/grants/{grant.Id}/revoke",
             new { reason = "fishing" });
 
-        // Assert — handler returns NotFoundException (404) rather than 403 so
-        // we don't confirm cross-tenant grant existence to outside callers.
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // The management surface is unavailable regardless of whether this grant exists.
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     #endregion
@@ -913,11 +904,13 @@ public sealed class ImpersonationTests : IAsyncLifetime
             if (statusResponse.IsSuccessStatusCode)
             {
                 var content = await statusResponse.Content.ReadAsStringAsync();
-                if (content.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+                using var document = JsonDocument.Parse(content);
+                var state = document.RootElement.GetProperty("status").GetString();
+                if (string.Equals(state, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
-                if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(state, "Failed", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException($"Tenant {tenantId} provisioning failed: {content}");
                 }

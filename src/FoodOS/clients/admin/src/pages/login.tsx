@@ -20,7 +20,6 @@ import { LanguageSwitcher } from "@/i18n/language-switcher";
 import { useT } from "@/i18n/locale-provider";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { env } from "@/env";
 import type { DemoAccount } from "@/pages/login.demo-accounts";
 
 // ────────────────────────────────────────────────────────────────────────
@@ -44,7 +43,7 @@ export function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [tenant, setTenant] = useState(env.defaultTenant);
+  const tenant = "root";
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
@@ -90,7 +89,6 @@ export function LoginPage() {
   const onPickDemo = (account: DemoAccount) => {
     setEmail(account.email);
     setPassword(account.password);
-    setTenant(account.tenant);
     void performLogin({ email: account.email, password: account.password, tenant: account.tenant });
   };
 
@@ -174,13 +172,14 @@ export function LoginPage() {
                   <Input
                     id="tenant"
                     value={tenant}
-                    onChange={(e) => setTenant(e.target.value)}
+                    readOnly
                     autoComplete="organization"
                     placeholder="root"
                     required
                     aria-invalid={error ? true : undefined}
                     className="h-11 text-[14px]"
                   />
+                  <p className="text-xs text-[var(--color-muted-foreground)]">{t("workbench.operatorOnly")}</p>
                 </div>
 
                 {/* Email */}

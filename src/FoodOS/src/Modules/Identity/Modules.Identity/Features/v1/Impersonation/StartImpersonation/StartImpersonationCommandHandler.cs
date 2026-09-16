@@ -10,6 +10,8 @@ using Mediator;
 using Microsoft.Extensions.Logging;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Finbuckle.MultiTenant.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace FSH.Modules.Identity.Features.v1.Impersonation.StartImpersonation;
 
@@ -24,6 +26,8 @@ public sealed class StartImpersonationCommandHandler
     private readonly IImpersonationGrantService _grantService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<StartImpersonationCommandHandler> _logger;
+    private readonly IMultiTenantStore<AppTenantInfo> _tenants;
+    private readonly IOptions<TenantGraceOptions> _grace;
 
     public StartImpersonationCommandHandler(
         IIdentityService identityService,
@@ -33,7 +37,9 @@ public sealed class StartImpersonationCommandHandler
         IRequestContext requestContext,
         IImpersonationGrantService grantService,
         TimeProvider timeProvider,
-        ILogger<StartImpersonationCommandHandler> logger)
+        ILogger<StartImpersonationCommandHandler> logger,
+        IMultiTenantStore<AppTenantInfo> tenants,
+        IOptions<TenantGraceOptions> grace)
     {
         _identityService = identityService;
         _tokenService = tokenService;
@@ -43,6 +49,8 @@ public sealed class StartImpersonationCommandHandler
         _grantService = grantService;
         _timeProvider = timeProvider;
         _logger = logger;
+        _tenants = tenants;
+        _grace = grace;
     }
 
     public async ValueTask<ImpersonationResponse> Handle(
@@ -61,12 +69,10 @@ public sealed class StartImpersonationCommandHandler
             ?? throw new UnauthorizedException("missing tenant context");
         var actorUserName = _currentUser.Name;
 
-        // Cross-tenant impersonation requires the actor to be in the root tenant. Tenant admins
-        // can only impersonate users within their own tenant.
-        if (!string.Equals(actorTenantId, MultitenancyConstants.Root.Id, StringComparison.Ordinal)
-            && !string.Equals(actorTenantId, request.TargetTenantId, StringComparison.Ordinal))
+        // Impersonation is an operator support capability, never a customer role capability.
+        if (!string.Equals(actorTenantId, MultitenancyConstants.Root.Id, StringComparison.Ordinal))
         {
-            throw new ForbiddenException("cross-tenant impersonation is restricted to platform operators");
+            throw new ForbiddenException("impersonation is restricted to platform operators");
         }
 
         // Prevent self-impersonation (pointless, confuses the audit trail). Caller error → explicit 4xx,
@@ -87,6 +93,14 @@ public sealed class StartImpersonationCommandHandler
                 errors: null,
                 System.Net.HttpStatusCode.BadRequest);
         }
+
+        var targetTenant = await _tenants.GetAsync(request.TargetTenantId).ConfigureAwait(false)
+            ?? throw new NotFoundException("target tenant not found");
+        if (!targetTenant.IsActive || (!string.Equals(targetTenant.Id, MultitenancyConstants.Root.Id, StringComparison.Ordinal)
+            && targetTenant.ValidUpto.AddDays(_grace.Value.GraceWindowDays) < _timeProvider.GetUtcNow().UtcDateTime))
+            throw new ForbiddenException("target tenant is unavailable");
+        if (!string.IsNullOrWhiteSpace(targetTenant.ConnectionString))
+            throw new ForbiddenException("cross-database impersonation is not supported");
 
         var targetClaimsResult = await _identityService
             .BuildClaimsForUserAsync(request.TargetUserId, request.TargetTenantId, cancellationToken);

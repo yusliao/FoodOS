@@ -1,4 +1,17 @@
 {
+  "workbench": {
+    "title": "Operator workbench",
+    "description": "Use the tools authorized for your role. Restaurant accounts use the customer portal.",
+    "identity": "Operator employee · root",
+    "operatorOnly": "This workbench is for operator employees only. Restaurant accounts must use the customer portal.",
+    "resolving": "Verifying your session and role permissions…",
+    "permissionsFailed": "Your role permissions could not be verified. Work modules remain unavailable until verification succeeds.",
+    "noReports": "Your role does not include operations reports.",
+    "noModules": "No work modules are available for your current permissions. Contact your administrator if access is needed.",
+    "loadFailed": "Operations data could not be loaded. No statistics are available.",
+    "retry": "Retry",
+    "personal": "My account"
+  },
   "chrome": {
     "skipToMain": "Skip to content",
     "language": "Language",
@@ -18,7 +31,7 @@
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "openProfile": "Open profile menu",
-    "admin": "Admin"
+    "admin": "Operator workbench"
   },
   "languages": {
     "en-US": "English",
@@ -27,17 +40,19 @@
   "nav": {
     "sections": {
       "multitenancy": "Tenants",
-      "identity": "Identity",
+      "identity": "Operator team",
+      "system": "System administration",
       "operations": "Operations"
     },
     "items": {
-      "home": "Overview",
+      "home": "Workbench",
       "settings": "Settings",
-      "tenants": "Tenants",
-      "users": "Users",
+      "tenants": "Customer identity domains",
+      "users": "Employees",
       "roles": "Roles",
       "impersonation": "Impersonation",
-      "billing": "Billing",
+      "billing": "Software subscriptions",
+      "notifications": "Notifications",
       "webhooks": "Webhooks",
       "audits": "Audits",
       "health": "Health"
@@ -59,8 +74,8 @@
     "passwordPlaceholder": "Enter your password",
     "demoSignIn": "Sign in with a demo account",
     "encrypted": "Encrypted in transit · JWT-secured session",
-    "platformAdmin": "Platform Admin",
-    "administration": "Administration",
+    "platformAdmin": "Operator workbench",
+    "administration": "FoodOS operations",
     "checkInboxLead": "Check your",
     "checkInboxAccent": "inbox",
     "remembered": "Remembered it?",

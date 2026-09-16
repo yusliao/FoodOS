@@ -1,6 +1,8 @@
 using FSH.Framework.Shared.Auditing;
 using FSH.Modules.Auditing.Contracts;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 
@@ -202,10 +204,13 @@ public sealed class AuditHttpMiddleware
     }
 
     // Streaming responses (SSE / SignalR SSE) must never be buffered: the audit path buffers Response.Body and flushes
-    // only when the handler returns, but a long-lived stream never returns, so the client would hang. Detect via Accept header and pass through.
+    // only when the handler returns. Trust server endpoint metadata, not an arbitrary caller's Accept header.
     private static bool IsStreamingResponse(HttpContext ctx) =>
-        ctx.Request.Headers.Accept.Any(static v =>
-            v is not null && v.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase));
+        ctx.GetEndpoint()?.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Any(static metadata => metadata.ContentTypes.Contains("text/event-stream", StringComparer.OrdinalIgnoreCase)) == true
+        || (ctx.GetEndpoint()?.Metadata.GetMetadata<HubMetadata>() is not null
+            && ctx.Request.Headers.Accept.Any(static v =>
+                v is not null && v.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase)));
 
     private readonly record struct RequestCaptureContext(object? Preview, int Size, int MaskedFields);
 }

@@ -9,6 +9,9 @@ using Mediator;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Constants;
+using FSH.Framework.Shared.Multitenancy;
 
 namespace FSH.Modules.Identity.Features.v1.Users.SearchUsers;
 
@@ -17,15 +20,18 @@ public sealed class SearchUsersQueryHandler : IQueryHandler<SearchUsersQuery, Pa
     private readonly UserManager<FshUser> _userManager;
     private readonly IdentityDbContext _dbContext;
     private readonly IRequestContext _requestContext;
+    private readonly IMultiTenantContextAccessor<AppTenantInfo> _tenantAccessor;
 
     public SearchUsersQueryHandler(
         UserManager<FshUser> userManager,
         IdentityDbContext dbContext,
-        IRequestContext requestContext)
+        IRequestContext requestContext,
+        IMultiTenantContextAccessor<AppTenantInfo> tenantAccessor)
     {
         _userManager = userManager;
         _dbContext = dbContext;
         _requestContext = requestContext;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async ValueTask<PagedResponse<UserDto>> Handle(SearchUsersQuery query, CancellationToken cancellationToken)
@@ -57,12 +63,11 @@ public sealed class SearchUsersQueryHandler : IQueryHandler<SearchUsersQuery, Pa
 
         if (!string.IsNullOrWhiteSpace(query.RoleId))
         {
-            var userIdsInRole = await _dbContext.UserRoles
-                .Where(ur => ur.RoleId == query.RoleId)
-                .Select(ur => ur.UserId)
-                .ToListAsync(cancellationToken);
-
-            users = users.Where(u => userIdsInRole.Contains(u.Id));
+            var audience = _tenantAccessor.MultiTenantContext.TenantInfo?.Id == MultitenancyConstants.Root.Id
+                ? RoleAudiences.Operator : RoleAudiences.Customer;
+            users = users.Where(user => _dbContext.UserRoles.Any(membership => membership.UserId == user.Id
+                && membership.RoleId == query.RoleId && _dbContext.Roles.Any(role => role.Id == membership.RoleId
+                    && role.Audience == audience)));
         }
 
         // Apply sorting
@@ -107,7 +112,7 @@ public sealed class SearchUsersQueryHandler : IQueryHandler<SearchUsersQuery, Pa
     {
         if (string.IsNullOrWhiteSpace(sort))
         {
-            return query.OrderBy(u => u.FirstName).ThenBy(u => u.LastName);
+            return query.OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ThenBy(u => u.Id);
         }
 
         var sortParts = sort.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -125,7 +130,7 @@ public sealed class SearchUsersQueryHandler : IQueryHandler<SearchUsersQuery, Pa
             orderedQuery = ApplySortExpression(query, orderedQuery, selector, descending);
         }
 
-        return orderedQuery ?? query.OrderBy(u => u.FirstName);
+        return (orderedQuery ?? query.OrderBy(u => u.FirstName)).ThenBy(u => u.Id);
     }
 
     private static (string field, bool descending) ParseSortField(string part)
