@@ -14,7 +14,7 @@ public sealed class LoadDueNotificationHandler(
     public Task HandleAsync(LoadDueIntegrationEvent @event, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
-        DailyCutoffReachedNotificationHandler.EnsureTenant(
+        OperationalNotificationScope.EnsureRootTenant(
             @event.TenantId, tenantAccessor, nameof(LoadDueIntegrationEvent));
         return inbox.FanoutAsync(
             LogisticsPermissions.Shipments.Load,

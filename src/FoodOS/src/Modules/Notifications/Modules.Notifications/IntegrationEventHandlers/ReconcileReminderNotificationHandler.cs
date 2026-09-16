@@ -14,7 +14,7 @@ public sealed class ReconcileReminderNotificationHandler(
     public Task HandleAsync(ReconcileReminderIntegrationEvent @event, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
-        DailyCutoffReachedNotificationHandler.EnsureTenant(
+        OperationalNotificationScope.EnsureRootTenant(
             @event.TenantId, tenantAccessor, nameof(ReconcileReminderIntegrationEvent));
         return inbox.FanoutAsync(
             OrderingPermissions.Orders.Reconcile,

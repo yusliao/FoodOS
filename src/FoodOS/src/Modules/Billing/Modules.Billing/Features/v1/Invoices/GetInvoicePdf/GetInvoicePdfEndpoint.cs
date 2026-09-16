@@ -19,8 +19,7 @@ public static class GetInvoicePdfEndpoint
                 })
             .WithName("GetInvoicePdf")
             .WithSummary("Download an invoice as a PDF")
-            // BillingPermissions.View is basic (granted to tenant users), and the handler scopes to the
-            // caller's tenant — so this single endpoint serves both operators and tenant self-service.
+            // Software billing is operator-only: Billing.View is not a customer-grantable permission.
             .RequirePermission(BillingPermissions.View)
             .Produces(StatusCodes.Status200OK, contentType: "application/pdf")
             .Produces(StatusCodes.Status404NotFound);

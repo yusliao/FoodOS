@@ -14,7 +14,7 @@ public sealed class NearExpiryLotsDetectedNotificationHandler(
     public Task HandleAsync(NearExpiryLotsDetectedIntegrationEvent @event, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
-        DailyCutoffReachedNotificationHandler.EnsureTenant(
+        OperationalNotificationScope.EnsureRootTenant(
             @event.TenantId, tenantAccessor, nameof(NearExpiryLotsDetectedIntegrationEvent));
         return inbox.FanoutAsync(
             InventoryPermissions.Stock.View,

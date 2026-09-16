@@ -14,7 +14,7 @@ public sealed class DailyCutoffReachedNotificationHandler(
     public Task HandleAsync(DailyCutoffReachedIntegrationEvent @event, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
-        EnsureTenant(@event.TenantId, tenantAccessor, nameof(DailyCutoffReachedIntegrationEvent));
+        OperationalNotificationScope.EnsureRootTenant(@event.TenantId, tenantAccessor, nameof(DailyCutoffReachedIntegrationEvent));
         return inbox.FanoutAsync(
             WarehousePermissions.Waves.View,
             "ops.cutoff",
@@ -23,19 +23,7 @@ public sealed class DailyCutoffReachedNotificationHandler(
             $"/ops/waves?cutoff={@event.DailyPlanId:N}",
             @event.Source,
             new { warehouseId = @event.WarehouseId, dailyPlanId = @event.DailyPlanId, businessDate = @event.BusinessDate, wavesGenerated = @event.WavesGenerated },
-            ct);
-    }
-
-    internal static void EnsureTenant(
-        string? eventTenantId,
-        IMultiTenantContextAccessor<AppTenantInfo> tenantAccessor,
-        string eventName)
-    {
-        var ambient = tenantAccessor.MultiTenantContext.TenantInfo?.Id;
-        if (!string.Equals(ambient, eventTenantId, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"Tenant context mismatch handling {eventName}: ambient '{ambient ?? "(none)"}' != event '{eventTenantId ?? "(none)"}'.");
-        }
+            ct,
+            scopePermission: WarehousePermissions.Waves.Assign);
     }
 }

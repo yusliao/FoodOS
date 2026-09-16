@@ -14,10 +14,10 @@ public sealed class PodDueNotificationHandler(
     public Task HandleAsync(PodDueIntegrationEvent @event, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
-        DailyCutoffReachedNotificationHandler.EnsureTenant(
+        OperationalNotificationScope.EnsureRootTenant(
             @event.TenantId, tenantAccessor, nameof(PodDueIntegrationEvent));
         return inbox.FanoutAsync(
-            LogisticsPermissions.ProofOfDelivery.Confirm,
+            LogisticsPermissions.Shipments.View,
             "ops.pod-due",
             "Delivery window started",
             $"{@event.OpenStopCount} stop(s) still need proof of delivery for {@event.BusinessDate:yyyy-MM-dd}.",

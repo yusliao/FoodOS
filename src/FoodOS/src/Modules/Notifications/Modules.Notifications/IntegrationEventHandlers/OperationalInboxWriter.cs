@@ -1,4 +1,6 @@
+using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Shared.Multitenancy;
 using FSH.Framework.Web.Realtime;
 using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Notifications.Data;
@@ -13,7 +15,8 @@ public sealed class OperationalInboxWriter(
     NotificationsDbContext db,
     IHubContext<AppHub> hub,
     IUserService userService,
-    ILogger<OperationalInboxWriter> logger)
+    ILogger<OperationalInboxWriter> logger,
+    IMultiTenantContextAccessor<AppTenantInfo> tenantAccessor)
 {
     public async Task FanoutAsync(
         string permission,
@@ -23,13 +26,18 @@ public sealed class OperationalInboxWriter(
         string link,
         string source,
         object? metadata,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? scopePermission = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(permission);
         ArgumentException.ThrowIfNullOrWhiteSpace(type);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentException.ThrowIfNullOrWhiteSpace(link);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
+
+        // Operational payloads contain shared warehouse/customer data, never a customer inbox projection.
+        OperationalNotificationScope.EnsureRootTenant(
+            MultitenancyConstants.Root.Id, tenantAccessor, nameof(OperationalInboxWriter));
 
         var users = await userService.GetListAsync(cancellationToken).ConfigureAwait(false);
         foreach (var user in users)
@@ -50,6 +58,10 @@ public sealed class OperationalInboxWriter(
             try
             {
                 allowed = await userService.HasPermissionAsync(user.Id, permission, cancellationToken).ConfigureAwait(false);
+                if (allowed && scopePermission is not null)
+                {
+                    allowed = await userService.HasPermissionAsync(user.Id, scopePermission, cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (UnauthorizedException)
             {
