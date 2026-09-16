@@ -21,6 +21,10 @@ public sealed class ChatChannelFileAccessPolicy(ChatDbContext db) : IFileAccessP
     public const string OwnerTypeName = "ChatChannel";
 
     public string OwnerType => OwnerTypeName;
+    public bool AllowsPublicFiles => false;
+
+    public Task<bool> CanChangeVisibilityAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken)
+        => Task.FromResult(false);
 
     public async Task<bool> CanAttachAsync(Guid? ownerId, string currentUserId, CancellationToken cancellationToken)
     {

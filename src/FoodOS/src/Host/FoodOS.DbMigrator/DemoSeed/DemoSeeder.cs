@@ -609,7 +609,8 @@ internal sealed class DemoSeeder
                 description: scenario.Description,
                 priority: scenario.Priority,
                 reporterUserId: scenario.ReporterUserId.Value,
-                assignedToUserId: scenario.AssignedToUserId);
+                assignedToUserId: scenario.AssignedToUserId,
+                customerTenantId: tenant.Id);
 
             foreach (var (authorUserId, body) in scenario.Comments)
             {

@@ -102,6 +102,25 @@ public sealed class TypingIndicatorTests
         received.ShouldBeNull("non-members must not receive typing broadcasts");
     }
 
+    [Fact]
+    public async Task Typing_Should_Not_Reach_RemovedMember_WithExistingConnection()
+    {
+        using var adminClient = await _auth.CreateRootAdminClientAsync();
+        var (peer, peerToken) = await RegisterAndSignInAsync(adminClient, "removed");
+        Guid channelId = await CreateChannelAsync(adminClient, Unique("Removed"));
+        await AddMemberAsync(adminClient, channelId, peer.Id);
+        var adminToken = await _auth.GetRootAdminTokenAsync();
+        await using var adminHub = await ConnectAsync(adminToken.AccessToken);
+        await using var peerHub = await ConnectAsync(peerToken);
+        using var peerInbox = new EventInbox<TypingPayload>(peerHub, "ChatTypingStarted");
+
+        using var remove = await adminClient.DeleteAsync($"{ChatBasePath}/channels/{channelId}/members/{peer.Id}");
+        remove.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await adminHub.InvokeAsync("Typing", channelId);
+        (await peerInbox.WaitForFirstAsync(payload => payload.ChannelId == channelId, TimeSpan.FromSeconds(1)))
+            .ShouldBeNull();
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────
 
     private static string Unique(string prefix) => $"chat-{prefix}-{Guid.NewGuid().ToString("N")[..8]}";

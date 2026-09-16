@@ -46,7 +46,7 @@ public sealed class TicketSearchAndLifecycleTests
     {
         #region Arrange
         using var client = await _auth.CreateRootAdminClientAsync();
-        var assignee = Guid.NewGuid();
+        var assignee = await TicketTestUsers.CreateAssigneeAsync(client);
         var assignedId = await CreateAsync(client, UniqueTitle("AssignedFilter"), assignedToUserId: assignee);
         var otherId = await CreateAsync(client, UniqueTitle("UnassignedFilter"));
         #endregion
@@ -135,7 +135,7 @@ public sealed class TicketSearchAndLifecycleTests
     {
         #region Arrange
         using var client = await _auth.CreateRootAdminClientAsync();
-        var assignee = Guid.NewGuid(); // isolate this batch via a private assignee
+        var assignee = await TicketTestUsers.CreateAssigneeAsync(client); // isolate this batch via a real assignee
         await CreateAsync(client, "MMM-sort-b", assignedToUserId: assignee);
         await CreateAsync(client, "MMM-sort-a", assignedToUserId: assignee);
         await CreateAsync(client, "MMM-sort-c", assignedToUserId: assignee);
@@ -157,7 +157,7 @@ public sealed class TicketSearchAndLifecycleTests
     {
         #region Arrange
         using var client = await _auth.CreateRootAdminClientAsync();
-        var assignee = Guid.NewGuid();
+        var assignee = await TicketTestUsers.CreateAssigneeAsync(client);
         var firstId = await CreateAsync(client, UniqueTitle("NumSortFirst"), assignedToUserId: assignee);
         var secondId = await CreateAsync(client, UniqueTitle("NumSortSecond"), assignedToUserId: assignee);
         #endregion
@@ -183,7 +183,7 @@ public sealed class TicketSearchAndLifecycleTests
     {
         #region Arrange
         using var client = await _auth.CreateRootAdminClientAsync();
-        var assignee = Guid.NewGuid();
+        var assignee = await TicketTestUsers.CreateAssigneeAsync(client);
         for (int i = 0; i < 3; i++)
         {
             await CreateAsync(client, UniqueTitle($"Page{i}"), assignedToUserId: assignee);
@@ -216,7 +216,7 @@ public sealed class TicketSearchAndLifecycleTests
     {
         #region Arrange
         using var client = await _auth.CreateRootAdminClientAsync();
-        var assignee = Guid.NewGuid();
+        var assignee = await TicketTestUsers.CreateAssigneeAsync(client);
         await CreateAsync(client, UniqueTitle("Clamp"), assignedToUserId: assignee);
         #endregion
 

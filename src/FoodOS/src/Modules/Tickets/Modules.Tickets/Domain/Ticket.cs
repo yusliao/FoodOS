@@ -12,11 +12,12 @@ namespace FSH.Modules.Tickets.Domain;
 /// method throws CustomException when called from an illegal state, so
 /// the API surface returns clean 409s for invalid transitions.
 /// </summary>
-public sealed class Ticket : AggregateRoot<Guid>, ISoftDeletable
+public sealed class Ticket : AggregateRoot<Guid>, ISoftDeletable, IGlobalEntity
 {
     private readonly List<TicketComment> _comments = [];
 
     public string Number { get; private set; } = default!;
+    public string CustomerTenantId { get; private set; } = default!;
     public string Title { get; private set; } = default!;
     public string? Description { get; private set; }
     public TicketStatus Status { get; private set; }
@@ -55,10 +56,12 @@ public sealed class Ticket : AggregateRoot<Guid>, ISoftDeletable
         string? description,
         TicketPriority priority,
         Guid reporterUserId,
-        Guid? assignedToUserId)
+        Guid? assignedToUserId,
+        string customerTenantId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(number);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerTenantId);
 
         // A ticket assigned at creation jumps straight to InProgress —
         // there's no point in flicking through Open for a single tick.
@@ -68,6 +71,7 @@ public sealed class Ticket : AggregateRoot<Guid>, ISoftDeletable
         {
             Id = Guid.CreateVersion7(),
             Number = number,
+            CustomerTenantId = customerTenantId,
             Title = title.Trim(),
             Description = description?.Trim(),
             Priority = priority,
@@ -204,7 +208,7 @@ public sealed class Ticket : AggregateRoot<Guid>, ISoftDeletable
                 HttpStatusCode.Conflict);
         }
 
-        var comment = TicketComment.Create(Id, authorUserId, body);
+        var comment = TicketComment.Create(Id, authorUserId, body, CustomerTenantId);
         _comments.Add(comment);
         UpdatedAtUtc = DateTime.UtcNow;
 

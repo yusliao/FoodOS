@@ -40,7 +40,7 @@ public sealed class RemoveReactionCommandHandler(
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        await hub.Clients.Group($"channel:{channel.Id}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatReactionChanged",
                 new { channelId = channel.Id, messageId = message.Id, userId = currentUserId, emoji = cmd.Emoji.Trim(), kind = "removed" },
                 cancellationToken)

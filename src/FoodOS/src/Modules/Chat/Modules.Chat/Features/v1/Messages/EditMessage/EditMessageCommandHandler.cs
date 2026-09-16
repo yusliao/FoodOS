@@ -36,7 +36,7 @@ public sealed class EditMessageCommandHandler(
         message.Edit(cmd.Body, currentUserId); // domain enforces author-only
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        await hub.Clients.Group($"channel:{channel.Id}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessageEdited", message.ToDto(), cancellationToken)
             .ConfigureAwait(false);
         return Unit.Value;

@@ -3,6 +3,7 @@ using Finbuckle.MultiTenant;
 using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Identity.Domain;
+using FSH.Modules.Chat.Contracts.v1.DTOs;
 using FSH.Modules.Notifications.Contracts.v1.DTOs;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
@@ -93,6 +94,45 @@ public sealed class MentionAndNotificationTests
         inbox.ShouldNotContain(n => n.Type == "chat.mention" && n.Link != null && n.Link.StartsWith($"/chat/{channelId}"));
     }
 
+    [Fact]
+    public async Task PrivateChannel_Mention_Should_Not_Notify_NonMember_Or_RemovedMember()
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        var (user, token, _) = await RegisterUserAsync(admin, "outsider");
+        using var outsider = await _auth.CreateAuthenticatedClientAsync(user.Email, user.Password);
+        Guid channelId = await CreateChannelAsync(admin, $"private-{Guid.NewGuid():N}", isPrivate: true);
+        await using var connection = await ConnectAsync(token);
+        using var events = new EventInbox<NotificationPayload>(connection, "NotificationCreated");
+        using var messages = new EventInbox<MessageDto>(connection, "ChatMessageCreated");
+
+        await AssertMentionSuppressedAsync(admin, outsider, channelId, user.UserName);
+        await AddMemberAsync(admin, channelId, user.Id);
+        await connection.InvokeAsync("JoinChannel", channelId);
+        await SendMessageAsync(admin, channelId, "visible while a member");
+        (await messages.WaitForFirstAsync(message => message.ChannelId == channelId, EventTimeout))
+            .ShouldNotBeNull();
+        using var remove = await admin.DeleteAsync($"{ChatBasePath}/channels/{channelId}/members/{user.Id}");
+        remove.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await AssertMentionSuppressedAsync(admin, outsider, channelId, user.UserName);
+        (await messages.WaitForFirstAsync(message => message.ChannelId == channelId, TimeSpan.FromSeconds(1)))
+            .ShouldBeNull("an already-connected removed member must not receive later channel messages");
+
+        var pushed = await events.WaitForFirstAsync(
+            notification => notification.Link == $"/chat/{channelId}", TimeSpan.FromSeconds(1));
+        pushed.ShouldBeNull("non-members must not receive message previews over SignalR");
+    }
+
+    private static async Task AssertMentionSuppressedAsync(
+        HttpClient author, HttpClient outsider, Guid channelId, string userName)
+    {
+        using var response = await author.PostAsJsonAsync($"{ChatBasePath}/channels/{channelId}/messages",
+            new { body = $"@{userName} confidential customer details", attachments = Array.Empty<object>() });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        (await response.DeserializeAsync<MessageDto>()).ChannelId.ShouldBe(channelId);
+        (await ReadInboxAsync(outsider)).ShouldNotContain(notification =>
+            notification.Link != null && notification.Link.StartsWith($"/chat/{channelId}"));
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────
 
     private async Task<HubConnection> ConnectAsync(string accessToken)
@@ -113,13 +153,13 @@ public sealed class MentionAndNotificationTests
         return connection;
     }
 
-    private static async Task<Guid> CreateChannelAsync(HttpClient client, string name)
+    private static async Task<Guid> CreateChannelAsync(HttpClient client, string name, bool isPrivate = false)
     {
         using var response = await client.PostAsJsonAsync($"{ChatBasePath}/channels", new
         {
             name,
             description = (string?)null,
-            isPrivate = false,
+            isPrivate,
         });
         return await response.DeserializeAsync<Guid>();
     }

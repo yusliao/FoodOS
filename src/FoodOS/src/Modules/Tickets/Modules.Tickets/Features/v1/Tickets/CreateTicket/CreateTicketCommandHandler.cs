@@ -9,12 +9,16 @@ using Mediator;
 using FSH.Framework.Persistence;
 using FSH.Modules.Tickets.Features.v1.Internal;
 using Microsoft.EntityFrameworkCore;
+using FSH.Modules.Identity.Contracts.Services;
+using FSH.Modules.Tickets.Contracts.Authorization;
 
 namespace FSH.Modules.Tickets.Features.v1.Tickets.CreateTicket;
 
 public sealed class CreateTicketCommandHandler(
     TicketsDbContext dbContext,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IUserProfileService users,
+    IUserPermissionService permissions)
     : ICommandHandler<CreateTicketCommand, Guid>
 {
     public async ValueTask<Guid> Handle(CreateTicketCommand command, CancellationToken cancellationToken)
@@ -22,6 +26,7 @@ public sealed class CreateTicketCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
 
         var reporterId = currentUser.GetUserId();
+        string tenantId = currentUser.GetTenant() ?? throw new UnauthorizedException("Invalid tenant.");
         if (reporterId == Guid.Empty)
         {
             throw new CustomException(
@@ -30,10 +35,22 @@ public sealed class CreateTicketCommandHandler(
                 HttpStatusCode.Unauthorized);
         }
 
+        if (command.AssignedToUserId is not null)
+        {
+            TicketAccess.RequireOperator(currentUser);
+            if (!await permissions.HasPermissionAsync(reporterId.ToString(), TicketsPermissions.Tickets.Assign, cancellationToken)
+                .ConfigureAwait(false))
+            {
+                throw new ForbiddenException("Assign permission is required to create an assigned ticket.");
+            }
+            await TicketAccess.RequireAssigneeAsync(users, command.AssignedToUserId, cancellationToken).ConfigureAwait(false);
+        }
+
         // Sequential, tenant-scoped ticket numbers (TK-1, …). Count ALL rows incl. soft-deleted so a
         // deleted number isn't reused; racing writers collide on the unique index (→ 409, retryable).
         long count = await dbContext.Tickets
             .IgnoreQueryFilters([QueryFilters.SoftDelete])
+            .Where(ticket => ticket.CustomerTenantId == tenantId)
             .LongCountAsync(cancellationToken)
             .ConfigureAwait(false);
         string number = $"TK-{(count + 1).ToString(CultureInfo.InvariantCulture)}";
@@ -44,7 +61,8 @@ public sealed class CreateTicketCommandHandler(
             description: command.Description,
             priority: command.Priority,
             reporterUserId: reporterId,
-            assignedToUserId: TicketAccess.IsOperator(currentUser) ? command.AssignedToUserId : null);
+            assignedToUserId: command.AssignedToUserId,
+            customerTenantId: tenantId);
 
         dbContext.Tickets.Add(ticket);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

@@ -5,6 +5,7 @@ using FSH.Modules.Chat.Contracts.v1.Commands;
 using FSH.Modules.Chat.Contracts.v1.DTOs;
 using FSH.Modules.Chat.Data;
 using FSH.Modules.Chat.Features.v1.Internal;
+using FSH.Modules.Identity.Contracts.Services;
 using Mediator;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,8 @@ namespace FSH.Modules.Chat.Features.v1.Channels.AddChannelMembers;
 public sealed class AddChannelMembersCommandHandler(
     ChatDbContext db,
     ICurrentUser currentUser,
-    IHubContext<AppHub> hub)
+    IHubContext<AppHub> hub,
+    IUserProfileService users)
     : ICommandHandler<AddChannelMembersCommand, Unit>
 {
     public async ValueTask<Unit> Handle(AddChannelMembersCommand cmd, CancellationToken cancellationToken)
@@ -35,6 +37,8 @@ public sealed class AddChannelMembersCommandHandler(
             throw new ForbiddenException("Only channel admins can add members to private channels.");
         }
 
+        await users.RequireActiveTenantUsersAsync(cmd.UserIds, cancellationToken).ConfigureAwait(false);
+
         var newlyAdded = new List<string>();
         foreach (var uid in cmd.UserIds.Distinct(StringComparer.Ordinal))
         {
@@ -48,9 +52,8 @@ public sealed class AddChannelMembersCommandHandler(
 
         foreach (var uid in newlyAdded)
         {
-            // Notify existing members. The new member isn't in the channel:{id} group yet; they pick
-            // it up on next reconnect (OnConnectedAsync pre-joins all their channels).
-            await hub.Clients.Group($"channel:{channel.Id}")
+            // Use current membership so revoked connections cannot receive later activity.
+            await hub.Clients.CurrentMembers(channel)
                 .SendAsync("ChatChannelMemberAdded", new { channelId = channel.Id, userId = uid }, cancellationToken)
                 .ConfigureAwait(false);
             await hub.Clients.Group($"user:{uid}")

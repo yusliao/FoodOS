@@ -13,9 +13,11 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Number).IsRequired().HasMaxLength(32);
-        // Effectively unique per (TenantId, Number) since Finbuckle adds TenantId; filtered on
-        // IsDeleted so soft-deleted ticket numbers don't conflict with new ones.
-        builder.HasIndex(x => x.Number).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
+        // Keep the physical ownership column and per-customer numbers during the transition.
+        builder.Property(x => x.CustomerTenantId).HasColumnName("TenantId").IsRequired();
+        builder.HasIndex(x => new { x.Number, x.CustomerTenantId }).IsUnique()
+            .HasDatabaseName("IX_Tickets_Number").HasFilter("\"IsDeleted\" = FALSE");
+        builder.HasIndex(x => new { x.CustomerTenantId, x.ReporterUserId });
 
         builder.Property(x => x.Title).IsRequired().HasMaxLength(160);
         builder.Property(x => x.Description).HasMaxLength(4096);

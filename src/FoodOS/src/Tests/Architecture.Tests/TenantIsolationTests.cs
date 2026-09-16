@@ -30,6 +30,24 @@ public sealed class TenantIsolationTests
 {
     private const string FinbuckleAnnotation = "Finbuckle:MultiTenant";
 
+    [Fact]
+    public void SharedTickets_Should_Keep_CustomerOwnership_And_ExplicitAudienceFilters()
+    {
+        var contextType = DiscoverBaseDbContextTypes().Single(type => type.Name == "TicketsDbContext");
+        using var context = ConstructDbContext(contextType);
+        foreach (string name in new[] { "Ticket", "TicketComment" })
+        {
+            var entity = context.Model.GetEntityTypes().Single(type => type.ClrType.Name == name);
+            typeof(IGlobalEntity).IsAssignableFrom(entity.ClrType).ShouldBeTrue();
+            var owner = entity.FindProperty("CustomerTenantId");
+            owner.ShouldNotBeNull();
+            owner.IsNullable.ShouldBeFalse();
+            owner.GetColumnName().ShouldBe("TenantId");
+            entity.GetDeclaredQueryFilters().Count.ShouldBe(2,
+                "shared tickets require both soft-delete and explicit customer audience filters");
+        }
+    }
+
     /// <summary>
     /// Every <see cref="BaseDbContext"/>-derived DbContext in the loaded module
     /// assemblies is instantiated; we assert that every non-owned entity in its

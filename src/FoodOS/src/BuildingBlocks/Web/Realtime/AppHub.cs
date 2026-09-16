@@ -15,8 +15,8 @@ namespace FSH.Framework.Web.Realtime;
 /// <list type="bullet">
 ///   <item><c>user:{userId}</c> — every connection a user has open. Used for cross-channel pushes
 ///   (notifications, channel-added, etc.).</item>
-///   <item><c>channel:{channelId}</c> — every connection of every member of that channel. Used
-///   for chat message broadcasts.</item>
+///   <item><c>channel:{channelId}</c> — legacy channel subscription groups. These may contain
+///   revoked members; sensitive broadcasts must resolve current members and target user groups.</item>
 /// </list>
 /// </summary>
 [Authorize]
@@ -177,7 +177,10 @@ public sealed class AppHub : Hub
                 Context.ConnectionAborted)
             .ConfigureAwait(false);
 
-        await Clients.OthersInGroup($"channel:{channelId}")
+        var recipients = await _membership.ListMemberUserIdsAsync(channelId, Context.ConnectionAborted)
+            .ConfigureAwait(false);
+        await Clients.Groups(recipients.Where(id => !string.Equals(id, userId, StringComparison.Ordinal))
+                .Select(id => $"user:{id}").ToArray())
             .SendAsync("ChatTypingStarted", new { channelId, userId }, Context.ConnectionAborted)
             .ConfigureAwait(false);
     }

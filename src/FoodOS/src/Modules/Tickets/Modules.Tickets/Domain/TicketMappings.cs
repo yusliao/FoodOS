@@ -20,7 +20,8 @@ internal static class TicketMappings
         t.ClosedAtUtc,
         commentCount,
         t.DeletedOnUtc,
-        t.DeletedBy);
+        t.DeletedBy,
+        t.CustomerTenantId);
 
     public static TicketCommentDto ToDto(this TicketComment c) => new(
         c.Id, c.TicketId, c.AuthorUserId, c.Body, c.CreatedAtUtc);

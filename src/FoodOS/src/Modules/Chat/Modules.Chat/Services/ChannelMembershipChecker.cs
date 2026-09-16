@@ -10,6 +10,12 @@ namespace FSH.Modules.Chat.Services;
 /// </summary>
 public sealed class ChannelMembershipChecker(ChatDbContext db) : IChannelMembershipChecker
 {
+    public async ValueTask<IReadOnlyList<string>> ListMemberUserIdsAsync(
+        Guid channelId, CancellationToken cancellationToken = default)
+        => await db.Channels.AsNoTracking().Where(channel => channel.Id == channelId)
+            .SelectMany(channel => channel.Members.Select(member => member.UserId))
+            .Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+
     public async ValueTask<bool> IsMemberAsync(Guid channelId, string userId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(userId)) return false;

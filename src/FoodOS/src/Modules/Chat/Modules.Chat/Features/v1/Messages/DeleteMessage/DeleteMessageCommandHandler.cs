@@ -51,7 +51,7 @@ public sealed class DeleteMessageCommandHandler(
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        await hub.Clients.Group($"channel:{channel.Id}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessageDeleted", new { channelId = channel.Id, messageId = message.Id }, cancellationToken)
             .ConfigureAwait(false);
         return Unit.Value;

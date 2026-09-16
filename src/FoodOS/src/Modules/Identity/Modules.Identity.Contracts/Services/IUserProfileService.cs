@@ -18,6 +18,9 @@ public interface IUserProfileService
     /// </summary>
     Task<List<UserDto>> GetListAsync(CancellationToken cancellationToken);
 
+    /// <summary>Returns only requested active user IDs in the current identity tenant.</summary>
+    Task<IReadOnlyList<string>> GetActiveUserIdsAsync(IReadOnlyCollection<string> userIds, CancellationToken cancellationToken);
+
     /// <summary>
     /// Gets the total user count.
     /// </summary>

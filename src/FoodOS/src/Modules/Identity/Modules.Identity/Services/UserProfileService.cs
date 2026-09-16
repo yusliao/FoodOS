@@ -54,6 +54,21 @@ internal sealed class UserProfileService(
     public Task<int> GetCountAsync(CancellationToken cancellationToken) =>
         userManager.Users.AsNoTracking().CountAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<string>> GetActiveUserIdsAsync(
+        IReadOnlyCollection<string> userIds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(userIds);
+        if (userIds.Count == 0 || multiTenantContextAccessor.MultiTenantContext.TenantInfo is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        return await userManager.Users.AsNoTracking()
+            .Where(user => user.IsActive && userIds.Contains(user.Id))
+            .Select(user => user.Id)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<List<UserDto>> GetListAsync(CancellationToken cancellationToken)
     {
         var users = await userManager.Users.AsNoTracking().ToListAsync(cancellationToken);

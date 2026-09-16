@@ -4,7 +4,12 @@ using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Shared.Constants;
 using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Identity.Domain;
+using FSH.Modules.Files.Contracts.v1.DTOs;
+using FSH.Modules.Multitenancy.Contracts.Dtos;
 using Microsoft.AspNetCore.Identity;
+using FSH.Modules.Tickets.Contracts.Authorization;
+using SupportTicketDto = FSH.Modules.Tickets.Contracts.Dtos.TicketDto;
+using SupportCommentDto = FSH.Modules.Tickets.Contracts.Dtos.TicketCommentDto;
 
 namespace Integration.Tests.Tests.Tickets;
 
@@ -12,8 +17,8 @@ namespace Integration.Tests.Tests.Tickets;
 /// Cross-TENANT isolation for the tickets module. Proves a ticket created in
 /// tenant A (root) is invisible to tenant B: B cannot fetch it, list it, or
 /// mutate it (assign). Reads return 404; operator-only assignment returns 403.
-/// The TicketsDbContext gets tenant isolation via BaseDbContext's auto-apply,
-/// so these assert intended behavior. Intra-tenant lifecycle / state-machine
+/// TicketsDbContext restricts customers by explicit ownership while permitting operator support.
+/// Intra-tenant lifecycle / state-machine
 /// coverage lives in <see cref="TicketsEndpointTests"/>.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
@@ -131,8 +136,8 @@ public sealed class TicketTenantIsolationTests
             priority = "Medium",
             assignedToUserId = memberId,
         });
-        create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
-        Guid ticketId = await create.DeserializeAsync<Guid>();
+        create.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        Guid ticketId = await CreateTicketAsync(tenantAdmin, $"Private participant ticket {suffix}");
 
         using var adminDetail = await tenantAdmin.GetAsync($"{TestConstants.TicketsBasePath}/tickets/{ticketId}");
         var ownTicket = await adminDetail.DeserializeAsync<TicketDto>();
@@ -150,9 +155,147 @@ public sealed class TicketTenantIsolationTests
         foreignList.StatusCode.ShouldBe(HttpStatusCode.OK, await foreignList.Content.ReadAsStringAsync());
         (await foreignList.DeserializeAsync<PagedResult<TicketDto>>()).Items.ShouldNotContain(
             ticket => ticket.Id == ticketId);
+
+        object Attachment(int visibility) => new
+        {
+            ownerType = "Ticket", ownerId = ticketId, fileName = "evidence.png",
+            contentType = "image/png", sizeBytes = 128, visibility, category = "Image",
+        };
+
+        using var publicUpload = await tenantAdmin.PostAsJsonAsync("/api/v1/files/upload-url", Attachment(0));
+        publicUpload.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var upload = await tenantAdmin.PostAsJsonAsync("/api/v1/files/upload-url", Attachment(1));
+        upload.StatusCode.ShouldBe(HttpStatusCode.OK, await upload.Content.ReadAsStringAsync());
+        Guid fileId = (await upload.DeserializeAsync<PresignedUploadResponse>()).FileAssetId;
+        using var ownDownload = await tenantAdmin.GetAsync($"/api/v1/files/{fileId}/url");
+        ownDownload.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var foreignUpload = await member.PostAsJsonAsync("/api/v1/files/upload-url", Attachment(1));
+        foreignUpload.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var foreignMetadata = await member.GetAsync($"/api/v1/files/{fileId}");
+        foreignMetadata.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var foreignDownload = await member.GetAsync($"/api/v1/files/{fileId}/url");
+        foreignDownload.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var foreignDelete = await member.DeleteAsync($"/api/v1/files/{fileId}");
+        foreignDelete.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var publish = await tenantAdmin.PatchAsJsonAsync(
+            $"/api/v1/files/{fileId}/visibility", new { visibility = 0 });
+        publish.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var deleteTicket = await tenantAdmin.DeleteAsync($"{TestConstants.TicketsBasePath}/tickets/{ticketId}");
+        deleteTicket.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var deletedTicketDownload = await tenantAdmin.GetAsync($"/api/v1/files/{fileId}/url");
+        deletedTicketDownload.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
-    private async Task<Guid> CreateActiveBasicUserAsync(string tenantId, string email, string userName)
+    [Fact]
+    public async Task OperatorSupport_Should_Collaborate_WithCustomers_Without_Exposing_OtherCustomersTickets()
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string tenantA = $"support-a-{suffix}";
+        string tenantB = $"support-b-{suffix}";
+        using var customerA = await ProvisionTenantClientAsync(admin, tenantA);
+        using var customerB = await ProvisionTenantClientAsync(admin, tenantB);
+        Guid ticketA = await CreateTicketAsync(customerA, $"Support-A-{suffix}");
+        Guid ticketB = await CreateTicketAsync(customerB, $"Support-B-{suffix}");
+
+        string email = $"support-{suffix}@test.com";
+        Guid staffId = await CreateActiveBasicUserAsync("root", email, $"support-{suffix}", assignBasic: false);
+        using var unprivileged = await _auth.CreateAuthenticatedClientAsync(email, TestConstants.DefaultPassword);
+        using var denied = await unprivileged.GetAsync($"/api/v1/tickets/{ticketA}");
+        denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        using var roleResponse = await admin.PostAsJsonAsync($"{TestConstants.IdentityBasePath}/roles", new
+        {
+            id = string.Empty, name = $"Support-{suffix}", description = "Customer support test role",
+        });
+        roleResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var role = await roleResponse.DeserializeAsync<RoleDto>();
+        using var permissions = await admin.PutAsJsonAsync($"{TestConstants.IdentityBasePath}/{role.Id}/permissions", new
+        {
+            roleId = role.Id,
+            permissions = new[] { TicketsPermissions.Tickets.View, TicketsPermissions.Tickets.Comment,
+                TicketsPermissions.Tickets.Create, TicketsPermissions.Tickets.Resolve },
+        });
+        permissions.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var assignRole = await admin.PostAsJsonAsync($"{TestConstants.IdentityBasePath}/users/{staffId}/roles", new
+        {
+            userId = staffId.ToString(), userRoles = new[] { new { roleName = role.Name, enabled = true } },
+        });
+        assignRole.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var support = await _auth.CreateAuthenticatedClientAsync(email, TestConstants.DefaultPassword);
+        using var list = await support.GetAsync($"/api/v1/tickets?search={suffix}&pageSize=200");
+        list.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var tickets = (await list.DeserializeAsync<PagedResult<SupportTicketDto>>()).Items;
+        tickets.Single(ticket => ticket.Id == ticketA).CustomerTenantId.ShouldBe(tenantA);
+        tickets.Single(ticket => ticket.Id == ticketB).CustomerTenantId.ShouldBe(tenantB);
+        tickets.Single(ticket => ticket.Id == ticketA).Number.ShouldBe("TK-1");
+        tickets.Single(ticket => ticket.Id == ticketB).Number.ShouldBe("TK-1");
+
+        using var createWithoutAssign = await support.PostAsJsonAsync("/api/v1/tickets", new
+        {
+            title = "Create must not bypass assignment permission", priority = "Medium", assignedToUserId = staffId,
+        });
+        createWithoutAssign.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var grantAssign = await admin.PutAsJsonAsync($"{TestConstants.IdentityBasePath}/{role.Id}/permissions", new
+        {
+            roleId = role.Id,
+            permissions = new[] { TicketsPermissions.Tickets.View, TicketsPermissions.Tickets.Comment,
+                TicketsPermissions.Tickets.Assign, TicketsPermissions.Tickets.Resolve, TicketsPermissions.Tickets.Create },
+        });
+        grantAssign.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var profileB = await customerB.GetAsync($"{TestConstants.IdentityBasePath}/profile");
+        string userB = (await profileB.DeserializeAsync<UserDto>()).Id;
+        using var invalidCreate = await admin.PostAsJsonAsync("/api/v1/tickets", new
+        {
+            title = "Cannot assign customer as operator", priority = "Medium", assignedToUserId = userB,
+        });
+        invalidCreate.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var foreignAssign = await support.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/assign", new { assigneeUserId = userB });
+        foreignAssign.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var assign = await support.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/assign", new { assigneeUserId = staffId });
+        assign.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var reply = await support.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/comments", new { body = "Operator response for A only" });
+        reply.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var customerReply = await customerA.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/comments", new { body = "Restaurant A confirmation" });
+        customerReply.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var comments = await customerA.GetAsync($"/api/v1/tickets/{ticketA}/comments");
+        comments.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var visibleComments = await comments.DeserializeAsync<IReadOnlyList<SupportCommentDto>>();
+        visibleComments.Count.ShouldBe(2);
+        visibleComments.ShouldContain(comment => comment.AuthorUserId == staffId);
+
+        foreach (var attempt in new[] { (customerB, ticketA), (customerA, ticketB) })
+        {
+            using var detail = await attempt.Item1.GetAsync($"/api/v1/tickets/{attempt.Item2}");
+            detail.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            using var readComments = await attempt.Item1.GetAsync($"/api/v1/tickets/{attempt.Item2}/comments");
+            readComments.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            using var writeComment = await attempt.Item1.PostAsJsonAsync($"/api/v1/tickets/{attempt.Item2}/comments", new { body = "Intrusion" });
+            writeComment.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            using var delete = await attempt.Item1.DeleteAsync($"/api/v1/tickets/{attempt.Item2}");
+            delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+
+        using var customerResolve = await customerA.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/resolve", new { resolutionNote = "Cannot self-resolve" });
+        customerResolve.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var resolve = await support.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/resolve", new { resolutionNote = "Replaced missing delivery" });
+        resolve.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var close = await customerA.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/close", new { });
+        close.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var closed = await support.GetAsync($"/api/v1/tickets/{ticketA}");
+        (await closed.DeserializeAsync<TicketDto>()).Status.ShouldBe("Closed");
+        using var deleteOwn = await customerA.DeleteAsync($"/api/v1/tickets/{ticketA}");
+        deleteOwn.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var foreignRestore = await customerB.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/restore", new { });
+        foreignRestore.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var restore = await admin.PostAsJsonAsync($"/api/v1/tickets/{ticketA}/restore", new { });
+        restore.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var restored = await customerA.GetAsync($"/api/v1/tickets/{ticketA}");
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task<Guid> CreateActiveBasicUserAsync(string tenantId, string email, string userName, bool assignBasic = true)
     {
         using var scope = _factory.Services.CreateScope();
         var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
@@ -171,8 +314,11 @@ public sealed class TicketTenantIsolationTests
         };
         var created = await userManager.CreateAsync(user, TestConstants.DefaultPassword);
         created.Succeeded.ShouldBeTrue(string.Join(", ", created.Errors.Select(error => error.Description)));
-        var assigned = await userManager.AddToRoleAsync(user, RoleConstants.Basic);
-        assigned.Succeeded.ShouldBeTrue(string.Join(", ", assigned.Errors.Select(error => error.Description)));
+        if (assignBasic)
+        {
+            var assigned = await userManager.AddToRoleAsync(user, RoleConstants.Basic);
+            assigned.Succeeded.ShouldBeTrue(string.Join(", ", assigned.Errors.Select(error => error.Description)));
+        }
         return Guid.Parse(user.Id);
     }
 
@@ -244,12 +390,13 @@ public sealed class TicketTenantIsolationTests
             if (statusResponse.IsSuccessStatusCode)
             {
                 var content = await statusResponse.Content.ReadAsStringAsync();
-                if (content.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+                var status = (await statusResponse.DeserializeAsync<TenantProvisioningStatusDto>()).Status;
+                if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
 
-                if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException(
                         $"Tenant {tenantId} provisioning failed: {content}");

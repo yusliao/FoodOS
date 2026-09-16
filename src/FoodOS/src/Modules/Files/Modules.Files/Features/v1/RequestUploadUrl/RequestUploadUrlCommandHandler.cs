@@ -62,6 +62,10 @@ public sealed class RequestUploadUrlCommandHandler(
         // Authorization: policy must exist and allow the attach.
         var policy = policies.Resolve(cmd.OwnerType)
             ?? throw new ForbiddenException($"No file access policy registered for owner type '{cmd.OwnerType}'.");
+        if (cmd.Visibility == Visibility.Public && !policy.AllowsPublicFiles)
+        {
+            throw new ForbiddenException("This owner only permits private attachments.");
+        }
         if (!await policy.CanAttachAsync(cmd.OwnerId, userId.ToString(), cancellationToken).ConfigureAwait(false))
         {
             throw new ForbiddenException("Not allowed to attach files to this owner.");

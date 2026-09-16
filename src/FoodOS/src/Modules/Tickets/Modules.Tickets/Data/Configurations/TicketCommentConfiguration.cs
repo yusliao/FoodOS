@@ -11,6 +11,7 @@ public sealed class TicketCommentConfiguration : IEntityTypeConfiguration<Ticket
         ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("TicketComments");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.CustomerTenantId).HasColumnName("TenantId").IsRequired();
 
         // Id is app-assigned (Guid.CreateVersion7) and comments attach only via the Ticket aggregate's nav
         // collection. Without ValueGeneratedNever, EF tracks the populated Guid as Modified → UPDATE-0-rows.

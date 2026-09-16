@@ -8,6 +8,8 @@ namespace FSH.Framework.Web.Realtime;
 public interface IChannelMembershipChecker
 {
     ValueTask<bool> IsMemberAsync(Guid channelId, string userId, CancellationToken cancellationToken = default);
+
+    ValueTask<IReadOnlyList<string>> ListMemberUserIdsAsync(Guid channelId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -43,7 +43,7 @@ public sealed class TicketsEndpointTests
         // Tickets created with an assignee skip the Open state (an owner is already driving it).
         // The aggregate's Create() encodes this rule.
         using var client = await _auth.CreateRootAdminClientAsync();
-        var assigneeId = Guid.NewGuid();
+        var assigneeId = await TicketTestUsers.CreateAssigneeAsync(client);
 
         var createResponse = await client.PostAsJsonAsync($"{TestConstants.TicketsBasePath}/tickets", new
         {
@@ -87,7 +87,7 @@ public sealed class TicketsEndpointTests
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var ticketId = await CreateAsync(client, UniqueTitle("ToBeAssigned"));
-        var assigneeId = Guid.NewGuid();
+        var assigneeId = await TicketTestUsers.CreateAssigneeAsync(client);
 
         var assignResponse = await client.PostAsJsonAsync(
             $"{TestConstants.TicketsBasePath}/tickets/{ticketId}/assign",
@@ -104,7 +104,7 @@ public sealed class TicketsEndpointTests
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var ticketId = await CreateAsync(client, UniqueTitle("Unassign"));
-        await AssignAsync(client, ticketId, Guid.NewGuid());
+        await AssignAsync(client, ticketId, await TicketTestUsers.CreateAssigneeAsync(client));
 
         var unassignResponse = await client.PostAsJsonAsync(
             $"{TestConstants.TicketsBasePath}/tickets/{ticketId}/assign",
@@ -135,7 +135,7 @@ public sealed class TicketsEndpointTests
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var ticketId = await CreateAsync(client, UniqueTitle("Reopen"));
-        await AssignAsync(client, ticketId, Guid.NewGuid());
+        await AssignAsync(client, ticketId, await TicketTestUsers.CreateAssigneeAsync(client));
         await ResolveAsync(client, ticketId, "shipped fix");
 
         var reopenResponse = await client.PostAsync(

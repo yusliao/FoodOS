@@ -27,6 +27,25 @@ public sealed class ChatChannelFileAccessTests
     }
 
     [Fact]
+    public async Task ChatAttachment_Should_Reject_PublicUpload_And_VisibilityChange()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        Guid channelId = await CreateChannelAsync(client, Unique("PrivateOnly"));
+        object Upload(int visibility) => new
+        {
+            ownerType = "ChatChannel", ownerId = channelId, fileName = "note.txt",
+            contentType = "text/plain", sizeBytes = 32, visibility, category = "Document",
+        };
+        using var publicUpload = await client.PostAsJsonAsync($"{FilesBasePath}/upload-url", Upload(0));
+        publicUpload.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var upload = await client.PostAsJsonAsync($"{FilesBasePath}/upload-url", Upload(1));
+        upload.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var file = await upload.DeserializeAsync<FSH.Modules.Files.Contracts.v1.DTOs.PresignedUploadResponse>();
+        using var publish = await client.PatchAsJsonAsync($"{FilesBasePath}/{file.FileAssetId}/visibility", new { visibility = 0 });
+        publish.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task RequestUploadUrl_For_ChatChannel_Should_Succeed_For_Member()
     {
         using var client = await _auth.CreateRootAdminClientAsync();

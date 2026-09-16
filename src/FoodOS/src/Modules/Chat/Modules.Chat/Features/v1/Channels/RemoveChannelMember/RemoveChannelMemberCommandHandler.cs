@@ -42,7 +42,7 @@ public sealed class RemoveChannelMemberCommandHandler(
         channel.RemoveMember(cmd.UserId, currentUserId);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        await hub.Clients.Group($"channel:{channel.Id}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatChannelMemberRemoved", new { channelId = channel.Id, userId = cmd.UserId }, cancellationToken)
             .ConfigureAwait(false);
         await hub.Clients.Group($"user:{cmd.UserId}")

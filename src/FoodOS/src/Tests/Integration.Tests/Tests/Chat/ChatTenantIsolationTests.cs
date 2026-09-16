@@ -1,4 +1,5 @@
 using FSH.Modules.Chat.Contracts.v1.DTOs;
+using FSH.Modules.Multitenancy.Contracts.Dtos;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
@@ -188,6 +189,37 @@ public sealed class ChatTenantIsolationTests
         #endregion
     }
 
+    [Fact]
+    public async Task Participants_Should_Reject_CrossTenantInvites_AndDirectMessages_InBothDirections()
+    {
+        using var root = await _auth.CreateRootAdminClientAsync();
+        using var customer = await CreateProvisionedTenantAdminClientAsync();
+        string rootUserId = await GetCurrentUserIdAsync(root);
+        string customerUserId = await GetCurrentUserIdAsync(customer);
+        Guid rootChannel = await CreateChannelAsync(root, $"operator-{Unique()}", isPrivate: true);
+        Guid customerChannel = await CreateChannelAsync(customer, $"customer-{Unique()}", isPrivate: true);
+
+        await AssertCannotInviteAsync(root, rootChannel, rootUserId, customerUserId);
+        await AssertCannotInviteAsync(customer, customerChannel, customerUserId, rootUserId);
+    }
+
+    private static async Task AssertCannotInviteAsync(
+        HttpClient client, Guid channelId, string ownUserId, string foreignUserId)
+    {
+        foreach (string targetId in new[] { foreignUserId, Guid.NewGuid().ToString() })
+        {
+            using var invite = await client.PostAsJsonAsync($"{ChatBasePath}/channels/{channelId}/members",
+                new { userIds = new[] { ownUserId, targetId } });
+            invite.StatusCode.ShouldBe(HttpStatusCode.NotFound, await invite.Content.ReadAsStringAsync());
+            using var dm = await client.PostAsJsonAsync($"{ChatBasePath}/dms", new { userIds = new[] { targetId } });
+            dm.StatusCode.ShouldBe(HttpStatusCode.NotFound, await dm.Content.ReadAsStringAsync());
+        }
+
+        using var detail = await client.GetAsync($"{ChatBasePath}/channels/{channelId}");
+        detail.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await detail.DeserializeAsync<ChannelDto>()).Members.ShouldHaveSingleItem().UserId.ShouldBe(ownUserId);
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────
 
     private static string Unique() => Guid.NewGuid().ToString("N")[..8];
@@ -278,12 +310,13 @@ public sealed class ChatTenantIsolationTests
             if (statusResponse.IsSuccessStatusCode)
             {
                 var content = await statusResponse.Content.ReadAsStringAsync();
-                if (content.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+                var status = (await statusResponse.DeserializeAsync<TenantProvisioningStatusDto>()).Status;
+                if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
 
-                if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException(
                         $"Tenant {tenantId} provisioning failed: {content}");

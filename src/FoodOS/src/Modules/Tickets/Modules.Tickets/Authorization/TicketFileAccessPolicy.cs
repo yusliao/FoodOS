@@ -14,6 +14,7 @@ public sealed class TicketFileAccessPolicy(
     IUserPermissionService permissions) : IFileAccessPolicy
 {
     public string OwnerType => "Ticket";
+    public bool AllowsPublicFiles => false;
 
     public Task<bool> CanAttachAsync(Guid? ownerId, string currentUserId, CancellationToken cancellationToken)
         => CanAccessTicketAsync(ownerId, currentUserId, cancellationToken);

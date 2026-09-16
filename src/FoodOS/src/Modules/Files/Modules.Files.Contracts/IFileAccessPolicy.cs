@@ -14,6 +14,9 @@ public interface IFileAccessPolicy
     /// <summary>The OwnerType this policy handles. Must be unique across registered policies.</summary>
     string OwnerType { get; }
 
+    /// <summary>Whether new attachments may expose a durable public URL.</summary>
+    bool AllowsPublicFiles => true;
+
     Task<bool> CanAttachAsync(Guid? ownerId, string currentUserId, CancellationToken cancellationToken);
 
     Task<bool> CanReadAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken);

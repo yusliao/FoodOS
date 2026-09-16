@@ -2,6 +2,7 @@ using FSH.Modules.Inventory.Contracts.Dtos;
 using FSH.Modules.Logistics.Data;
 using FSH.Modules.Logistics.Domain;
 using FSH.Modules.Ordering.Contracts.Dtos;
+using FSH.Modules.Multitenancy.Contracts.Dtos;
 using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Shared.Multitenancy;
 using Integration.Tests.Infrastructure;
@@ -116,7 +117,40 @@ public sealed class CustomerShopIsolationTests
         using var foreignOrder = await clientB.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
         foreignOrder.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignOrder.Content.ReadAsStringAsync());
 
-        Guid otherOrderId = Guid.CreateVersion7();
+        using var cartB = await clientB.PutAsJsonAsync(
+            $"{TestConstants.ShopBasePath}/stores/{storeB}/cart",
+            new { lines = new[] { new { productId, quantity = 4m } } });
+        cartB.StatusCode.ShouldBe(HttpStatusCode.OK, await cartB.Content.ReadAsStringAsync());
+        using var placeB = await clientB.PostAsJsonAsync(
+            $"{TestConstants.ShopBasePath}/orders", new { storeId = storeB });
+        placeB.StatusCode.ShouldBe(HttpStatusCode.OK, await placeB.Content.ReadAsStringAsync());
+        Guid otherOrderId = await placeB.DeserializeAsync<Guid>();
+        otherOrderId.ShouldNotBe(orderId);
+        using var ownOrderB = await clientB.GetAsync($"{TestConstants.ShopBasePath}/orders/{otherOrderId}");
+        ownOrderB.StatusCode.ShouldBe(HttpStatusCode.OK, await ownOrderB.Content.ReadAsStringAsync());
+        var orderB = await ownOrderB.DeserializeAsync<ShopOrderDto>();
+        orderB.StoreId.ShouldBe(storeB);
+        orderB.Lines.Single().UnitPrice.ShouldBe(9.5m);
+        orderB.Lines.Single().OrderedQty.ShouldBe(4m);
+
+        await AssertCannotAccessOtherCustomerAsync(clientA, storeB, orderB, productId);
+        await AssertCannotAccessOtherCustomerAsync(clientB, storeA, order, productId);
+        await AssertOwnOrderListAsync(clientA, orderId, otherOrderId);
+        await AssertOwnOrderListAsync(clientB, otherOrderId, orderId);
+
+        using var operatorOrders = await rootClient.GetAsync(
+            $"{TestConstants.OrderingBasePath}/orders?pageNumber=1&pageSize=200");
+        operatorOrders.StatusCode.ShouldBe(HttpStatusCode.OK, await operatorOrders.Content.ReadAsStringAsync());
+        var allOrders = (await operatorOrders.DeserializeAsync<PagedResult<SalesOrderDto>>()).Items;
+        var operatorA = allOrders.Single(item => item.Id == orderId);
+        var operatorB = allOrders.Single(item => item.Id == otherOrderId);
+        operatorA.CustomerTenantId.ShouldBe(tenantA.ToUpperInvariant());
+        operatorB.CustomerTenantId.ShouldBe(tenantB.ToUpperInvariant());
+        operatorA.Lines.Single().OrderedQty.ShouldBe(3m);
+        operatorB.Lines.Single().OrderedQty.ShouldBe(4m);
+        operatorA.Status.ShouldBe(order.Status);
+        operatorB.Status.ShouldBe(orderB.Status);
+
         Guid shipmentId = await SeedMixedShipmentAsync(
             warehouse.Id,
             storeA,
@@ -164,6 +198,47 @@ public sealed class CustomerShopIsolationTests
 
         using var operatorOrder = await rootClient.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
         operatorOrder.StatusCode.ShouldBe(HttpStatusCode.OK, await operatorOrder.Content.ReadAsStringAsync());
+    }
+
+    private static async Task AssertOwnOrderListAsync(HttpClient client, Guid ownId, Guid foreignId)
+    {
+        using var response = await client.GetAsync($"{TestConstants.ShopBasePath}/orders?pageNumber=1&pageSize=20");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var orders = (await response.DeserializeAsync<PagedResult<ShopOrderDto>>()).Items;
+        orders.ShouldHaveSingleItem().Id.ShouldBe(ownId);
+        orders.ShouldNotContain(order => order.Id == foreignId);
+    }
+
+    private static async Task AssertCannotAccessOtherCustomerAsync(
+        HttpClient client, Guid foreignStoreId, ShopOrderDto foreignOrder, Guid productId)
+    {
+        foreach (string path in new[]
+        {
+            $"/stores/{foreignStoreId}", $"/stores/{foreignStoreId}/cart",
+            $"/orders/{foreignOrder.Id}", $"/orders?storeId={foreignStoreId}&pageNumber=1&pageSize=20",
+        })
+        {
+            using var response = await client.GetAsync($"{TestConstants.ShopBasePath}{path}");
+            response.StatusCode.ShouldBe(HttpStatusCode.NotFound, path);
+        }
+
+        using var cart = await client.PutAsJsonAsync($"{TestConstants.ShopBasePath}/stores/{foreignStoreId}/cart",
+            new { lines = new[] { new { productId, quantity = 1m } } });
+        cart.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var place = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/orders",
+            new { storeId = foreignStoreId });
+        place.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var amend = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/orders/{foreignOrder.Id}/amend",
+            new { lines = new[] { new { productId, quantity = 1m } } });
+        amend.StatusCode.ShouldBe(HttpStatusCode.NotFound, await amend.Content.ReadAsStringAsync());
+        using var cancel = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/orders/{foreignOrder.Id}/cancel", new { });
+        cancel.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var afterSales = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/after-sales", new
+        {
+            orderId = foreignOrder.Id, orderLineId = foreignOrder.Lines.Single().Id,
+            type = "Shortage", quantity = 1m, reason = "Cross-customer attempt",
+        });
+        afterSales.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     private async Task<HttpClient> CreateDashboardClientAsync(string email, string tenantId)
@@ -215,11 +290,14 @@ public sealed class CustomerShopIsolationTests
         {
             using var response = await client.GetAsync($"{TestConstants.TenantsBasePath}/{tenantId}/provisioning");
             string content = await response.Content.ReadAsStringAsync();
-            if (response.IsSuccessStatusCode && content.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+            var status = response.IsSuccessStatusCode
+                ? (await response.DeserializeAsync<TenantProvisioningStatusDto>()).Status
+                : null;
+            if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
-            if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Tenant {tenantId} provisioning failed: {content}");
             }

@@ -35,7 +35,7 @@ public sealed class PinMessageCommandHandler(
         message.Pin(currentUserId);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        await hub.Clients.Group($"channel:{channel.Id}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessagePinned", message.ToDto(), cancellationToken)
             .ConfigureAwait(false);
         return Unit.Value;

@@ -35,7 +35,7 @@ public sealed class UnpinMessageCommandHandler(
         message.Unpin(currentUserId);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        await hub.Clients.Group($"channel:{channel.Id}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessageUnpinned", message.ToDto(), cancellationToken)
             .ConfigureAwait(false);
         return Unit.Value;

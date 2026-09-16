@@ -5,6 +5,7 @@ using FSH.Modules.Identity.Domain;
 using FSH.Modules.Inventory.Contracts.Dtos;
 using FSH.Modules.Inventory.Data;
 using FSH.Modules.Inventory.Domain;
+using FSH.Modules.Multitenancy.Contracts.Dtos;
 using FSH.Modules.Procurement.Contracts.Authorization;
 using FSH.Modules.Procurement.Contracts.Dtos;
 using Integration.Tests.Infrastructure;
@@ -79,6 +80,12 @@ public sealed class ProcurementInboundTests
             QcBody("LOT-FAIL", 5m));
         purchaserPass.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await purchaserPass.Content.ReadAsStringAsync());
 
+        using var purchaserFail = await purchaser.PostAsJsonAsync(
+            QcUrl(failPo.Id, failLineId, pass: false), QcBody("LOT-FAIL", 5m));
+        purchaserFail.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        await AssertProcurementWritesForbiddenAsync(inspector, supplierId, warehouse.Id, failProductId, failPo.Id);
+
         using var failQc = await inspector.PostAsJsonAsync(
             QcUrl(failPo.Id, failLineId, pass: false),
             QcBody("LOT-FAIL", 5m));
@@ -138,6 +145,80 @@ public sealed class ProcurementInboundTests
         var inventory = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
         (await inventory.InventoryTransactions.AnyAsync(t => t.ProductId == productId)).ShouldBeFalse();
         (await inventory.Lots.AnyAsync(l => l.ProductId == productId)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task RestaurantAdmin_Should_NotReadOrMutateOperatorProcurement()
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        var warehouse = await CreateWarehouseAsync(admin);
+        var supplierId = await CreateSupplierAsync(admin, unique);
+        var productId = Guid.CreateVersion7();
+        var po = await CreateAppointedPurchaseOrderAsync(admin, supplierId, warehouse.Id, productId, 5m);
+        var tenantId = $"proc-{unique}";
+        var email = $"admin@{tenantId}.example.com";
+        using var create = await admin.PostAsJsonAsync(TestConstants.TenantsBasePath, new
+        {
+            id = tenantId, name = $"Restaurant {unique}", connectionString = (string?)null,
+            adminEmail = email, adminPassword = TestConstants.DefaultPassword, issuer = $"{tenantId}.issuer",
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        await WaitForProvisioningAsync(admin, tenantId);
+        using var customer = await _auth.CreateAuthenticatedClientAsync(email, TestConstants.DefaultPassword, tenantId);
+
+        foreach (var path in new[] { "suppliers", $"suppliers/{supplierId}", "purchase-orders", $"purchase-orders/{po.Id}" })
+        {
+            using var response = await customer.GetAsync($"{TestConstants.ProcurementBasePath}/{path}");
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, $"Customer read {path}: {await response.Content.ReadAsStringAsync()}");
+        }
+
+        await AssertProcurementWritesForbiddenAsync(customer, supplierId, warehouse.Id, productId, po.Id);
+        foreach (var pass in new[] { true, false })
+        {
+            using var response = await customer.PostAsJsonAsync(
+                QcUrl(po.Id, po.Lines[0].Id, pass), QcBody($"LOT-{unique}", 5m));
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        }
+
+        using var get = await admin.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}");
+        var unchanged = await get.DeserializeAsync<PurchaseOrderDto>();
+        unchanged.Status.ShouldBe(po.Status);
+        unchanged.QualityChecks.ShouldBeEmpty();
+        (await GetAvailableAsync(admin, warehouse.Id, productId, "Ambient")).Available.ShouldBe(0m);
+    }
+
+    private static async Task AssertProcurementWritesForbiddenAsync(
+        HttpClient client, Guid supplierId, Guid warehouseId, Guid productId, Guid purchaseOrderId)
+    {
+        var requests = new (string Path, object Body)[]
+        {
+            ("suppliers", new { code = $"DENY{Guid.NewGuid():N}", name = "Denied supplier", categories = "produce", leadDays = 2 }),
+            ("purchase-orders", new { supplierId, warehouseId, expectedAt = DateTimeOffset.UtcNow.AddDays(1),
+                lines = new[] { new { productId, zone = "Ambient", quantity = 5m } } }),
+            ($"purchase-orders/{purchaseOrderId}/send", new { }),
+            ($"purchase-orders/{purchaseOrderId}/appointments", new { dockSlot = "DENIED", vehicleNo = "DENIED" }),
+        };
+        foreach (var (path, body) in requests)
+        {
+            using var response = await client.PostAsJsonAsync($"{TestConstants.ProcurementBasePath}/{path}", body);
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, $"Write {path}: {await response.Content.ReadAsStringAsync()}");
+        }
+    }
+
+    private static async Task WaitForProvisioningAsync(HttpClient admin, string tenantId)
+    {
+        for (var attempt = 0; attempt < 60; attempt++)
+        {
+            using var response = await admin.GetAsync($"{TestConstants.TenantsBasePath}/{tenantId}/provisioning");
+            response.EnsureSuccessStatusCode();
+            var status = (await response.DeserializeAsync<TenantProvisioningStatusDto>()).Status;
+            if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase)) return;
+            if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Tenant {tenantId} provisioning failed.");
+            await Task.Delay(1000);
+        }
+        throw new TimeoutException($"Tenant {tenantId} did not finish provisioning.");
     }
 
     private static string QcUrl(Guid purchaseOrderId, Guid lineId, bool pass)

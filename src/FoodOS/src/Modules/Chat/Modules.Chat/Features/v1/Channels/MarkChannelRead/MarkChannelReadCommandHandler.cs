@@ -44,9 +44,9 @@ public sealed class MarkChannelReadCommandHandler(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        // Push to the channel group so members update read receipts in real time. The reader's own
+        // Push to current members so they update read receipts in real time. The reader's own
         // connections also receive this (alongside the user-scoped push); the client handler is idempotent.
-        await hub.Clients.Group($"channel:{cmd.ChannelId}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatChannelMemberRead",
                 new { channelId = cmd.ChannelId, userId = currentUserId, lastReadMessageId = cmd.MessageId },
                 cancellationToken)

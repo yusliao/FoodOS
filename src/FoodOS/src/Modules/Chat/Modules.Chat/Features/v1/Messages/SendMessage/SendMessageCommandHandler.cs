@@ -69,10 +69,12 @@ public sealed class SendMessageCommandHandler(
 
         var parsedMentions = new List<Message.ParsedMention>();
         var notifyUserIds = new HashSet<string>(StringComparer.Ordinal);
+        var memberIds = channel.Members.Select(member => member.UserId).ToHashSet(StringComparer.Ordinal);
         foreach (var match in rawMatches)
         {
             if (!resolved.TryGetValue(match.Username, out var mentionedUserId)) continue;
             if (string.Equals(mentionedUserId, currentUserId, StringComparison.Ordinal)) continue;
+            if (!memberIds.Contains(mentionedUserId)) continue;
             parsedMentions.Add(new Message.ParsedMention(mentionedUserId, match.StartIndex, match.Length));
             notifyUserIds.Add(mentionedUserId);
         }
@@ -94,7 +96,7 @@ public sealed class SendMessageCommandHandler(
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         var dto = message.ToDto();
-        await hub.Clients.Group($"channel:{channel.Id}")
+        await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessageCreated", dto, cancellationToken)
             .ConfigureAwait(false);
 

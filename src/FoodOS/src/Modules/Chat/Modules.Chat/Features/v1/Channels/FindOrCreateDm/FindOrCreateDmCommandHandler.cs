@@ -5,6 +5,8 @@ using FSH.Modules.Chat.Contracts.v1.Commands;
 using FSH.Modules.Chat.Contracts.v1.DTOs;
 using FSH.Modules.Chat.Data;
 using FSH.Modules.Chat.Domain;
+using FSH.Modules.Chat.Features.v1.Internal;
+using FSH.Modules.Identity.Contracts.Services;
 using Mediator;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +16,8 @@ namespace FSH.Modules.Chat.Features.v1.Channels.FindOrCreateDm;
 public sealed class FindOrCreateDmCommandHandler(
     ChatDbContext db,
     IHubContext<AppHub> hub,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IUserProfileService users)
     : ICommandHandler<FindOrCreateDmCommand, Guid>
 {
     public async ValueTask<Guid> Handle(FindOrCreateDmCommand cmd, CancellationToken cancellationToken)
@@ -29,6 +32,8 @@ public sealed class FindOrCreateDmCommandHandler(
         {
             throw new CustomException("Cannot DM yourself.", (IEnumerable<string>?)null, System.Net.HttpStatusCode.BadRequest);
         }
+
+        await users.RequireActiveTenantUsersAsync(otherIds, cancellationToken).ConfigureAwait(false);
 
         if (otherIds.Count == 1)
         {
@@ -63,8 +68,7 @@ public sealed class FindOrCreateDmCommandHandler(
     /// <summary>
     /// Tell every other participant's open tabs that a new conversation exists so their channel rail
     /// refreshes without a reload. Targets each user's <c>user:{id}</c> group — always joined on connect
-    /// (see <see cref="AppHub.OnConnectedAsync"/>) — because their live sockets aren't in the new
-    /// <c>channel:{id}</c> group yet; the client joins that on demand when it opens the conversation.
+    /// (see <see cref="AppHub.OnConnectedAsync"/>), including conversations created after connect.
     /// The caller's own rail refreshes via the mutation's <c>onSuccess</c> on the client.
     /// </summary>
     private async Task NotifyChannelAddedAsync(Guid channelId, IEnumerable<string> otherUserIds, CancellationToken cancellationToken)

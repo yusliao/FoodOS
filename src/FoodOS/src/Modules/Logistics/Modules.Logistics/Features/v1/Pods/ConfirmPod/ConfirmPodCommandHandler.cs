@@ -43,7 +43,9 @@ public sealed class ConfirmPodCommandHandler(
             .AsNoTracking()
             .AnyAsync(driver => driver.Id == shipment.DriverId && driver.UserId == userId, cancellationToken)
             .ConfigureAwait(false);
-        if (!assignedToCurrentDriver && !currentUser.IsInRole(RoleConstants.Admin))
+        bool isRootAdmin = currentUser.IsInRole(RoleConstants.Admin)
+            && string.Equals(currentUser.GetTenant(), MultitenancyConstants.Root.Id, StringComparison.OrdinalIgnoreCase);
+        if (userId == Guid.Empty || (!assignedToCurrentDriver && !isRootAdmin))
         {
             throw new NotFoundException($"Stop {command.StopId} not found.");
         }
