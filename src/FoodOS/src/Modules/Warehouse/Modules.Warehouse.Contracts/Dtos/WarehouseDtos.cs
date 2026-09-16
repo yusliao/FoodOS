@@ -39,7 +39,8 @@ public sealed record WaveDto(
     DateOnly BusinessDate,
     string Status,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<PickTaskDto> Tasks);
+    IReadOnlyList<PickTaskDto> Tasks,
+    Guid? AssignedPickerUserId = null);
 
 public sealed record PutawayTaskDto(
     Guid Id,

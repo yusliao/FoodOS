@@ -18,6 +18,7 @@ public static class WarehousePermissions
         public const string Cutoff = $"Permissions.{Resource}.Cutoff";
         public const string Generate = $"Permissions.{Resource}.Generate";
         public const string Release = $"Permissions.{Resource}.Release";
+        public const string Assign = $"Permissions.{Resource}.Assign";
     }
 
     public static class Picks
@@ -55,6 +56,7 @@ public static class WarehousePermissions
         new("Trigger Cutoff", "Cutoff", Waves.Resource),
         new("Generate Waves", ActionConstants.Generate, Waves.Resource),
         new("Release Waves", "Release", Waves.Resource),
+        new("Assign wave pickers", "Assign", Waves.Resource),
         new("View Pick Tasks", ActionConstants.View, Picks.Resource, IsBasic: true),
         new("Confirm Picks", "Confirm", Picks.Resource),
         new("View putaway tasks", ActionConstants.View, Putaway.Resource, IsBasic: true),

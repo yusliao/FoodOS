@@ -34,7 +34,8 @@ internal static class WarehouseMappings
             wave.BusinessDate,
             wave.Status.ToString(),
             wave.CreatedAt,
-            wave.Tasks.Select(t => t.ToDto()).ToList());
+            wave.Tasks.Select(t => t.ToDto()).ToList(),
+            wave.AssignedPickerUserId);
 
     public static PutawayTaskDto ToDto(this PutawayTask task)
         => new(

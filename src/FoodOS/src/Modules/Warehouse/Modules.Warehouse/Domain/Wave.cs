@@ -16,6 +16,7 @@ public sealed class Wave : AggregateRoot<Guid>, IOperatorOwnedEntity
     public Guid? RouteId { get; private set; }
     public DateOnly BusinessDate { get; private set; }
     public WaveStatus Status { get; private set; }
+    public Guid? AssignedPickerUserId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<PickTask> Tasks => _tasks;
@@ -75,6 +76,18 @@ public sealed class Wave : AggregateRoot<Guid>, IOperatorOwnedEntity
         var task = PickTask.Create(Id, orderId, orderLineId, reservationId, productId, zone, locationId, quantity);
         _tasks.Add(task);
         return task;
+    }
+
+    public void AssignPicker(Guid pickerUserId)
+    {
+        if (pickerUserId == Guid.Empty) throw new ArgumentException("Picker is required.", nameof(pickerUserId));
+        if (AssignedPickerUserId == pickerUserId) return;
+        if (AssignedPickerUserId.HasValue || Status == WaveStatus.Completed || _tasks.Any(t => t.Status == PickTaskStatus.Picked))
+        {
+            throw new CustomException("Wave assignment cannot be changed after assignment or picking.",
+                (IEnumerable<string>?)null, HttpStatusCode.Conflict);
+        }
+        AssignedPickerUserId = pickerUserId;
     }
 
     public void Release()

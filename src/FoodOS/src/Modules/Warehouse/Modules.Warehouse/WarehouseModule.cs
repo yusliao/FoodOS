@@ -18,6 +18,7 @@ using FSH.Modules.Warehouse.Features.v1.Waves.GenerateWave;
 using FSH.Modules.Warehouse.Features.v1.Waves.GetWaveById;
 using FSH.Modules.Warehouse.Features.v1.Waves.SearchWaves;
 using FSH.Modules.Warehouse.Features.v1.Waves.StartWave;
+using FSH.Modules.Warehouse.Features.v1.Waves.AssignWave;
 using FSH.Modules.Warehouse.Jobs;
 using Hangfire;
 using Hangfire.Common;
@@ -77,6 +78,7 @@ public sealed class WarehouseModule : IModule
         group.MapGenerateWaveEndpoint();
         group.MapGetWaveByIdEndpoint();
         group.MapStartWaveEndpoint();
+        group.MapAssignWaveEndpoint();
         group.MapGetMyPickTasksEndpoint();
         group.MapConfirmPickTaskEndpoint();
         group.MapCreatePutawayTaskEndpoint();

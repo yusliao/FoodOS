@@ -5,6 +5,9 @@ using FSH.Framework.Shared.Constants;
 using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Identity.Domain;
 using FSH.Modules.Files.Contracts.v1.DTOs;
+using FSH.Modules.Files.Contracts.Authorization;
+using FSH.Modules.Files.Data;
+using FSH.Modules.Files.Domain;
 using FSH.Modules.Multitenancy.Contracts.Dtos;
 using Microsoft.AspNetCore.Identity;
 using FSH.Modules.Tickets.Contracts.Authorization;
@@ -168,7 +171,9 @@ public sealed class TicketTenantIsolationTests
         upload.StatusCode.ShouldBe(HttpStatusCode.OK, await upload.Content.ReadAsStringAsync());
         Guid fileId = (await upload.DeserializeAsync<PresignedUploadResponse>()).FileAssetId;
         using var ownDownload = await tenantAdmin.GetAsync($"/api/v1/files/{fileId}/url");
-        ownDownload.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ownDownload.StatusCode.ShouldBe(HttpStatusCode.NotFound, "pending attachments must not receive download URLs");
+        using var ownMetadata = await tenantAdmin.GetAsync($"/api/v1/files/{fileId}");
+        ownMetadata.StatusCode.ShouldBe(HttpStatusCode.OK);
         using var foreignUpload = await member.PostAsJsonAsync("/api/v1/files/upload-url", Attachment(1));
         foreignUpload.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         using var foreignMetadata = await member.GetAsync($"/api/v1/files/{fileId}");
@@ -293,6 +298,110 @@ public sealed class TicketTenantIsolationTests
         restore.StatusCode.ShouldBe(HttpStatusCode.OK);
         using var restored = await customerA.GetAsync($"/api/v1/tickets/{ticketA}");
         restored.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task TicketAttachments_Should_AllowAuthorizedCrossTenantReads_WithoutSharingOtherFilesOrWrites()
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string tenantA = $"attach-a-{suffix}";
+        string tenantB = $"attach-b-{suffix}";
+        using var customerA = await ProvisionTenantClientAsync(admin, tenantA);
+        using var customerB = await ProvisionTenantClientAsync(admin, tenantB);
+        using var support = await OperatorTestUsers.CreateOperatorAsync(_factory,
+            TicketsPermissions.Tickets.View, FilesPermissions.Upload, FilesPermissions.DeleteOwn);
+        using var unprivileged = await OperatorTestUsers.CreateOperatorAsync(_factory, FilesPermissions.Upload);
+        string memberEmail = $"member-{suffix}@test.com";
+        await CreateActiveBasicUserAsync(tenantA, memberEmail, $"member-{suffix}");
+        using var member = await _auth.CreateAuthenticatedClientAsync(memberEmail, TestConstants.DefaultPassword, tenantA);
+        Guid ticket = await CreateTicketAsync(customerA, $"Attachment exchange {suffix}");
+        Guid customerFile = await UploadTicketAttachmentAsync(customerA, ticket, support);
+        Guid operatorFile = await UploadTicketAttachmentAsync(support, ticket, customerA);
+        Guid mismatchedFile;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            // A malformed legacy row must not become visible merely because its OwnerId names an accessible ticket.
+            var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>().GetAsync(tenantB);
+            scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+                new MultiTenantContext<AppTenantInfo>(tenant);
+            var db = scope.ServiceProvider.GetRequiredService<FilesDbContext>();
+            var file = FileAsset.CreatePending(Guid.NewGuid(), "Ticket", ticket, "wrong-source.pdf", "wrong-source.pdf",
+                "application/pdf", 20, $"test/{Guid.NewGuid():N}", Visibility.Private,
+                (await WaveAssignments.UserIdAsync(customerB)).ToString(), DateTimeOffset.UtcNow.AddMinutes(10));
+            file.MarkAvailable(20, ScanStatus.Clean);
+            db.FileAssets.Add(file);
+            await db.SaveChangesAsync();
+            mismatchedFile = file.Id;
+        }
+        foreach (var reader in new[] { support, customerA, customerB })
+        {
+            using var mismatch = await reader.GetAsync($"/api/v1/files/{mismatchedFile}/url");
+            mismatch.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+        foreach (var (reader, fileId) in new[] { (support, customerFile), (customerA, operatorFile) })
+        {
+            using var metadata = await reader.GetAsync($"/api/v1/files/{fileId}");
+            metadata.StatusCode.ShouldBe(HttpStatusCode.OK, await metadata.Content.ReadAsStringAsync());
+            var file = await metadata.DeserializeAsync<FileAssetDto>();
+            file.PublicUrl.ShouldBeNull();
+            file.Visibility.ShouldBe(Visibility.Private);
+            using var download = await reader.GetAsync($"/api/v1/files/{fileId}/url");
+            download.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var url = await download.DeserializeAsync<PresignedDownloadResponse>();
+            using var raw = new HttpClient();
+            (await raw.GetStringAsync(url.Url)).ShouldBe("Private ticket evidence");
+            using var finalize = await reader.PostAsync($"/api/v1/files/{fileId}/finalize", null);
+            finalize.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            using var delete = await reader.DeleteAsync($"/api/v1/files/{fileId}");
+            delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+        foreach (var other in new[] { customerB, member, unprivileged })
+        {
+            foreach (var fileId in new[] { customerFile, operatorFile })
+            {
+                using var metadata = await other.GetAsync($"/api/v1/files/{fileId}");
+                metadata.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+                using var url = await other.GetAsync($"/api/v1/files/{fileId}/url");
+                url.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            }
+        }
+        using var visibility = await support.PatchAsJsonAsync($"/api/v1/files/{operatorFile}/visibility", new { visibility = 0 });
+        visibility.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var ownDelete = await customerA.DeleteAsync($"/api/v1/files/{customerFile}");
+        ownDelete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var deletedFile = await support.GetAsync($"/api/v1/files/{customerFile}/url");
+        deletedFile.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var deletedTicket = await customerA.DeleteAsync($"/api/v1/tickets/{ticket}");
+        deletedTicket.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var revokedAccess = await customerA.GetAsync($"/api/v1/files/{operatorFile}/url");
+        revokedAccess.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var revokedSupport = await support.GetAsync($"/api/v1/files/{operatorFile}/url");
+        revokedSupport.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private static async Task<Guid> UploadTicketAttachmentAsync(HttpClient uploader, Guid ticketId, HttpClient collaborator)
+    {
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes("Private ticket evidence");
+        using var request = await uploader.PostAsJsonAsync("/api/v1/files/upload-url", new
+        {
+            ownerType = "Ticket", ownerId = ticketId, fileName = "evidence.pdf", contentType = "application/pdf",
+            sizeBytes = bytes.Length, visibility = 1, category = "Document",
+        });
+        request.StatusCode.ShouldBe(HttpStatusCode.OK, await request.Content.ReadAsStringAsync());
+        var upload = await request.DeserializeAsync<PresignedUploadResponse>();
+        using var pending = await collaborator.GetAsync($"/api/v1/files/{upload.FileAssetId}/url");
+        pending.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var raw = new HttpClient();
+        using var put = new HttpRequestMessage(HttpMethod.Put, upload.UploadUrl)
+        {
+            Content = new ByteArrayContent(bytes) { Headers = { ContentType = new MediaTypeHeaderValue("application/pdf") } },
+        };
+        using var uploaded = await raw.SendAsync(put);
+        uploaded.EnsureSuccessStatusCode();
+        using var finalize = await uploader.PostAsync($"/api/v1/files/{upload.FileAssetId}/finalize", null);
+        finalize.EnsureSuccessStatusCode();
+        return upload.FileAssetId;
     }
 
     private async Task<Guid> CreateActiveBasicUserAsync(string tenantId, string email, string userName, bool assignBasic = true)

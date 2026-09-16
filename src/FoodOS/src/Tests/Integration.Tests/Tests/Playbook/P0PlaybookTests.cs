@@ -135,6 +135,7 @@ public sealed class P0PlaybookTests
             new { warehouseId = warehouse.Id, businessDate = cutoffResult.BusinessDate });
         generate.StatusCode.ShouldBe(HttpStatusCode.OK, await generate.Content.ReadAsStringAsync());
         var wave = (await generate.DeserializeAsync<List<WaveDto>>()).ShouldHaveSingleItem();
+        await WaveAssignments.AssignToSelfAsync(client, wave.Id);
 
         using var release = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release",

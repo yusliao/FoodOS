@@ -1,4 +1,7 @@
 using Integration.Tests.Infrastructure;
+using Integration.Tests.Infrastructure.Extensions;
+using FSH.Modules.Multitenancy.Contracts.Dtos;
+using FSH.Modules.Auditing.Contracts.Authorization;
 
 namespace Integration.Tests.Tests.Auditing;
 
@@ -6,14 +9,16 @@ namespace Integration.Tests.Tests.Auditing;
 public sealed class AuditTenantIsolationTests
 {
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public AuditTenantIsolationTests(FshWebApplicationFactory factory)
     {
         _auth = new AuthHelper(factory);
+        _factory = factory;
     }
 
     [Fact]
-    public async Task GetAudits_Should_OnlyReturnCurrentTenantsRecords()
+    public async Task AuditAccess_Should_RequireOperatorPermission_And_ExplicitCrossTenantPermission()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -28,12 +33,20 @@ public sealed class AuditTenantIsolationTests
         using var otherClient = await CreateTenantAdminClientWithRetryAsync(
             otherAdminEmail, TestConstants.DefaultPassword, otherTenantId);
 
-        // Wait for audit flush + retry until otherClient sees its own audits.
+        using var customerAudit = await otherClient.GetAsync(TestConstants.AuditsBasePath);
+        customerAudit.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var auditor = await OperatorTestUsers.CreateOperatorAsync(_factory, AuditingPermissions.AuditTrails.View);
+        using var deniedCrossTenant = await auditor.GetAsync($"{TestConstants.AuditsBasePath}?tenantId={otherTenantId}");
+        deniedCrossTenant.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        var ownPage = await AuditTestHelper.GetAuditsPageAsync(auditor);
+        ownPage.Items.ShouldAllBe(a => a.TenantId == TestConstants.RootTenantId);
+
+        // An operator with the extra cross-tenant permission can explicitly select one customer.
         string body = string.Empty;
         for (int i = 0; i < 20; i++)
         {
-            var response = await otherClient.GetAsync(
-                $"{TestConstants.AuditsBasePath}?pageNumber=1&pageSize=100");
+            using var response = await rootClient.GetAsync(
+                $"{TestConstants.AuditsBasePath}?pageNumber=1&pageSize=100&tenantId={otherTenantId}");
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
             body = await response.Content.ReadAsStringAsync();
 
@@ -91,16 +104,16 @@ public sealed class AuditTenantIsolationTests
 
             if (statusResponse.IsSuccessStatusCode)
             {
-                var content = await statusResponse.Content.ReadAsStringAsync();
-                if (content.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+                var status = (await statusResponse.DeserializeAsync<TenantProvisioningStatusDto>()).Status;
+                if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
 
-                if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException(
-                        $"Tenant {tenantId} provisioning failed: {content}");
+                        $"Tenant {tenantId} provisioning failed.");
                 }
             }
 

@@ -23,6 +23,8 @@ public sealed class WaveConfiguration : IEntityTypeConfiguration<Wave>
             .HasDatabaseName("IX_Waves_DailyPlanId_ZoneId_Unrouted");
         builder.Property(x => x.Zone).IsRequired().HasMaxLength(16);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
+        builder.Property(x => x.AssignedPickerUserId).IsConcurrencyToken();
+        builder.HasIndex(x => x.AssignedPickerUserId);
         builder.HasMany(x => x.Tasks)
             .WithOne()
             .HasForeignKey(t => t.WaveId)

@@ -6,8 +6,8 @@ using FSH.Modules.Files.Contracts.v1.DTOs;
 using FSH.Modules.Files.Contracts.v1.Queries;
 using FSH.Modules.Files.Data;
 using FSH.Modules.Files.Services;
+using FSH.Modules.Files.Features.v1.Internal;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace FSH.Modules.Files.Features.v1.GetFileDownloadUrl;
@@ -24,10 +24,12 @@ public sealed class GetFileDownloadUrlQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(q);
 
-        var f = await db.FileAssets.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == q.FileAssetId, cancellationToken)
+        var f = await FileReadLookup.FindAsync(db, policies, currentUser, q.FileAssetId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException("file not found");
+
+        if (f.Status != FileAssetStatus.Available)
+            throw new NotFoundException("file not found");
 
         var userId = currentUser.GetUserId().ToString();
         var policy = policies.Resolve(f.OwnerType)

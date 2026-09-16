@@ -6,6 +6,8 @@ using FSH.Modules.Ops.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Procurement.Contracts.Dtos;
 using FSH.Modules.Warehouse.Contracts.Dtos;
+using FSH.Modules.Warehouse.Contracts.Authorization;
+using FSH.Modules.Logistics.Contracts.Authorization;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
@@ -88,7 +90,18 @@ public sealed class WarehouseOpsTests
         (await listPutaway.DeserializeAsync<List<PutawayTaskDto>>())
             .ShouldContain(t => t.Id == task.Id);
 
-        using var confirm = await client.PostAsJsonAsync(
+        using var reader = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Putaway.View);
+        using var denied = await reader.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks/{task.Id}/confirm", new { locationId });
+        denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var deniedCreate = await reader.PostAsJsonAsync($"{TestConstants.WarehouseBasePath}/putaway-tasks",
+            new { warehouseId = warehouse.Id, zone = "Chilled", productId, lotId, quantity = 8m, source = "QcPass" });
+        deniedCreate.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var stillPending = await reader.GetAsync(
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks?warehouseId={warehouse.Id}&status=Pending");
+        (await stillPending.DeserializeAsync<List<PutawayTaskDto>>()).ShouldContain(t => t.Id == task.Id);
+        using var putawayWorker = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Putaway.Confirm);
+        using var confirm = await putawayWorker.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/putaway-tasks/{task.Id}/confirm",
             new { locationId });
         confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
@@ -178,7 +191,14 @@ public sealed class WarehouseOpsTests
         using var client = await _auth.CreateRootAdminClientAsync();
         var packed = await PackOrderAsync(client, 4m);
 
-        using var pack = await client.PostAsJsonAsync(
+        using var picker = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Picks.Confirm);
+        using var deniedPack = await picker.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves/{packed.WaveId}/pack",
+            new { orderIds = new[] { packed.OrderId }, sscc = $"SSCC{Guid.NewGuid():N}"[..18] });
+        deniedPack.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var packer = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Pack.Create);
+
+        using var pack = await packer.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/waves/{packed.WaveId}/pack",
             new { orderIds = new[] { packed.OrderId }, sscc = $"SSCC{Guid.NewGuid():N}"[..18] });
         pack.StatusCode.ShouldBe(HttpStatusCode.OK, await pack.Content.ReadAsStringAsync());
@@ -202,11 +222,24 @@ public sealed class WarehouseOpsTests
         var shipment = await create.DeserializeAsync<ShipmentDto>();
         shipment.Lines.ShouldHaveSingleItem().ToteId.ShouldBe(tote.Id);
 
-        using var load = await client.PostAsJsonAsync(
+        using var deniedLoad = await packer.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/load", new { toteIds = new[] { tote.Id } });
+        deniedLoad.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var loader = await OperatorTestUsers.CreateOperatorAsync(_factory, LogisticsPermissions.Shipments.Load);
+
+        using var load = await loader.PostAsJsonAsync(
             $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/load",
             new { toteIds = new[] { tote.Id } });
         load.StatusCode.ShouldBe(HttpStatusCode.OK, await load.Content.ReadAsStringAsync());
         (await load.DeserializeAsync<ShipmentDto>()).Status.ShouldBe("Loading");
+        using var deniedDepart = await loader.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/depart", new { });
+        deniedDepart.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var dispatcher = await OperatorTestUsers.CreateOperatorAsync(_factory, LogisticsPermissions.Shipments.Depart);
+        using var depart = await dispatcher.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/depart", new { });
+        depart.StatusCode.ShouldBe(HttpStatusCode.OK, await depart.Content.ReadAsStringAsync());
+        (await depart.DeserializeAsync<ShipmentDto>()).Status.ShouldBe("Departed");
     }
 
     private sealed record PackedOrder(
@@ -237,6 +270,7 @@ public sealed class WarehouseOpsTests
             $"{TestConstants.WarehouseBasePath}/waves",
             new { warehouseId = warehouse.Id, businessDate = cutoffResult.BusinessDate });
         var wave = (await generate.DeserializeAsync<List<WaveDto>>()).ShouldHaveSingleItem();
+        await WaveAssignments.AssignToSelfAsync(client, wave.Id);
         using var release = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release", new { });
         var task = (await release.DeserializeAsync<WaveDto>()).Tasks.ShouldHaveSingleItem();

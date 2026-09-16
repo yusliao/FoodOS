@@ -6,6 +6,33 @@ namespace Warehouse.Tests.Domain;
 public sealed class WaveTests
 {
     [Fact]
+    public void Assignment_Should_BeExplicit_Idempotent_And_Immutable()
+    {
+        var wave = Wave.Create("ASSIGN", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "Ambient", new DateOnly(2026, 9, 16));
+        wave.AssignedPickerUserId.ShouldBeNull();
+        Should.Throw<ArgumentException>(() => wave.AssignPicker(Guid.Empty));
+        Guid picker = Guid.NewGuid();
+        wave.AssignPicker(picker);
+        wave.AssignPicker(picker);
+        wave.AssignedPickerUserId.ShouldBe(picker);
+        Should.Throw<CustomException>(() => wave.AssignPicker(Guid.NewGuid())).StatusCode
+            .ShouldBe(System.Net.HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public void CompletedLegacyWave_Should_NotBeAssigned()
+    {
+        var wave = Wave.Create("LEGACY", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "Ambient", new DateOnly(2026, 9, 16));
+        var task = wave.AddTask(Guid.NewGuid(), Guid.NewGuid(), null, Guid.NewGuid(), "Ambient", Guid.NewGuid(), 1m);
+        task.MarkShorted(1m);
+        wave.CompleteIfDone();
+        Should.Throw<CustomException>(() => wave.AssignPicker(Guid.NewGuid())).StatusCode
+            .ShouldBe(System.Net.HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public void ReleaseThenPick_Should_AssignLotAndRejectWrongScan()
     {
         var wave = Wave.Create(

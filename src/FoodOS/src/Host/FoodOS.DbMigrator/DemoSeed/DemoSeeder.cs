@@ -930,6 +930,7 @@ internal sealed class DemoSeeder
                 WarehousePermissions.Waves.Cutoff,
                 WarehousePermissions.Waves.Generate,
                 WarehousePermissions.Waves.Release,
+                WarehousePermissions.Waves.Assign,
                 WarehousePermissions.Picks.View,
             ]),
 

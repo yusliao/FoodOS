@@ -1,6 +1,14 @@
 using FSH.Modules.Inventory.Contracts.Dtos;
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Identity.Domain;
+using Microsoft.AspNetCore.Identity;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Warehouse.Contracts.Dtos;
+using FSH.Modules.Warehouse.Contracts.Authorization;
+using FSH.Modules.Warehouse.Data;
+using FSH.Modules.Warehouse.Domain;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
@@ -13,10 +21,12 @@ namespace Integration.Tests.Tests.Warehouse;
 public sealed class WarehouseWaveTests
 {
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public WarehouseWaveTests(FshWebApplicationFactory factory)
     {
         _auth = new AuthHelper(factory);
+        _factory = factory;
     }
 
     [Fact]
@@ -80,6 +90,11 @@ public sealed class WarehouseWaveTests
         var wave = drafts.ShouldHaveSingleItem();
         wave.Status.ShouldBe("Draft");
 
+        using var unprivileged = await CreateUnprivilegedOperatorAsync();
+        using var deniedRelease = await unprivileged.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release", new { });
+        deniedRelease.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
         using var release = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release",
             new { });
@@ -91,10 +106,69 @@ public sealed class WarehouseWaveTests
         task.LotNo.ShouldBe("LOT-EARLY");
         released.Tasks.ShouldNotContain(t => t.LotId == isolatedLotId);
 
+        using var deniedRead = await unprivileged.GetAsync(
+            $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}");
+        deniedRead.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var deniedMine = await unprivileged.GetAsync($"{TestConstants.WarehouseBasePath}/pick-tasks/mine");
+        deniedMine.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var deniedPick = await unprivileged.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm", new { scannedLotId = earlyLotId });
+        deniedPick.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var deniedPack = await unprivileged.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/pack", new { });
+        deniedPack.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var unchangedWave = await client.GetAsync($"{TestConstants.WarehouseBasePath}/waves/{wave.Id}");
+        (await unchangedWave.DeserializeAsync<WaveDto>()).Tasks.ShouldHaveSingleItem().Status.ShouldBe("Pending");
+
         using var getPicking = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
         (await getPicking.DeserializeAsync<SalesOrderDto>()).Status.ShouldBe("Picking");
 
-        using var wrong = await client.PostAsJsonAsync(
+        using var pickerA = await CreateUnprivilegedOperatorAsync(
+            WarehousePermissions.Picks.View, WarehousePermissions.Picks.Confirm, WarehousePermissions.Waves.View);
+        using var pickerB = await CreateUnprivilegedOperatorAsync(
+            WarehousePermissions.Picks.View, WarehousePermissions.Picks.Confirm, WarehousePermissions.Waves.View);
+        Guid pickerAId = await WaveAssignments.UserIdAsync(pickerA);
+        Guid pickerBId = await WaveAssignments.UserIdAsync(pickerB);
+        using var supervisor = await CreateUnprivilegedOperatorAsync(WarehousePermissions.Waves.Assign, WarehousePermissions.Waves.View);
+        string assignUrl = $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/assign";
+        string mineUrl = $"{TestConstants.WarehouseBasePath}/pick-tasks/mine?warehouseId={warehouse.Id}";
+        using var unassigned = await pickerA.GetAsync(mineUrl);
+        (await unassigned.DeserializeAsync<List<PickTaskDto>>()).ShouldBeEmpty();
+        using var unassignedConfirm = await pickerA.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm", new { scannedLotId = earlyLotId });
+        unassignedConfirm.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var selfAssign = await pickerA.PostAsJsonAsync(assignUrl, new { pickerUserId = pickerAId });
+        selfAssign.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var invalidAssign = await client.PostAsJsonAsync(assignUrl, new { pickerUserId = Guid.NewGuid() });
+        invalidAssign.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var unqualifiedAssign = await client.PostAsJsonAsync(assignUrl,
+            new { pickerUserId = await WaveAssignments.UserIdAsync(unprivileged) });
+        unqualifiedAssign.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        using var assigned = await supervisor.PostAsJsonAsync(assignUrl, new { pickerUserId = pickerAId });
+        assigned.StatusCode.ShouldBe(HttpStatusCode.OK, await assigned.Content.ReadAsStringAsync());
+        (await assigned.DeserializeAsync<WaveDto>()).AssignedPickerUserId.ShouldBe(pickerAId);
+        using var duplicateAssign = await client.PostAsJsonAsync(assignUrl, new { pickerUserId = pickerAId });
+        duplicateAssign.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var reassign = await client.PostAsJsonAsync(assignUrl, new { pickerUserId = pickerBId });
+        reassign.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        using var mineA = await pickerA.GetAsync(mineUrl);
+        (await mineA.DeserializeAsync<List<PickTaskDto>>()).ShouldHaveSingleItem().Id.ShouldBe(task.Id);
+        using var mineB = await pickerB.GetAsync(mineUrl);
+        (await mineB.DeserializeAsync<List<PickTaskDto>>()).ShouldBeEmpty();
+        using var foreignWave = await pickerB.GetAsync($"{TestConstants.WarehouseBasePath}/waves/{wave.Id}");
+        foreignWave.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var foreignList = await pickerB.GetAsync($"{TestConstants.WarehouseBasePath}/waves?warehouseId={warehouse.Id}");
+        (await foreignList.DeserializeAsync<List<WaveDto>>()).ShouldBeEmpty();
+        using var ownWave = await pickerA.GetAsync($"{TestConstants.WarehouseBasePath}/waves/{wave.Id}");
+        ownWave.StatusCode.ShouldBe(HttpStatusCode.OK);
+        foreach (var other in new[] { pickerB, client })
+        {
+            using var forbiddenConfirm = await other.PostAsJsonAsync(
+                $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm", new { scannedLotId = earlyLotId });
+            forbiddenConfirm.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+
+        using var wrong = await pickerA.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm",
             new { scannedLotId = isolatedLotId });
         wrong.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await wrong.Content.ReadAsStringAsync());
@@ -102,12 +176,19 @@ public sealed class WarehouseWaveTests
         using var stillPicking = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
         (await stillPicking.DeserializeAsync<SalesOrderDto>()).Status.ShouldBe("Picking");
 
-        using var confirm = await client.PostAsJsonAsync(
+        using var confirm = await pickerA.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm",
             new { scannedLotId = earlyLotId });
         confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
         var picked = await confirm.DeserializeAsync<PickTaskDto>();
         picked.Status.ShouldBe("Picked");
+
+        using var repeat = await pickerA.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm", new { scannedLotId = earlyLotId });
+        repeat.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var foreignRepeat = await pickerB.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm", new { scannedLotId = earlyLotId });
+        foreignRepeat.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         using var getPacked = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
         (await getPacked.DeserializeAsync<SalesOrderDto>()).Status.ShouldBe("Packed");
@@ -123,6 +204,61 @@ public sealed class WarehouseWaveTests
         var nextOrder = await getNext.DeserializeAsync<SalesOrderDto>();
         nextOrder.Status.ShouldBe("Reserved");
         nextOrder.BusinessDate.ShouldNotBe(cutoffResult.BusinessDate);
+    }
+
+    private Task<HttpClient> CreateUnprivilegedOperatorAsync(params string[] permissions)
+        => OperatorTestUsers.CreateOperatorAsync(_factory, permissions);
+
+    [Fact]
+    public async Task Assignment_Should_RejectInactivePicker_And_KeepOneWinner_WhenSupervisorsRace()
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        using var pickerA = await CreateUnprivilegedOperatorAsync(WarehousePermissions.Picks.View, WarehousePermissions.Picks.Confirm);
+        using var pickerB = await CreateUnprivilegedOperatorAsync(WarehousePermissions.Picks.View, WarehousePermissions.Picks.Confirm);
+        Guid userA = await WaveAssignments.UserIdAsync(pickerA);
+        Guid userB = await WaveAssignments.UserIdAsync(pickerB);
+        var warehouse = await CreateWarehouseAsync(admin);
+        var wave = Wave.Create($"RACE{Guid.NewGuid():N}", Guid.NewGuid(), warehouse.Id,
+            warehouse.Zones[0].Id, "Ambient", DateOnly.FromDateTime(DateTime.UtcNow));
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+                .GetAsync(TestConstants.RootTenantId);
+            scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+                new MultiTenantContext<AppTenantInfo>(tenant);
+            var db = scope.ServiceProvider.GetRequiredService<WarehouseDbContext>();
+            db.Waves.Add(wave);
+            await db.SaveChangesAsync();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<FshUser>>();
+            var user = await users.FindByIdAsync(userA.ToString());
+            user.ShouldNotBeNull();
+            user.IsActive = false;
+            (await users.UpdateAsync(user)).Succeeded.ShouldBeTrue();
+        }
+        string url = $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/assign";
+        using var inactive = await admin.PostAsJsonAsync(url, new { pickerUserId = userA });
+        inactive.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var empty = await admin.PostAsJsonAsync(url, new { pickerUserId = Guid.Empty });
+        empty.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        using var pickerC = await CreateUnprivilegedOperatorAsync(WarehousePermissions.Picks.View, WarehousePermissions.Picks.Confirm);
+        Guid userC = await WaveAssignments.UserIdAsync(pickerC);
+        using var supervisorA = await CreateUnprivilegedOperatorAsync(WarehousePermissions.Waves.Assign, WarehousePermissions.Waves.View);
+        using var supervisorB = await CreateUnprivilegedOperatorAsync(WarehousePermissions.Waves.Assign, WarehousePermissions.Waves.View);
+        var responses = await Task.WhenAll(
+            supervisorA.PostAsJsonAsync(url, new { pickerUserId = userB }),
+            supervisorB.PostAsJsonAsync(url, new { pickerUserId = userC }));
+        try
+        {
+            responses.Count(r => r.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+            responses.Count(r => r.StatusCode == HttpStatusCode.Conflict).ShouldBe(1);
+            var winner = await responses.Single(r => r.IsSuccessStatusCode).DeserializeAsync<WaveDto>();
+            using var persisted = await admin.GetAsync($"{TestConstants.WarehouseBasePath}/waves/{wave.Id}");
+            (await persisted.DeserializeAsync<WaveDto>()).AssignedPickerUserId.ShouldBe(winner.AssignedPickerUserId);
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
     }
 
     [Fact]
@@ -176,6 +312,7 @@ public sealed class WarehouseWaveTests
             $"{TestConstants.WarehouseBasePath}/waves",
             new { warehouseId = warehouse.Id, businessDate = cutoffResult.BusinessDate });
         var wave = (await generate.DeserializeAsync<List<WaveDto>>()).ShouldHaveSingleItem();
+        await WaveAssignments.AssignToSelfAsync(client, wave.Id);
         using var release = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release", new { });
         var released = await release.DeserializeAsync<WaveDto>();

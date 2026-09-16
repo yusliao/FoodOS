@@ -21,9 +21,12 @@ public sealed class ConfirmPickTaskCommandHandler(
     public async ValueTask<PickTaskDto> Handle(ConfirmPickTaskCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        WaveAccess.RequireOperator(currentUser);
+        Guid pickerId = currentUser.GetUserId();
 
         var wave = await dbContext.Waves
-            .FirstOrDefaultAsync(w => w.Tasks.Any(t => t.Id == command.PickTaskId), cancellationToken)
+            .FirstOrDefaultAsync(w => w.AssignedPickerUserId == pickerId
+                && w.Tasks.Any(t => t.Id == command.PickTaskId), cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Pick task {command.PickTaskId} not found.");
 
@@ -33,7 +36,6 @@ public sealed class ConfirmPickTaskCommandHandler(
             return task.ToDto();
         }
 
-        Guid pickerId = currentUser.GetUserId();
         task.Confirm(command.ScannedLotId, pickerId);
 
         if (task.LotId is { } lotId)

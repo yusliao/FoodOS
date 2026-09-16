@@ -1,4 +1,5 @@
 using FSH.Modules.Warehouse.Contracts.Dtos;
+using FSH.Framework.Core.Context;
 using FSH.Modules.Warehouse.Contracts.v1.Picks;
 using FSH.Modules.Warehouse.Data;
 using FSH.Modules.Warehouse.Domain;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Warehouse.Features.v1.Picks.GetMyPickTasks;
 
-public sealed class GetMyPickTasksQueryHandler(WarehouseDbContext dbContext)
+public sealed class GetMyPickTasksQueryHandler(WarehouseDbContext dbContext, ICurrentUser currentUser)
     : IQueryHandler<GetMyPickTasksQuery, IReadOnlyList<PickTaskDto>>
 {
     public async ValueTask<IReadOnlyList<PickTaskDto>> Handle(
@@ -16,9 +17,12 @@ public sealed class GetMyPickTasksQueryHandler(WarehouseDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        WaveAccess.RequireOperator(currentUser);
+        Guid pickerId = currentUser.GetUserId();
 
         var q = dbContext.PickTasks.AsNoTracking()
-            .Where(t => t.Status == PickTaskStatus.Pending && t.LotId != null);
+            .Where(t => t.Status == PickTaskStatus.Pending && t.LotId != null
+                && dbContext.Waves.Any(w => w.Id == t.WaveId && w.AssignedPickerUserId == pickerId));
         if (query.WarehouseId is { } warehouseId && warehouseId != Guid.Empty)
         {
             q = q.Where(t => dbContext.Waves.Any(w => w.Id == t.WaveId && w.WarehouseId == warehouseId));

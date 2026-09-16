@@ -9,7 +9,6 @@ using FSH.Modules.Files.Domain;
 using FSH.Modules.Files.Features.v1.Internal;
 using FSH.Modules.Files.Services;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Files.Features.v1.GetFileMetadata;
 
@@ -24,8 +23,7 @@ public sealed class GetFileMetadataQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(q);
 
-        var f = await db.FileAssets.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == q.FileAssetId, cancellationToken)
+        var f = await FileReadLookup.FindAsync(db, policies, currentUser, q.FileAssetId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException("file not found");
 
@@ -41,7 +39,7 @@ public sealed class GetFileMetadataQueryHandler(
 
         // Public files get a durable URL safe to persist long-term, while private files mint a
         // short-lived presigned GET on demand via the auth-gated url endpoint.
-        var publicUrl = f.Visibility == Visibility.Public
+        var publicUrl = f.Visibility == Visibility.Public && f.Status == FileAssetStatus.Available
             ? storage.BuildPublicUrl(f.StorageKey)
             : null;
 

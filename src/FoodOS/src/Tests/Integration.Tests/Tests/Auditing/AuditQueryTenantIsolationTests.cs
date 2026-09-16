@@ -1,4 +1,6 @@
 using Integration.Tests.Infrastructure;
+using Integration.Tests.Infrastructure.Extensions;
+using FSH.Modules.Multitenancy.Contracts.Dtos;
 
 namespace Integration.Tests.Tests.Auditing;
 
@@ -35,12 +37,15 @@ public sealed class AuditQueryTenantIsolationTests
             otherAdminEmail, TestConstants.DefaultPassword, otherTenantId);
 
         // Generate an audit row inside the OTHER tenant and capture its keys.
-        var otherSeed = await PollForOtherTenantAuditAsync(otherClient, otherTenantId);
+        var otherSeed = await PollForOtherTenantAuditAsync(rootClient, otherTenantId);
 
-        // Sanity: the other tenant can read its own row by id.
-        var ownDetail = await AuditTestHelper.GetByIdAsync(otherClient, otherSeed.Id);
-        ownDetail.ShouldNotBeNull();
-        ownDetail.TenantId.ShouldBe(otherTenantId);
+        // Restaurant admins cannot use even their own audit keys to access internal audit APIs.
+        foreach (var path in new[] { $"/{otherSeed.Id}", $"/by-correlation/{Uri.EscapeDataString(otherSeed.CorrelationId!)}",
+            $"/by-trace/{Uri.EscapeDataString(otherSeed.TraceId!)}", "/summary", "/security", "/exceptions" })
+        {
+            using var response = await otherClient.GetAsync($"{TestConstants.AuditsBasePath}{path}");
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, path);
+        }
 
         // Act + Assert — root tenant must NOT see the other tenant's row.
 
@@ -61,16 +66,17 @@ public sealed class AuditQueryTenantIsolationTests
     }
 
     private static async Task<FSH.Modules.Auditing.Contracts.Dtos.AuditSummaryDto> PollForOtherTenantAuditAsync(
-        HttpClient otherClient, string tenantId)
+        HttpClient operatorClient, string tenantId)
     {
-        // The other tenant authenticated (Security audit) and now hits an
-        // audited endpoint; poll until a row scoped to its own tenant appears.
-        return await AuditTestHelper.PollForAuditAsync(
-            otherClient,
-            a => a.TenantId == tenantId
-                 && !string.IsNullOrEmpty(a.CorrelationId)
-                 && !string.IsNullOrEmpty(a.TraceId),
-            attempts: 40);
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            var page = await AuditTestHelper.GetAuditsPageAsync(operatorClient, extraQuery: $"tenantId={tenantId}");
+            var match = page.Items.FirstOrDefault(a => a.TenantId == tenantId
+                && !string.IsNullOrEmpty(a.CorrelationId) && !string.IsNullOrEmpty(a.TraceId));
+            if (match is not null) return match;
+            await Task.Delay(500);
+        }
+        throw new TimeoutException($"No audit was recorded for {tenantId}.");
     }
 
     private async Task<HttpClient> CreateTenantAdminClientWithRetryAsync(
@@ -115,16 +121,16 @@ public sealed class AuditQueryTenantIsolationTests
 
             if (statusResponse.IsSuccessStatusCode)
             {
-                var content = await statusResponse.Content.ReadAsStringAsync();
-                if (content.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+                var status = (await statusResponse.DeserializeAsync<TenantProvisioningStatusDto>()).Status;
+                if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
 
-                if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException(
-                        $"Tenant {tenantId} provisioning failed: {content}");
+                        $"Tenant {tenantId} provisioning failed.");
                 }
             }
 

@@ -1,4 +1,9 @@
 using System.Security.Cryptography;
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Files.Data;
+using FSH.Modules.Files.Domain;
 using FSH.Modules.Files.Contracts.v1.DTOs;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
@@ -10,10 +15,38 @@ public sealed class RequestAndFinalizeUploadTests
 {
     private const string FilesBasePath = "/api/v1/files";
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public RequestAndFinalizeUploadTests(FshWebApplicationFactory factory)
     {
         _auth = new AuthHelper(factory);
+        _factory = factory;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DownloadUrl_Should_RejectPendingAndQuarantinedFiles_EvenForUploader(bool quarantined)
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var upload = await RequestPresignedUploadAsync(client, "unavailable.pdf", "application/pdf", 128, "Document", visibility: 0);
+        if (quarantined)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+                .GetAsync(TestConstants.RootTenantId);
+            scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+                new MultiTenantContext<AppTenantInfo>(tenant);
+            var db = scope.ServiceProvider.GetRequiredService<FilesDbContext>();
+            var file = await db.FileAssets.SingleAsync(f => f.Id == upload.FileAssetId);
+            file.MarkAvailable(128, ScanStatus.Infected);
+            await db.SaveChangesAsync();
+        }
+        using var download = await client.GetAsync($"{FilesBasePath}/{upload.FileAssetId}/url");
+        download.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var metadata = await client.GetAsync($"{FilesBasePath}/{upload.FileAssetId}");
+        metadata.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await metadata.DeserializeAsync<FileAssetDto>()).PublicUrl.ShouldBeNull();
     }
 
     [Fact]
