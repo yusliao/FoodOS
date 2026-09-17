@@ -265,8 +265,7 @@ export function ShopOrderDetailPage() {
               disabled={cancelMutation.isPending || !order || !canEdit}
               onClick={() =>
                 order &&
-                if (!canEdit) return;
-                cancelMutation.mutate({
+                canEdit && cancelMutation.mutate({
                   orderId: order.id,
                   idempotencyKey: crypto.randomUUID(),
                 })

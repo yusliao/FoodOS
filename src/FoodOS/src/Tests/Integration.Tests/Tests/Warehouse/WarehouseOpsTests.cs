@@ -29,13 +29,13 @@ public sealed class WarehouseOpsTests
     }
 
     [Fact]
-    public void CutoffJob_Should_BeRegisteredEveryMinute()
+    public void LegacyCutoffJob_Should_NotBeScheduled_InExternalWmsMode()
     {
         _ = _factory.Server;
-        var job = JobStorage.Current.GetConnection().GetRecurringJobs()
+        using var connection = JobStorage.Current.GetConnection();
+        var job = connection.GetRecurringJobs()
             .FirstOrDefault(j => j.Id == "warehouse-cutoff");
-        job.ShouldNotBeNull();
-        job.Cron.ShouldBe("* * * * *");
+        job.ShouldBeNull();
     }
 
     [Fact]

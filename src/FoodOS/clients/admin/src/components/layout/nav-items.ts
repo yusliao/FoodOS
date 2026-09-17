@@ -23,6 +23,7 @@ import {
   NotificationPermissions,
   OrderingPermissions,
   ProcurementPermissions,
+  LogisticsPermissions,
   IdentityPermissions,
   MultitenancyPermissions,
   WebhooksPermissions,
@@ -86,6 +87,9 @@ export const sections: NavSection[] = [
     items: [
       { to: "/procurement/purchase-orders", label: "Purchase orders", icon: Receipt, perms: [ProcurementPermissions.Purchase.View] },
       { to: "/procurement/suppliers", label: "Suppliers", icon: Building2, perms: [ProcurementPermissions.Suppliers.View] },
+      { to: "/logistics/vehicles", label: "Vehicles", icon: Package, perms: [LogisticsPermissions.Vehicles.View] },
+      { to: "/logistics/drivers", label: "Drivers", icon: UserCog, perms: [LogisticsPermissions.Drivers.View] },
+      { to: "/logistics/routes", label: "Delivery routes", icon: Package, perms: [LogisticsPermissions.Routes.View] },
       { to: "/orders", label: "Orders", icon: Receipt, perms: [OrderingPermissions.Orders.View] },
       { to: "/notifications", label: "Notifications", icon: Bell, perms: [NotificationPermissions.Inbox.View] },
       { to: "/audits", label: "Audits", icon: ScrollText, perms: [AuditingPermissions.AuditTrails.View] },

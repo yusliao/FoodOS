@@ -21,7 +21,6 @@ using FSH.Modules.Warehouse.Features.v1.Waves.StartWave;
 using FSH.Modules.Warehouse.Features.v1.Waves.AssignWave;
 using FSH.Modules.Warehouse.Jobs;
 using Hangfire;
-using Hangfire.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -87,14 +86,7 @@ public sealed class WarehouseModule : IModule
         group.MapCreatePackToteEndpoint();
         group.MapCreateShrinkageEndpoint();
 
-        var jobManager = endpoints.ServiceProvider.GetService<IRecurringJobManager>();
-        if (jobManager is not null)
-        {
-            jobManager.AddOrUpdate(
-                "warehouse-cutoff",
-                Job.FromExpression<CutoffJob>(j => j.RunAsync(CancellationToken.None)),
-                "* * * * *",
-                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
-        }
+        // Retire only this persisted schedule; queued jobs retain a safe compatibility entry point.
+        endpoints.ServiceProvider.GetService<IRecurringJobManager>()?.RemoveIfExists("warehouse-cutoff");
     }
 }

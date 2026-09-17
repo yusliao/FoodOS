@@ -6,6 +6,7 @@ const permissions = ["Permissions.Procurement.Purchase.View", "Permissions.Procu
 async function setup(page: Page, grants = permissions) {
   await seedAuthedSession(page, { ...TEST_USER, permissions: grants });
   await installAdminShellMocks(page, grants);
+  await page.route("**/api/v1/fulfillment/capabilities", route => route.fulfill({ json: { mode: "externalWms", readiness: "notConfigured", acceptsOrders: false, acceptsOrderChanges: false, localWarehouseExecution: false } }));
   await page.route("**/api/v1/procurement/purchase-orders?**", route => route.fulfill({ json: [] }));
   await page.route("**/api/v1/procurement/suppliers?**", route => route.fulfill({ json: [{ id: "supplier-1", code: "SUP", name: "Supplier One" }] }));
   for (const [path, prefix] of [["inventory/warehouses", "warehouse"], ["catalog/products", "product"]]) {

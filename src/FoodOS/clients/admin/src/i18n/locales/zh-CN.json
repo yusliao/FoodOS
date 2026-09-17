@@ -1,4 +1,6 @@
 {
+  "drivers": {"title":"司机档案","description":"司机身份档案。直接显示用户标识，不额外查询员工资料。当前不支持编辑或删除。","create":"新增司机","loading":"正在加载司机…","failed":"无法加载或保存司机。","empty":"暂无司机档案。","userId":"运营用户标识","phone":"司机电话","search":"搜索活跃运营用户","selected":"已选用户","noUsers":"没有匹配的活跃用户。","lookupRequired":"需要用户查看权限才能选择运营账号。","save":"登记司机","createHint":"请选择活跃运营用户。已登记用户返回原司机档案，不修改电话。WMS 对接就绪前不开放发运。"},
+  "vehicles": {"title":"车辆档案","description":"仅维护配送车辆档案。当前不支持编辑或删除，仓内执行仍由 WMS 负责。","create":"新增车辆","loading":"正在加载车辆…","failed":"无法加载或保存车辆。","empty":"暂无车辆档案。","plate":"车牌号","zones":"车厢温区","payload":"载重（kg）","save":"登记车辆","createHint":"按档案填写车厢温区（例如 Ambient,Chilled）。已有车牌会返回原档案，不更新温区或载重。"},
   "wms": {"title":"仓储系统对接","loading":"正在核对 WMS 就绪状态…","failed":"无法确认 WMS 状态，执行操作继续禁用。","unavailable":"WMS 对接尚未就绪，暂不能确认库存及配送承诺。","boundary":"可继续浏览、保存购物车和维护档案。仓内执行由 WMS 负责，禁止本地重复执行。","retry":"重试 WMS 状态"},
   "quality": {
     "pass": "质检通过",
@@ -350,6 +352,7 @@
       "operations": "运营"
     },
     "items": {
+      "logistics": { "vehicles": "车辆档案", "drivers": "司机档案" },
       "procurement": { "suppliers": "供应商管理", "purchase-orders": "采购单工作台" },
       "orders": "运营订单中心",
       "customers": "合作客户",

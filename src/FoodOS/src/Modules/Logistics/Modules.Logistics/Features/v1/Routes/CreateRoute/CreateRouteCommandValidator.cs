@@ -10,6 +10,8 @@ public sealed class CreateRouteCommandValidator : AbstractValidator<CreateRouteC
         RuleFor(x => x.WarehouseId).NotEmpty();
         RuleFor(x => x.Code).NotEmpty().MaximumLength(16);
         RuleFor(x => x.StoreIds).NotEmpty();
+        RuleFor(x => x.StoreIds).Must(ids => ids is not null && ids.Distinct().Count() == ids.Count)
+            .WithMessage("Each store may appear only once in a route.");
         RuleForEach(x => x.StoreIds).NotEmpty();
     }
 }

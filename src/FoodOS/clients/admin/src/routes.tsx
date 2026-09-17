@@ -16,6 +16,7 @@ import {
   NotificationPermissions,
   OrderingPermissions,
   ProcurementPermissions,
+  LogisticsPermissions,
   WebhooksPermissions,
 } from "@/lib/permissions";
 
@@ -40,6 +41,9 @@ const ProductsPage = lazyNamed(() => import("@/pages/catalog/products"), "Produc
 const PricingPage = lazyNamed(() => import("@/pages/catalog/pricing"), "PricingPage");
 const OrdersPage = lazyNamed(() => import("@/pages/orders/orders"), "OrdersPage");
 const SuppliersPage = lazyNamed(() => import("@/pages/procurement/suppliers"), "SuppliersPage");
+const VehiclesPage = lazyNamed(() => import("@/pages/logistics/vehicles"), "VehiclesPage");
+const DriversPage = lazyNamed(() => import("@/pages/logistics/drivers"), "DriversPage");
+const DeliveryRoutesPage = lazyNamed(() => import("@/pages/logistics/routes"), "DeliveryRoutesPage");
 const PurchaseOrdersPage = lazyNamed(() => import("@/pages/procurement/purchase-orders"), "PurchaseOrdersPage");
 const OrderDetailPage = lazyNamed(() => import("@/pages/orders/orders"), "OrderDetailPage");
 const TenantDetailPage = lazyNamed(() => import("@/pages/tenants/detail"), "TenantDetailPage");
@@ -95,6 +99,9 @@ export const router = createBrowserRouter([
           { index: true, element: <DashboardPage /> },
           { path: "procurement/purchase-orders", element: <RouteGuard perms={[ProcurementPermissions.Purchase.View]}><PurchaseOrdersPage /></RouteGuard> },
           { path: "procurement/suppliers", element: <RouteGuard perms={[ProcurementPermissions.Suppliers.View]}><SuppliersPage /></RouteGuard> },
+          { path: "logistics/vehicles", element: <RouteGuard perms={[LogisticsPermissions.Vehicles.View]}><VehiclesPage /></RouteGuard> },
+          { path: "logistics/drivers", element: <RouteGuard perms={[LogisticsPermissions.Drivers.View]}><DriversPage /></RouteGuard> },
+          { path: "logistics/routes", element: <RouteGuard perms={[LogisticsPermissions.Routes.View]}><DeliveryRoutesPage /></RouteGuard> },
           { path: "orders", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrdersPage /></RouteGuard> },
           { path: "orders/:id", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrderDetailPage /></RouteGuard> },
           { path: "customers", element: <RouteGuard perms={[OrderingPermissions.Customers.View]}><CustomersPage /></RouteGuard> },

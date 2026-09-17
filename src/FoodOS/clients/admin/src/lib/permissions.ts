@@ -26,6 +26,12 @@ export const OrderingPermissions = Object.freeze({
   },
 });
 
+export const LogisticsPermissions = Object.freeze({
+  Routes: { View: "Permissions.Logistics.Routes.View", Create: "Permissions.Logistics.Routes.Create" },
+  Drivers: { View: "Permissions.Logistics.Drivers.View", Create: "Permissions.Logistics.Drivers.Create" },
+  Vehicles: { View: "Permissions.Logistics.Vehicles.View", Create: "Permissions.Logistics.Vehicles.Create" },
+});
+
 export const ProcurementPermissions = Object.freeze({
   Quality: { Pass: "Permissions.Procurement.Quality.Pass", Fail: "Permissions.Procurement.Quality.Fail", View: "Permissions.Procurement.Quality.View" },
   Purchase: { View: "Permissions.Procurement.Purchase.View", Create: "Permissions.Procurement.Purchase.Create" },
@@ -161,6 +167,18 @@ export type PermissionGroup = {
 };
 
 export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
+  {
+    category: "Delivery records",
+    blurb: "Read and register operator delivery vehicles and drivers.",
+    entries: [
+      { name: LogisticsPermissions.Vehicles.View, description: "View vehicles" },
+      { name: LogisticsPermissions.Vehicles.Create, description: "Register vehicles" },
+      { name: LogisticsPermissions.Drivers.View, description: "View drivers" },
+      { name: LogisticsPermissions.Drivers.Create, description: "Register drivers" },
+      { name: LogisticsPermissions.Routes.View, description: "View routes" },
+      { name: LogisticsPermissions.Routes.Create, description: "Register routes" },
+    ],
+  },
   {
     category: "Procurement",
     blurb: "Manage operator suppliers and procurement records.",

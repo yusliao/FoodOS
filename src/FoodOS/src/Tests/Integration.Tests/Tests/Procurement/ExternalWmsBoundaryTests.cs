@@ -76,4 +76,25 @@ public sealed class ExternalWmsBoundaryTests(FshWebApplicationFactory factory)
         });
         create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task Capabilities_Should_RequireAuthentication_AndReportNotConfigured()
+    {
+        using var anonymous = factory.CreateClient();
+        using var denied = await anonymous.GetAsync("/api/v1/fulfillment/capabilities");
+        denied.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        using var client = await new AuthHelper(factory).CreateRootAdminClientAsync();
+        using var response = await client.GetAsync("/api/v1/fulfillment/capabilities");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using (body)
+        {
+            body.RootElement.GetProperty("mode").GetString().ShouldBe("externalWms");
+            body.RootElement.GetProperty("readiness").GetString().ShouldBe("notConfigured");
+            body.RootElement.GetProperty("acceptsOrders").GetBoolean().ShouldBeFalse();
+            body.RootElement.GetProperty("acceptsOrderChanges").GetBoolean().ShouldBeFalse();
+            body.RootElement.GetProperty("localWarehouseExecution").GetBoolean().ShouldBeFalse();
+        }
+    }
 }

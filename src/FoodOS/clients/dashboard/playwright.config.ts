@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 5174);
 
 /**
  * Playwright config for the dashboard app.
@@ -31,7 +32,7 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
 
   use: {
-    baseURL: "http://localhost:5174",
+    baseURL: `http://localhost:${port}`,
     locale: "en-US",
     trace: "on-first-retry",
     // Disable animations + reduce flake from CSS keyframes / transitions
@@ -48,13 +49,11 @@ export default defineConfig({
     },
   ],
 
-  // Boot the Vite dev server before any test runs. `reuseExistingServer`
-  // means re-running the test suite picks up an already-running dev
-  // server (faster local iteration).
+  // Start an isolated server; PLAYWRIGHT_PORT keeps tests off a user's dev server.
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:5174",
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev -- --port ${port}`,
+    url: `http://localhost:${port}`,
+    reuseExistingServer: false,
     timeout: 60_000,
     stdout: "ignore",
     stderr: "pipe",
