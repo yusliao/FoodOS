@@ -120,6 +120,43 @@ public sealed class ProcurementInboundTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public async Task RepeatedLotQualityCheck_Should_NotRepeatReceipts(bool pass)
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var supplierId = await CreateSupplierAsync(client, Guid.NewGuid().ToString("N")[..8]);
+        var productId = Guid.CreateVersion7();
+        var po = await CreateAppointedPurchaseOrderAsync(client, supplierId, warehouse.Id, productId, 10m);
+        var lineId = po.Lines[0].Id;
+        using var first = await PostQualityWithFreshKeyAsync(client, QcUrl(po.Id, lineId, pass), "REPLAY-LOT", 5m);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+
+        using var repeated = await PostQualityWithFreshKeyAsync(client, QcUrl(po.Id, lineId, pass), " replay-lot ", 5m);
+        repeated.StatusCode.ShouldBe(HttpStatusCode.OK, await repeated.Content.ReadAsStringAsync());
+        (await repeated.DeserializeAsync<Guid>()).ShouldBe(await first.DeserializeAsync<Guid>());
+        using var changed = await PostQualityWithFreshKeyAsync(client, QcUrl(po.Id, lineId, pass), "REPLAY-LOT", 3m);
+        changed.StatusCode.ShouldBe(HttpStatusCode.Conflict, await changed.Content.ReadAsStringAsync());
+
+        using var get = await client.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}");
+        var after = await get.DeserializeAsync<PurchaseOrderDto>();
+        after.QualityChecks.ShouldHaveSingleItem();
+        after.Lines[0].ReceivedQty.ShouldBe(pass ? 5m : 0m);
+        after.Lines[0].RejectedQty.ShouldBe(pass ? 0m : 5m);
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(pass ? 5m : 0m);
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>().GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext = new MultiTenantContext<AppTenantInfo>(tenant);
+        var inventory = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+        var balance = await inventory.LotBalances.SingleAsync(b => b.ProductId == productId);
+        balance.OnHand.ShouldBe(5m);
+        balance.Isolated.ShouldBe(pass ? 0m : 5m);
+        var tasks = scope.ServiceProvider.GetRequiredService<FSH.Modules.Warehouse.Data.WarehouseDbContext>();
+        (await tasks.PutawayTasks.CountAsync(t => t.ProductId == productId)).ShouldBe(pass ? 1 : 0);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public async Task DraftPurchaseOrder_QualityCheck_Should_NotCreateInventory(bool pass)
     {
         using var client = await _auth.CreateRootAdminClientAsync();
@@ -145,6 +182,56 @@ public sealed class ProcurementInboundTests
         var inventory = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
         (await inventory.InventoryTransactions.AnyAsync(t => t.ProductId == productId)).ShouldBeFalse();
         (await inventory.Lots.AnyAsync(l => l.ProductId == productId)).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public async Task ConcurrentLotQualityChecks_Should_KeepReceiptAndStockTotals(bool pass, bool sameLot)
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var supplierId = await CreateSupplierAsync(client, Guid.NewGuid().ToString("N")[..8]);
+        var productId = Guid.CreateVersion7();
+        var po = await CreateAppointedPurchaseOrderAsync(client, supplierId, warehouse.Id, productId, 10m);
+        string url = QcUrl(po.Id, po.Lines[0].Id, pass);
+        var responses = await Task.WhenAll(
+            PostQualityWithFreshKeyAsync(client, url, "CONCURRENT-A", 5m),
+            PostQualityWithFreshKeyAsync(client, url, sameLot ? " concurrent-a " : "CONCURRENT-B", 5m));
+        try
+        {
+            responses.Count(response => response.StatusCode == HttpStatusCode.OK).ShouldBe(2);
+            if (sameLot)
+                (await responses[0].DeserializeAsync<Guid>()).ShouldBe(await responses[1].DeserializeAsync<Guid>());
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
+
+        using var get = await client.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}");
+        var after = await get.DeserializeAsync<PurchaseOrderDto>();
+        int count = sameLot ? 1 : 2;
+        decimal total = count * 5m;
+        after.QualityChecks.Count.ShouldBe(count);
+        after.Lines[0].ReceivedQty.ShouldBe(pass ? total : 0m);
+        after.Lines[0].RejectedQty.ShouldBe(pass ? 0m : total);
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(pass ? total : 0m);
+
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>().GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext = new MultiTenantContext<AppTenantInfo>(tenant);
+        var inventory = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+        (await inventory.LotBalances.Where(balance => balance.ProductId == productId).SumAsync(balance => balance.OnHand)).ShouldBe(total);
+        (await inventory.LotBalances.Where(balance => balance.ProductId == productId).SumAsync(balance => balance.Isolated)).ShouldBe(pass ? 0m : total);
+        var procurement = scope.ServiceProvider.GetRequiredService<FSH.Modules.Procurement.Data.ProcurementDbContext>();
+        (await procurement.ReceiveRecords.CountAsync(record => record.PurchaseOrderId == po.Id)).ShouldBe(count);
+        (await procurement.TraceEvents.CountAsync(record => record.ProductId == productId)).ShouldBe(count);
+        var tasks = scope.ServiceProvider.GetRequiredService<FSH.Modules.Warehouse.Data.WarehouseDbContext>();
+        (await tasks.PutawayTasks.CountAsync(task => task.ProductId == productId)).ShouldBe(pass ? count : 0);
+        (await tasks.PutawayTasks.Where(task => task.ProductId == productId).SumAsync(task => task.Quantity)).ShouldBe(pass ? total : 0m);
     }
 
     [Fact]
@@ -223,6 +310,87 @@ public sealed class ProcurementInboundTests
 
     private static string QcUrl(Guid purchaseOrderId, Guid lineId, bool pass)
         => $"{TestConstants.ProcurementBasePath}/purchase-orders/{purchaseOrderId}/lines/{lineId}/qc/{(pass ? "pass" : "fail")}";
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task InterruptedQualityCheck_Should_ResumeWithoutChangingReceipt(bool pass, bool failPutaway)
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(admin);
+        var supplier = await CreateSupplierAsync(admin, Guid.NewGuid().ToString("N")[..8]);
+        var product = Guid.CreateVersion7();
+        var po = await CreateAppointedPurchaseOrderAsync(admin, supplier, warehouse.Id, product, 10m);
+        var fault = new QualitySaveFault(failPutaway);
+        using var failingFactory = _factory.WithWebHostBuilder(builder =>
+            Microsoft.AspNetCore.TestHost.WebHostBuilderExtensions.ConfigureTestServices(builder, services =>
+            {
+                services.ConfigureDbContext<FSH.Modules.Procurement.Data.ProcurementDbContext>((_, options) => options.AddInterceptors(fault));
+                services.ConfigureDbContext<FSH.Modules.Warehouse.Data.WarehouseDbContext>((_, options) => options.AddInterceptors(fault));
+            }));
+        using var client = failingFactory.CreateClient();
+        var token = await _auth.GetRootAdminTokenAsync();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+        client.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+        string url = QcUrl(po.Id, po.Lines[0].Id, pass);
+        using var first = await PostQualityWithFreshKeyAsync(client, url, "RECOVER-LOT", 5m);
+        first.StatusCode.ShouldBe(HttpStatusCode.InternalServerError, await first.Content.ReadAsStringAsync());
+        fault.Fired.ShouldBeTrue();
+        using var interruptedGet = await admin.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}");
+        var interrupted = await interruptedGet.DeserializeAsync<PurchaseOrderDto>();
+        interrupted.QualityChecks.Count.ShouldBe(failPutaway ? 1 : 0);
+
+        using var changed = await PostQualityWithFreshKeyAsync(client, url, "RECOVER-LOT", 3m);
+        changed.StatusCode.ShouldBe(HttpStatusCode.Conflict, await changed.Content.ReadAsStringAsync());
+        using var retry = await PostQualityWithFreshKeyAsync(client, url, "RECOVER-LOT", 5m);
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK, await retry.Content.ReadAsStringAsync());
+        using var get = await admin.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}");
+        var after = await get.DeserializeAsync<PurchaseOrderDto>();
+        var check = after.QualityChecks.ShouldHaveSingleItem();
+        after.Lines[0].ReceivedQty.ShouldBe(pass ? 5m : 0m);
+        after.Lines[0].RejectedQty.ShouldBe(pass ? 0m : 5m);
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>().GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext = new MultiTenantContext<AppTenantInfo>(tenant);
+        var inventory = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+        var balance = await inventory.LotBalances.SingleAsync(b => b.ProductId == product);
+        balance.OnHand.ShouldBe(5m);
+        balance.Isolated.ShouldBe(pass ? 0m : 5m);
+        var tasks = scope.ServiceProvider.GetRequiredService<FSH.Modules.Warehouse.Data.WarehouseDbContext>();
+        var putaway = await tasks.PutawayTasks.Where(task => task.ProductId == product).ToListAsync();
+        putaway.Count.ShouldBe(pass ? 1 : 0);
+        if (pass)
+        {
+            putaway[0].Quantity.ShouldBe(5m);
+            putaway[0].RefId.ShouldBe(check.Id);
+        }
+    }
+
+    private sealed class QualitySaveFault(bool failPutaway) : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        private int _fired;
+        public bool Fired => _fired != 0;
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            bool target = failPutaway
+                ? eventData.Context is FSH.Modules.Warehouse.Data.WarehouseDbContext
+                : eventData.Context is FSH.Modules.Procurement.Data.ProcurementDbContext;
+            if (target && Interlocked.Exchange(ref _fired, 1) == 0)
+                throw new InvalidOperationException("Injected QC persistence failure.");
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private static async Task<HttpResponseMessage> PostQualityWithFreshKeyAsync(HttpClient client, string url, string lotNo, decimal quantity)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(QcBody(lotNo, quantity)) };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+        return await client.SendAsync(request);
+    }
 
     private static object QcBody(string lotNo, decimal quantity) => new
     {

@@ -1,5 +1,6 @@
 import {
   Activity,
+  BadgeDollarSign,
   Bell,
   Building2,
   FolderTree,
@@ -21,6 +22,7 @@ import {
   CatalogPermissions,
   NotificationPermissions,
   OrderingPermissions,
+  ProcurementPermissions,
   IdentityPermissions,
   MultitenancyPermissions,
   WebhooksPermissions,
@@ -62,6 +64,7 @@ export const sections: NavSection[] = [
       { to: "/catalog/products", label: "Products", icon: Package, perms: [CatalogPermissions.Products.View] },
       { to: "/catalog/brands", label: "Brands", icon: Tags, perms: [CatalogPermissions.Brands.View] },
       { to: "/catalog/categories", label: "Categories", icon: FolderTree, perms: [CatalogPermissions.Categories.View] },
+      { to: "/catalog/pricing", label: "Contract pricing", icon: BadgeDollarSign, perms: [CatalogPermissions.PriceLists.View] },
     ],
   },
   {
@@ -81,6 +84,9 @@ export const sections: NavSection[] = [
   {
     id: "operations", caption: "Operations", icon: Activity,
     items: [
+      { to: "/procurement/purchase-orders", label: "Purchase orders", icon: Receipt, perms: [ProcurementPermissions.Purchase.View] },
+      { to: "/procurement/suppliers", label: "Suppliers", icon: Building2, perms: [ProcurementPermissions.Suppliers.View] },
+      { to: "/orders", label: "Orders", icon: Receipt, perms: [OrderingPermissions.Orders.View] },
       { to: "/notifications", label: "Notifications", icon: Bell, perms: [NotificationPermissions.Inbox.View] },
       { to: "/audits", label: "Audits", icon: ScrollText, perms: [AuditingPermissions.AuditTrails.View] },
     ],

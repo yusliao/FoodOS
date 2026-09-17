@@ -34,6 +34,8 @@ import {
   ErrorBand,
 } from "@/components/list";
 import { describe, formatDate, formatDateTimeMono, formatMoney } from "@/lib/list-helpers";
+import { useFulfillmentCapabilities } from "@/api/fulfillment";
+import { WmsStatusNotice } from "@/components/wms-status";
 import { useT } from "@/i18n/locale-provider";
 import { formatCountdown, isAmendable, orderStatusTone, zoneLabel } from "./shop-helpers";
 import { useProductsById } from "./use-shop-data";
@@ -42,6 +44,8 @@ const DESKTOP_GRID = "grid-cols-[1fr_90px_90px_110px_110px]";
 
 export function ShopOrderDetailPage() {
   const t = useT();
+  const capabilities = useFulfillmentCapabilities();
+  const canChange = capabilities.isSuccess && capabilities.data.readiness === "ready" && capabilities.data.acceptsOrderChanges === true;
   const { orderId = "" } = useParams<{ orderId: string }>();
   const queryClient = useQueryClient();
   const [qtyDraft, setQtyDraft] = useState<Record<string, number>>({});
@@ -91,12 +95,12 @@ export function ShopOrderDetailPage() {
   });
 
   const cutoff = order ? formatCountdown(order.cutoffAt) : null;
-  const canEdit = order ? isAmendable(order.status, order.cutoffAt) : false;
+  const canEdit = canChange && (order ? isAmendable(order.status, order.cutoffAt) : false);
   const total = order?.lines.reduce((s, l) => s + l.unitPrice * l.orderedQty, 0) ?? 0;
   const currency = order?.lines[0]?.currency ?? "USD";
 
   const onSaveAmend = () => {
-    if (!order) return;
+    if (!order || !canEdit) return;
     const lines = Object.entries(qtyDraft)
       .filter(([, qty]) => qty > 0)
       .map(([productId, quantity]) => ({ productId, quantity }));
@@ -113,6 +117,7 @@ export function ShopOrderDetailPage() {
 
   return (
     <div className="space-y-5">
+      {!canChange && <WmsStatusNotice />}
       <EntityDetailBack to="/shop/orders" label={t("shop.backToOrders", "Back to orders")} />
 
       {query.isError ? <ErrorBand message={describe(query.error)} /> : null}
@@ -257,9 +262,10 @@ export function ShopOrderDetailPage() {
             </DialogClose>
             <Button
               variant="destructive"
-              disabled={cancelMutation.isPending || !order}
+              disabled={cancelMutation.isPending || !order || !canEdit}
               onClick={() =>
                 order &&
+                if (!canEdit) return;
                 cancelMutation.mutate({
                   orderId: order.id,
                   idempotencyKey: crypto.randomUUID(),

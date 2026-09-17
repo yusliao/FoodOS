@@ -103,6 +103,7 @@ var moduleAssemblies = new Assembly[]
     typeof(FSH.Modules.Notifications.NotificationsModule).Assembly,
 };
 
+builder.Services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(FoodOS.Api.ExternalWmsExecutionBehavior<,>));
 builder.AddHeroPlatform(o =>
 {
     o.EnableCaching = true;
@@ -137,4 +138,13 @@ app.UseHeroPlatform(p =>
 app.MapGet("/", () => Results.Ok(new { message = "hello world!" }))
    .WithTags("PlayGround")
    .AllowAnonymous();
+app.MapGet("/api/v1/fulfillment/capabilities", (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Ok(new
+    {
+        mode = "externalWms", readiness = "notConfigured",
+        acceptsOrders = false, acceptsOrderChanges = false, localWarehouseExecution = false,
+    });
+}).RequireAuthorization().WithName("GetFulfillmentCapabilities").WithTags("Fulfillment");
 await app.RunAsync();

@@ -14,24 +14,17 @@ public sealed class ReceiveIsolatedStockCommandHandler(InventoryDbContext dbCont
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        bool duplicate = await dbContext.InventoryTransactions
-            .AnyAsync(t => t.IdempotencyKey == command.IdempotencyKey, cancellationToken)
-            .ConfigureAwait(false);
-        if (duplicate)
-        {
-            var existing = await dbContext.InventoryTransactions
-                .AsNoTracking()
-                .FirstAsync(t => t.IdempotencyKey == command.IdempotencyKey, cancellationToken)
-                .ConfigureAwait(false);
-            return existing.LotId ?? existing.Id;
-        }
-
         var warehouse = await dbContext.Warehouses
             .FirstOrDefaultAsync(w => w.Id == command.WarehouseId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Warehouse {command.WarehouseId} not found.");
 
         var zone = warehouse.ZoneOf(command.Zone);
+        var replay = await ReceiptReplay.FindAsync(
+            dbContext, command.IdempotencyKey, warehouse.Id, zone.Id, command.ProductId,
+            command.LotNo, command.Quantity, command.ExpiryDate, command.ManufacturedOn,
+            "ReceiveIsolated", cancellationToken).ConfigureAwait(false);
+        if (replay.HasValue) return replay.Value;
 
         string lotNo = command.LotNo.Trim().ToUpperInvariant();
         var lot = await dbContext.Lots

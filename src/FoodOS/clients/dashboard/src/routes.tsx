@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import { WmsStatusNotice } from "@/components/wms-status";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProtectedRoute } from "@/auth/protected-route";
 import { RouteError } from "@/components/route-error";
@@ -119,12 +120,7 @@ const ShopOrderDetailPage = lazyNamed(
   "ShopOrderDetailPage",
 );
 const ShopAfterSalesPage = lazyNamed(() => import("@/pages/shop/after-sales"), "ShopAfterSalesPage");
-const QualityDeskPage = lazyNamed(() => import("@/pages/ops/qc"), "QualityDeskPage");
 const PurchaseDeskPage = lazyNamed(() => import("@/pages/ops/purchase"), "PurchaseDeskPage");
-const PutawayPage = lazyNamed(() => import("@/pages/ops/putaway"), "PutawayPage");
-const WavesPage = lazyNamed(() => import("@/pages/ops/waves"), "WavesPage");
-const PicksPage = lazyNamed(() => import("@/pages/ops/picks"), "PicksPage");
-const ShipmentsPage = lazyNamed(() => import("@/pages/ops/shipments"), "ShipmentsPage");
 
 /**
  * RouteFallback — what shows while a lazy chunk is downloading. Mirrors
@@ -244,11 +240,11 @@ export const router = createBrowserRouter([
             ],
           },
           { path: "ops/purchase", element: withSuspense(<PurchaseDeskPage />) },
-          { path: "ops/qc", element: withSuspense(<QualityDeskPage />) },
-          { path: "ops/putaway", element: withSuspense(<PutawayPage />) },
-          { path: "ops/waves", element: withSuspense(<WavesPage />) },
-          { path: "ops/picks", element: withSuspense(<PicksPage />) },
-          { path: "ops/shipments", element: withSuspense(<ShipmentsPage />) },
+          { path: "ops/qc", element: <WmsStatusNotice /> },
+          { path: "ops/putaway", element: <WmsStatusNotice /> },
+          { path: "ops/waves", element: <WmsStatusNotice /> },
+          { path: "ops/picks", element: <WmsStatusNotice /> },
+          { path: "ops/shipments", element: <WmsStatusNotice /> },
           { path: "catalog", element: <Navigate to="/catalog/brands" replace /> },
           { path: "catalog/brands", element: withSuspense(<BrandsPage />) },
           { path: "catalog/categories", element: withSuspense(<CategoriesPage />) },

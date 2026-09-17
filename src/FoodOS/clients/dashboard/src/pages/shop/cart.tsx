@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getCart, placeOrder, updateCart, type CartLineInput } from "@/api/ordering";
+import { useFulfillmentCapabilities } from "@/api/fulfillment";
+import { WmsStatusNotice } from "@/components/wms-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +26,8 @@ const DESKTOP_GRID = "grid-cols-[1fr_90px_120px_110px_40px]";
 
 export function ShopCartPage() {
   const t = useT();
+  const capabilities = useFulfillmentCapabilities();
+  const canPlace = capabilities.isSuccess && capabilities.data.readiness === "ready" && capabilities.data.acceptsOrders === true;
   const navigate = useNavigate();
   const { store } = useShopStore();
   const queryClient = useQueryClient();
@@ -89,6 +93,7 @@ export function ShopCartPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {!canPlace && <WmsStatusNotice />}
       <EntityPageHeader
         icon={ShoppingCart}
         title={t("shop.cartTitle", "Cart")}
@@ -214,10 +219,10 @@ export function ShopCartPage() {
               </div>
             </div>
             <Button
-              disabled={!store || lines.length === 0 || placeMutation.isPending}
+              disabled={!canPlace || !store || lines.length === 0 || placeMutation.isPending}
               onClick={() =>
                 store &&
-                placeMutation.mutate({ storeId: store.id, idempotencyKey: crypto.randomUUID() })
+                canPlace && placeMutation.mutate({ storeId: store.id, idempotencyKey: crypto.randomUUID() })
               }
             >
               {placeMutation.isPending

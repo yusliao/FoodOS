@@ -1,0 +1,79 @@
+using System.Runtime.CompilerServices;
+using FSH.Framework.Core.Exceptions;
+using FSH.Modules.Inventory.Contracts.v1.Stock;
+using FSH.Modules.Ordering.Contracts.v1.Orders;
+using FSH.Modules.Ordering.Contracts.v1.Shop;
+using FSH.Modules.Procurement.Contracts.v1.QualityChecks;
+using FSH.Modules.Logistics.Contracts.v1.Shipments;
+using FSH.Modules.Logistics.Contracts.v1.ProofOfDelivery;
+using FSH.Modules.Warehouse.Contracts.v1.Putaway;
+using Integration.Tests.Infrastructure;
+using Mediator;
+
+namespace Integration.Tests.Tests.Procurement;
+
+[Collection(FshCollectionDefinition.Name)]
+public sealed class ExternalWmsBoundaryTests(FshWebApplicationFactory factory)
+{
+    public static IEnumerable<object[]> BlockedMessages()
+    {
+        var inventory = typeof(ReceiveInventoryCommand).Assembly.GetTypes().Where(type =>
+            type.Namespace is "FSH.Modules.Inventory.Contracts.v1.Stock" or "FSH.Modules.Inventory.Contracts.v1.Plans");
+        var warehouse = typeof(CreatePutawayTaskCommand).Assembly.GetTypes();
+        var additional = new[] {
+            typeof(PassQualityCheckCommand), typeof(FailQualityCheckCommand),
+            typeof(PlaceOrderCommand), typeof(AmendOrderCommand), typeof(CancelOrderCommand),
+            typeof(PlaceShopOrderCommand), typeof(AmendShopOrderCommand), typeof(CancelShopOrderCommand),
+            typeof(LockOrdersForCutoffCommand), typeof(StartOrderPickingCommand), typeof(ConfirmOrderPackedCommand),
+            typeof(RecordOrderLineShortageCommand), typeof(StartOrderInTransitCommand), typeof(ConfirmOrderReceivedCommand),
+            typeof(CreateShipmentCommand), typeof(LoadShipmentCommand), typeof(DepartShipmentCommand), typeof(ConfirmPodCommand),
+        };
+        return inventory.Concat(warehouse).Concat(additional).Where(type => !type.IsAbstract && type.GetInterfaces()
+            .Any(contract => contract.IsGenericType && contract.GetGenericTypeDefinition() == typeof(ICommand<>)))
+            .Distinct().Select(type => new object[] { type });
+    }
+
+    [Theory]
+    [MemberData(nameof(BlockedMessages))]
+    public async Task Mediator_Should_RejectLegacyExecution_BeforeHandlers(Type messageType)
+    {
+        using var scope = factory.Services.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        // Deliberately no HTTP context or tenant: background/internal dispatch must also fail closed.
+        var command = RuntimeHelpers.GetUninitializedObject(messageType);
+        var error = await Should.ThrowAsync<CustomException>(async () => await mediator.Send(command));
+        error.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        error.Message.ShouldContain("External WMS confirmation");
+    }
+
+    [Theory]
+    [InlineData("procurement/purchase-orders/00000000-0000-0000-0000-000000000001/lines/00000000-0000-0000-0000-000000000002/qc/pass")]
+    [InlineData("procurement/purchase-orders/00000000-0000-0000-0000-000000000001/lines/00000000-0000-0000-0000-000000000002/qc/fail")]
+    [InlineData("inventory/stock/receive")]
+    [InlineData("logistics/shipments/00000000-0000-0000-0000-000000000001/depart")]
+    public async Task RootHttp_Should_NotBypassExecutionBoundary(string path)
+    {
+        var auth = new AuthHelper(factory);
+        using var client = await auth.CreateRootAdminClientAsync();
+        using var response = await client.PostAsJsonAsync("/api/v1/" + path, new {
+            warehouseId = Guid.NewGuid(), productId = Guid.NewGuid(), zone = "Ambient",
+            quantity = 5, sampleQty = 1, lotNo = "DENIED", expiryDate = "2027-01-01",
+            idempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict, await response.Content.ReadAsStringAsync());
+        (await response.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
+    }
+
+    [Fact]
+    public async Task ReadAndSupplierMaintenance_Should_RemainAvailable()
+    {
+        var auth = new AuthHelper(factory);
+        using var client = await auth.CreateRootAdminClientAsync();
+        using var read = await client.GetAsync("/api/v1/procurement/purchase-orders");
+        read.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var create = await client.PostAsJsonAsync("/api/v1/procurement/suppliers", new {
+            code = "W" + Guid.NewGuid().ToString("N")[..8], name = "External WMS supplier", leadDays = 1,
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
+    }
+}

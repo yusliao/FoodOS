@@ -24,6 +24,10 @@ public sealed class CancelOrderCommandHandler(OrderingDbContext dbContext, IMedi
             .ToList();
         int revision = order.Revision;
 
+        // Validate cutoff and state before any independently committed inventory release.
+        // Reservation identifiers were captured above; persist the order only after releases succeed.
+        order.Cancel(clock.GetUtcNow());
+
         foreach (var (lineId, reservationId) in holds)
         {
             await InventoryStockOps.UnreserveAsync(
@@ -37,7 +41,6 @@ public sealed class CancelOrderCommandHandler(OrderingDbContext dbContext, IMedi
                 .ConfigureAwait(false);
         }
 
-        order.Cancel(clock.GetUtcNow());
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return order.Id;
     }

@@ -4,6 +4,8 @@ using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Data;
 using FSH.Modules.Ordering.Domain;
 using FSH.Modules.Ordering.Features.v1.Orders.PlaceOrder;
+using FSH.Modules.Ordering.Features.v1.Orders.CancelOrder;
+using FSH.Framework.Core.Exceptions;
 using Finbuckle.MultiTenant;
 using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Shared.Multitenancy;
@@ -149,6 +151,56 @@ public sealed class OrderingShopTests
 
         var afterCancel = await GetAvailableAsync(client, warehouse.Id, productId, "Ambient");
         afterCancel.Available.ShouldBe(10m);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectedCancellation_Should_PreserveReservation(bool afterCutoff)
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var warehouse = await CreateWarehouseAsync(client);
+        var productId = await CreateProductAsync(client);
+        await ReceiveAsync(client, warehouse.Id, productId, "LOT-REJECT-CANCEL", 10m);
+        var orgId = await CreateCustomerOrgAsync(client);
+        var storeId = await CreateStoreAsync(client, orgId, warehouse.Id);
+        using var cart = await client.PutAsJsonAsync(
+            $"{TestConstants.OrderingBasePath}/carts/{storeId}",
+            new { storeId, lines = new[] { new { productId, quantity = 6m } } });
+        cart.EnsureSuccessStatusCode();
+        using var place = await client.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/orders", new { storeId });
+        place.EnsureSuccessStatusCode();
+        var orderId = await place.DeserializeAsync<Guid>();
+
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+        var order = await db.SalesOrders.SingleAsync(o => o.Id == orderId);
+        var reservationId = order.Lines.Single().ReservationId;
+        if (!afterCutoff)
+        {
+            order.LockForCutoff();
+            await db.SaveChangesAsync();
+        }
+
+        var clock = new CancellationClock(afterCutoff ? order.CutoffAt.AddSeconds(1) : order.CutoffAt.AddSeconds(-1));
+        var handler = new CancelOrderCommandHandler(db, scope.ServiceProvider.GetRequiredService<IMediator>(), clock);
+        await Should.ThrowAsync<CustomException>(async () => await handler.Handle(new CancelOrderCommand(orderId), CancellationToken.None));
+
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(4m);
+        db.ChangeTracker.Clear();
+        var persisted = await db.SalesOrders.SingleAsync(o => o.Id == orderId);
+        persisted.Status.ShouldBe(afterCutoff ? SalesOrderStatus.Reserved : SalesOrderStatus.Planned);
+        persisted.Lines.Single().ReservationId.ShouldBe(reservationId);
+        persisted.Lines.Single().ReservedQty.ShouldBe(6m);
+    }
+
+    private sealed class CancellationClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     [Fact]

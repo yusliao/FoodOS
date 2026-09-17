@@ -37,6 +37,13 @@ internal static class QualityCheckRecording
                 System.Net.HttpStatusCode.Unauthorized);
         }
 
+        // Serialize QC for the whole order: different lots also update the same line totals.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        string lockKey = $"procurement:qc:{purchaseOrderId:N}";
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
+            cancellationToken).ConfigureAwait(false);
+
         var po = await dbContext.PurchaseOrders
             .FirstOrDefaultAsync(p => p.Id == purchaseOrderId, cancellationToken)
             .ConfigureAwait(false)
@@ -45,6 +52,18 @@ internal static class QualityCheckRecording
         po.EnsureCanRecordQualityCheck();
         var line = po.RequireLine(lineId);
         var zone = ZoneKinds.Parse(line.Zone);
+        string normalizedLotNo = lotNo.Trim().ToUpperInvariant();
+        var recorded = po.QualityChecks.FirstOrDefault(check =>
+            check.LineId == lineId && check.Result == result && check.LotNo == normalizedLotNo);
+        if (recorded is not null && (recorded.Quantity != quantity || recorded.SampleQty != sampleQty
+            || recorded.Note != (string.IsNullOrWhiteSpace(note) ? null : note.Trim())
+            || !recorded.PhotoIds().SequenceEqual(photoFileIds ?? [])))
+        {
+            throw new CustomException(
+                "This purchase line and lot already have a quality check with different details.",
+                (IEnumerable<string>?)null,
+                System.Net.HttpStatusCode.Conflict);
+        }
 
         Guid lotId = result == QualityCheckResult.Pass
             ? await InventoryStockOps.ReceiveAsync(
@@ -75,6 +94,16 @@ internal static class QualityCheckRecording
                 po.SupplierId,
                 cancellationToken).ConfigureAwait(false);
 
+        if (recorded is not null)
+        {
+            if (recorded.LotId != lotId)
+                throw new CustomException("The recorded quality check does not match its inventory receipt.",
+                    (IEnumerable<string>?)null, System.Net.HttpStatusCode.Conflict);
+            await EnsurePutawayAsync(mediator, po, line, recorded, lotId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return recorded.Id;
+        }
+
         var check = po.RecordQualityCheck(
             lineId,
             inspectorId,
@@ -102,8 +131,17 @@ internal static class QualityCheckRecording
             destLocation: po.WarehouseId.ToString("N")));
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        if (result == QualityCheckResult.Pass)
+        await EnsurePutawayAsync(mediator, po, line, check, lotId, cancellationToken).ConfigureAwait(false);
+        return check.Id;
+    }
+
+    private static async Task EnsurePutawayAsync(
+        IMediator mediator, PurchaseOrder po, PurchaseOrderLine line, QualityCheck check,
+        Guid lotId, CancellationToken cancellationToken)
+    {
+        if (check.Result == QualityCheckResult.Pass)
         {
             await mediator.Send(
                     new CreatePutawayTaskCommand(
@@ -111,13 +149,12 @@ internal static class QualityCheckRecording
                         line.Zone,
                         line.ProductId,
                         lotId,
-                        quantity,
+                        check.Quantity,
                         Source: "QcPass",
                         RefId: check.Id),
                     cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        return check.Id;
     }
 }

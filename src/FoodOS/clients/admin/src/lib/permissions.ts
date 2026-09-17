@@ -11,6 +11,11 @@
  */
 
 export const OrderingPermissions = Object.freeze({
+  Orders: {
+    View: "Permissions.Ordering.Orders.View",
+    Manage: "Permissions.Ordering.Orders.Manage",
+    Reconcile: "Permissions.Ordering.Orders.Reconcile",
+  },
   Customers: {
     View: "Permissions.Ordering.Customers.View",
     Create: "Permissions.Ordering.Customers.Create",
@@ -20,6 +25,15 @@ export const OrderingPermissions = Object.freeze({
     Create: "Permissions.Ordering.Stores.Create",
   },
 });
+
+export const ProcurementPermissions = Object.freeze({
+  Quality: { Pass: "Permissions.Procurement.Quality.Pass", Fail: "Permissions.Procurement.Quality.Fail", View: "Permissions.Procurement.Quality.View" },
+  Purchase: { View: "Permissions.Procurement.Purchase.View", Create: "Permissions.Procurement.Purchase.Create" },
+  Suppliers: {
+    View: "Permissions.Procurement.Suppliers.View",
+    Create: "Permissions.Procurement.Suppliers.Create",
+  },
+} as const);
 
 export const InventoryPermissions = Object.freeze({
   Warehouses: { View: "Permissions.Inventory.Warehouses.View" },
@@ -37,6 +51,10 @@ export const CatalogPermissions = Object.freeze({
   Products: {
     View: "Permissions.Catalog.Products.View", Create: "Permissions.Catalog.Products.Create",
     Update: "Permissions.Catalog.Products.Update", Delete: "Permissions.Catalog.Products.Delete",
+  },
+  PriceLists: {
+    View: "Permissions.Catalog.PriceLists.View", Create: "Permissions.Catalog.PriceLists.Create",
+    Update: "Permissions.Catalog.PriceLists.Update",
   },
 } as const);
 
@@ -144,6 +162,28 @@ export type PermissionGroup = {
 
 export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
   {
+    category: "Procurement",
+    blurb: "Manage operator suppliers and procurement records.",
+    entries: [
+      { name: ProcurementPermissions.Quality.View, description: "View quality checks" },
+      { name: ProcurementPermissions.Quality.Pass, description: "Pass quality checks" },
+      { name: ProcurementPermissions.Quality.Fail, description: "Fail quality checks" },
+      { name: ProcurementPermissions.Purchase.View, description: "View purchase orders" },
+      { name: ProcurementPermissions.Purchase.Create, description: "Create, send and appoint purchase orders" },
+      { name: ProcurementPermissions.Suppliers.View, description: "View suppliers" },
+      { name: ProcurementPermissions.Suppliers.Create, description: "Create suppliers" },
+    ],
+  },
+  {
+    category: "Ordering",
+    blurb: "View, manage, and reconcile operator orders.",
+    entries: [
+      { name: OrderingPermissions.Orders.View, description: "View orders and after-sales claims" },
+      { name: OrderingPermissions.Orders.Manage, description: "Manage orders and register after-sales claims" },
+      { name: OrderingPermissions.Orders.Reconcile, description: "Reconcile received orders" },
+    ],
+  },
+  {
     category: "Catalog",
     blurb: "Maintain operator-owned brands, categories, products, and pricing.",
     entries: [
@@ -159,6 +199,9 @@ export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
       { name: CatalogPermissions.Products.Create, description: "Create products" },
       { name: CatalogPermissions.Products.Update, description: "Update products and base list prices" },
       { name: CatalogPermissions.Products.Delete, description: "Delete products" },
+      { name: CatalogPermissions.PriceLists.View, description: "View price lists" },
+      { name: CatalogPermissions.PriceLists.Create, description: "Create price lists" },
+      { name: CatalogPermissions.PriceLists.Update, description: "Update price tiers and customer price locks" },
     ],
   },
   {

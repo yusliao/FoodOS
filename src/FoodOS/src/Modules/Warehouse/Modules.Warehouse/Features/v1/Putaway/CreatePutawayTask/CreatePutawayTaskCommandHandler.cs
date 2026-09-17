@@ -20,6 +20,11 @@ public sealed class CreatePutawayTaskCommandHandler(WarehouseDbContext dbContext
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        string lockKey = $"warehouse:putaway:{command.LotId:N}";
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
+            cancellationToken).ConfigureAwait(false);
 
         if (command.RefId is not null)
         {
@@ -82,6 +87,7 @@ public sealed class CreatePutawayTaskCommandHandler(WarehouseDbContext dbContext
             command.RefId);
         dbContext.PutawayTasks.Add(task);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return task.ToDto();
     }
 }

@@ -15,6 +15,7 @@ import {
   MultitenancyPermissions,
   NotificationPermissions,
   OrderingPermissions,
+  ProcurementPermissions,
   WebhooksPermissions,
 } from "@/lib/permissions";
 
@@ -36,6 +37,11 @@ const StoresPage = lazyNamed(() => import("@/pages/customers/stores"), "StoresPa
 const BrandsPage = lazyNamed(() => import("@/pages/catalog/brands"), "BrandsPage");
 const CategoriesPage = lazyNamed(() => import("@/pages/catalog/categories"), "CategoriesPage");
 const ProductsPage = lazyNamed(() => import("@/pages/catalog/products"), "ProductsPage");
+const PricingPage = lazyNamed(() => import("@/pages/catalog/pricing"), "PricingPage");
+const OrdersPage = lazyNamed(() => import("@/pages/orders/orders"), "OrdersPage");
+const SuppliersPage = lazyNamed(() => import("@/pages/procurement/suppliers"), "SuppliersPage");
+const PurchaseOrdersPage = lazyNamed(() => import("@/pages/procurement/purchase-orders"), "PurchaseOrdersPage");
+const OrderDetailPage = lazyNamed(() => import("@/pages/orders/orders"), "OrderDetailPage");
 const TenantDetailPage = lazyNamed(() => import("@/pages/tenants/detail"), "TenantDetailPage");
 const UsersListPage = lazyNamed(() => import("@/pages/users/list"), "UsersListPage");
 const UserDetailPage = lazyNamed(() => import("@/pages/users/detail"), "UserDetailPage");
@@ -87,12 +93,17 @@ export const router = createBrowserRouter([
         errorElement: <RouteError />,
         children: [
           { index: true, element: <DashboardPage /> },
+          { path: "procurement/purchase-orders", element: <RouteGuard perms={[ProcurementPermissions.Purchase.View]}><PurchaseOrdersPage /></RouteGuard> },
+          { path: "procurement/suppliers", element: <RouteGuard perms={[ProcurementPermissions.Suppliers.View]}><SuppliersPage /></RouteGuard> },
+          { path: "orders", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrdersPage /></RouteGuard> },
+          { path: "orders/:id", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrderDetailPage /></RouteGuard> },
           { path: "customers", element: <RouteGuard perms={[OrderingPermissions.Customers.View]}><CustomersPage /></RouteGuard> },
           { path: "stores", element: <RouteGuard perms={[OrderingPermissions.Stores.View]}><StoresPage /></RouteGuard> },
           { path: "catalog", element: <Navigate to="/catalog/products" replace /> },
           { path: "catalog/products", element: <RouteGuard perms={[CatalogPermissions.Products.View]}><ProductsPage /></RouteGuard> },
           { path: "catalog/brands", element: <RouteGuard perms={[CatalogPermissions.Brands.View]}><BrandsPage /></RouteGuard> },
           { path: "catalog/categories", element: <RouteGuard perms={[CatalogPermissions.Categories.View]}><CategoriesPage /></RouteGuard> },
+          { path: "catalog/pricing", element: <RouteGuard perms={[CatalogPermissions.PriceLists.View]}><PricingPage /></RouteGuard> },
 
           // Tenants — root-only
           {

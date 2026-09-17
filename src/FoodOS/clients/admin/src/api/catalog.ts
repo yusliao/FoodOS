@@ -142,3 +142,92 @@ export function changeProductPrice(input: { productId: string; amount: number; c
 export function deleteProduct(id: string) {
   return apiFetch<void>(`/api/v1/catalog/products/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+export type PriceListLineDto = {
+  id: string;
+  productId: string;
+  minQty: number;
+  unitPrice: number;
+  currency: string;
+};
+
+export type PriceListDto = {
+  id: string;
+  name: string;
+  customerOrgId?: string | null;
+  priority: number;
+  validFrom: string;
+  validTo?: string | null;
+  lines: PriceListLineDto[];
+};
+
+export type PriceQuoteDto = {
+  customerOrgId: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  currency: string;
+  source: string;
+};
+
+export function getPriceLists(customerOrgId = "", signal?: AbortSignal) {
+  const query = new URLSearchParams();
+  if (customerOrgId) query.set("customerOrgId", customerOrgId);
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return apiFetch<PriceListDto[]>(`/api/v1/catalog/price-lists${suffix}`, { signal });
+}
+
+export function createPriceList(input: {
+  name: string;
+  customerOrgId?: string | null;
+  priority: number;
+  validFrom: string;
+  validTo?: string | null;
+}, idempotencyKey: string) {
+  return apiFetch<string>("/api/v1/catalog/price-lists", {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ ...input, lines: [] }),
+  });
+}
+
+export function upsertPriceListLine(input: {
+  priceListId: string;
+  productId: string;
+  minQty: number;
+  unitPrice: number;
+  currency: string;
+}, idempotencyKey: string) {
+  return apiFetch<string>(`/api/v1/catalog/price-lists/${encodeURIComponent(input.priceListId)}/lines`, {
+    method: "PUT",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+
+export function upsertPriceLock(input: {
+  customerOrgId: string;
+  productId: string;
+  unitPrice: number;
+  currency: string;
+  until: string;
+}, idempotencyKey: string) {
+  return apiFetch<string>("/api/v1/catalog/price-locks", {
+    method: "PUT",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+
+export function quoteProductPrice(input: {
+  customerOrgId: string;
+  productId: string;
+  quantity: number;
+}, signal?: AbortSignal) {
+  const query = new URLSearchParams({
+    customerOrgId: input.customerOrgId,
+    productId: input.productId,
+    quantity: String(input.quantity),
+  });
+  return apiFetch<PriceQuoteDto>(`/api/v1/catalog/quotes?${query}`, { signal });
+}
