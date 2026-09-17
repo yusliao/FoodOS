@@ -61,6 +61,41 @@ public sealed class TenantThemeTests : IAsyncLifetime
     #region Happy Path
 
     [Fact]
+    public async Task OperatorTarget_Should_UpdateReadAndReset_WithoutChangingIdentityDomain()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var target = $"{ThemePath}?targetTenantId={_tenantA}";
+        (await client.PutAsJsonAsync(target, ValidTheme(primary: "#123456"))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var theme = await client.GetFromJsonAsync<TenantThemeDto>(target, Json);
+        theme!.LightPalette.Primary.ShouldBe("#123456");
+        var other = await client.GetFromJsonAsync<TenantThemeDto>($"{ThemePath}?targetTenantId={_tenantB}", Json);
+        other!.LightPalette.Primary.ShouldBe("#2563EB");
+        (await client.PostAsync($"{ThemeResetPath}?targetTenantId={_tenantA}", null)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var reset = await client.GetFromJsonAsync<TenantThemeDto>(target, Json);
+        reset!.LightPalette.Primary.ShouldBe("#2563EB");
+    }
+
+    [Fact]
+    public async Task Customer_Should_NotAddressExplicitThemeTarget()
+    {
+        using var client = await _auth.CreateAuthenticatedClientAsync(_tenantAAdminEmail, TestConstants.DefaultPassword, _tenantA);
+        (await client.GetAsync($"{ThemePath}?targetTenantId={_tenantB}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.GetAsync($"{ThemePath}?targetTenantId={_tenantA}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.PutAsJsonAsync($"{ThemePath}?targetTenantId={_tenantB}", ValidTheme())).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await client.PostAsync($"{ThemeResetPath}?targetTenantId={_tenantB}", null)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task OperatorTarget_Should_RejectMissingTenant_WithoutCreatingTheme()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var missing = $"absent-{Guid.NewGuid():N}";
+        (await client.GetAsync($"{ThemePath}?targetTenantId={missing}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await client.PutAsJsonAsync($"{ThemePath}?targetTenantId={missing}", ValidTheme())).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await client.PostAsync($"{ThemeResetPath}?targetTenantId={missing}", null)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task GetTheme_Should_ReturnDefault_When_TenantHasNoCustomTheme()
     {
         // Arrange

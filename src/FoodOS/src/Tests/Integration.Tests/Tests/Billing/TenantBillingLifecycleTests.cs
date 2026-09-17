@@ -84,6 +84,26 @@ public sealed class TenantBillingLifecycleTests
             .ShouldBeFalse("a zero-price plan must not produce a subscription invoice");
     }
 
+    [Theory]
+    [InlineData("q")]
+    [InlineData("legacy_plan")]
+    public async Task CatalogKey_Should_Work_For_Create_And_Explicit_Renewal(string key)
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var planKey = await CreatePlanAsync(client, key, 0m);
+        var tenantId = $"key-{Guid.NewGuid():N}";
+        await CreateTenantAsync(client, tenantId, $"{tenantId}@tenant.com", planKey);
+        var before = await client.GetFromJsonAsync<TenantStatus>(
+            $"{TestConstants.TenantsBasePath}/{tenantId}/status", Json);
+        var response = await client.PostAsJsonAsync(
+            $"{TestConstants.TenantsBasePath}/{tenantId}/renew", new { tenantId, planKey });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var after = await client.GetFromJsonAsync<TenantStatus>(
+            $"{TestConstants.TenantsBasePath}/{tenantId}/status", Json);
+        after!.Plan.ShouldBe(key);
+        after.ValidUpto!.Value.ShouldBeGreaterThan(before!.ValidUpto!.Value.AddDays(27));
+    }
+
     private static async Task<IReadOnlyCollection<InvoiceDto>> GetInvoicesAsync(HttpClient client, string tenantId)
     {
         var page = await client.GetFromJsonAsync<PagedResponse<InvoiceDto>>(

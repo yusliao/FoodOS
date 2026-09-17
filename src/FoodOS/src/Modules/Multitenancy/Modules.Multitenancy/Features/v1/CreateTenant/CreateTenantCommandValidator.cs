@@ -35,10 +35,10 @@ public sealed class CreateTenantCommandValidator : AbstractValidator<CreateTenan
             .WithMessage("Admin password must be at least 8 characters.");
 
         // Optional — null/empty falls back to the configured default plan. When supplied it must be a
-        // lowercase plan slug; existence is validated by GetPlanTerm in the handler.
+        // Billing catalog key (up to 64 characters); GetPlanTerm validates existence and active state.
         RuleFor(t => t.PlanKey)
-            .Matches("^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$")
+            .MaximumLength(64)
             .When(t => !string.IsNullOrWhiteSpace(t.PlanKey))
-            .WithMessage("Plan key must be a lowercase slug (a-z, 0-9, hyphen).");
+            .WithMessage("Plan key must not exceed 64 characters.");
     }
 }

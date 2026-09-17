@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, RefreshCw, ScrollText, X } from "lucide-react";
 import {
   AUDIT_EVENT_TYPES,
@@ -31,6 +31,7 @@ import { AuditingPermissions } from "@/lib/permissions";
 import { AuditDetailSheet } from "@/pages/audits/detail";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { ForbiddenView } from "@/components/forbidden-view";
 
 const PAGE_SIZE = 25;
 
@@ -48,10 +49,14 @@ export function AuditsListPage() {
     AuditingPermissions.AuditTrails.ViewCrossTenant,
   );
 
-  const pageNumber = Number(params.get("page") ?? "1") || 1;
+  const canView = !!user?.permissions.includes(AuditingPermissions.AuditTrails.View);
+  const rawPage = Number(params.get("page") ?? "1");
+  const pageNumber = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   const eventType = (params.get("type") as AuditEventType | null) ?? "";
   const severity = (params.get("sev") as AuditSeverity | null) ?? "";
-  const tenantId = params.get("tenant") ?? "";
+  const tenantId = (params.get("tenant") ?? "").trim();
+  const crossScope = !!tenantId && tenantId.toLowerCase() !== "root";
+  const allowed = canView && (!crossScope || canCrossTenant);
   const correlationId = params.get("corr") ?? "";
   const search = params.get("q") ?? "";
 
@@ -84,12 +89,13 @@ export function AuditsListPage() {
         search: search || undefined,
         sort: "-OccurredAtUtc",
       }),
-    placeholderData: keepPreviousData,
+    enabled: allowed,
   });
 
   const summary = useQuery({
     queryKey: ["audits", "summary", { tenantId }],
     queryFn: () => getAuditSummary({ tenantId: tenantId || undefined }),
+    enabled: allowed,
   });
 
   const data = query.data;
@@ -106,6 +112,7 @@ export function AuditsListPage() {
   }, [summary.data]);
 
   const setParam = (key: string, value: string | null) => {
+    setSelectedId(null);
     const next = new URLSearchParams(params);
     if (value && value.length > 0) next.set(key, value);
     else next.delete(key);
@@ -120,11 +127,14 @@ export function AuditsListPage() {
   };
 
   const clearAll = () => {
+    setSelectedId(null);
     setParams(new URLSearchParams(), { replace: true });
     setSearchInput("");
   };
 
   const activeFilters = [eventType, severity, tenantId, correlationId, search].filter(Boolean).length;
+
+  if (!allowed) return <ForbiddenView missing={[canView ? AuditingPermissions.AuditTrails.ViewCrossTenant : AuditingPermissions.AuditTrails.View]} />;
 
   return (
     <div className="space-y-8">
@@ -138,8 +148,8 @@ export function AuditsListPage() {
         <Button
           variant="outline"
           size="sm"
-          disabled={query.isFetching}
-          onClick={() => query.refetch()}
+          disabled={query.isFetching || summary.isFetching}
+          onClick={() => { void query.refetch(); void summary.refetch(); }}
           className="flex-1 sm:flex-none"
         >
           <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", query.isFetching && "animate-spin")} />
@@ -147,12 +157,15 @@ export function AuditsListPage() {
         </Button>
       </EntityPageHeader>
 
-      <StatStrip cols={4}>
+      <p className="text-sm text-[var(--color-muted-foreground)]">{t("audits.summaryScope")}</p>
+      {crossScope && <p role="status">{t("audits.crossSummaryOnly")}</p>}
+      {summary.isError && <div className="space-y-2"><ErrorBand message={t("audits.summaryFailed")} /><Button variant="outline" disabled={summary.isFetching} onClick={() => void summary.refetch()}>{t("workbench.retry")}</Button></div>}
+      {!summary.isError && <StatStrip cols={4}>
         <Stat label={t("audits.statTotal")} value={summary.isLoading ? "—" : summaryStats.total.toLocaleString()} hint={t("audits.statTotalHint")} />
         <Stat label={t("audits.statErrors")} value={summary.isLoading ? "—" : summaryStats.errors.toLocaleString()} hint={t("audits.statErrorsHint")} tone={summaryStats.errors > 0 ? "danger" : "default"} />
         <Stat label={t("audits.statSecurity")} value={summary.isLoading ? "—" : summaryStats.security.toLocaleString()} hint={t("audits.statSecurityHint")} tone={summaryStats.security > 0 ? "info" : "default"} />
         <Stat label={t("audits.statExceptions")} value={summary.isLoading ? "—" : summaryStats.exceptions.toLocaleString()} hint={t("audits.statExceptionsHint")} tone={summaryStats.exceptions > 0 ? "warning" : "default"} />
-      </StatStrip>
+      </StatStrip>}
 
       <FilterBar
         trailing={
@@ -243,7 +256,7 @@ export function AuditsListPage() {
       {items.length > 0 && (
         <ol className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
           {items.map((event) => (
-            <AuditRow key={event.id} event={event} onClick={() => setSelectedId(event.id)} />
+            <AuditRow key={event.id} event={event} disabled={crossScope || (!!event.tenantId && event.tenantId.toLowerCase() !== "root")} onClick={() => setSelectedId(event.id)} />
           ))}
         </ol>
       )}
@@ -264,19 +277,20 @@ export function AuditsListPage() {
       )}
 
       {/* Audit detail side sheet */}
-      <AuditDetailSheet auditId={selectedId} onClose={() => setSelectedId(null)} />
+      {!crossScope && <AuditDetailSheet auditId={selectedId} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }
 
-function AuditRow({ event, onClick }: { event: AuditSummaryDto; onClick: () => void }) {
+function AuditRow({ event, onClick, disabled }: { event: AuditSummaryDto; onClick: () => void; disabled: boolean }) {
   const t = useT();
   return (
     <li>
       <button
         type="button"
+        disabled={disabled}
         onClick={onClick}
-        className="group grid w-full grid-cols-[auto_8rem_auto_1fr_auto] items-center gap-4 px-1 py-3 text-left transition-colors hover:bg-[var(--color-muted)]/50 focus:outline-none focus-visible:bg-[var(--color-muted)]/50"
+        className="group flex w-full flex-wrap items-center gap-3 px-1 py-3 text-left transition-colors sm:grid sm:grid-cols-[auto_8rem_auto_1fr_auto] sm:gap-4 hover:bg-[var(--color-muted)]/50 focus:outline-none focus-visible:bg-[var(--color-muted)]/50"
       >
         <SeverityDot severity={event.severity} />
         <span className="font-mono text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
@@ -308,7 +322,7 @@ function AuditRow({ event, onClick }: { event: AuditSummaryDto; onClick: () => v
             </div>
           )}
         </div>
-        <ChevronRight className="h-4 w-4 text-[var(--color-muted-foreground)] transition-transform group-hover:translate-x-0.5" />
+        {!disabled && <ChevronRight className="h-4 w-4 text-[var(--color-muted-foreground)] transition-transform group-hover:translate-x-0.5" />}
       </button>
     </li>
   );

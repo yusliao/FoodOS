@@ -20,6 +20,8 @@ import { Badge } from "@/components/ui/badge";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { IdentityPermissions } from "@/lib/permissions";
 
 type Props = {
   grant: ImpersonationGrantDto | null;
@@ -36,6 +38,8 @@ type Props = {
  */
 export function RevokeGrantDialog({ grant, onOpenChange, onRevoked }: Props) {
   const t = useT();
+  const { user } = useAuth();
+  const canRevoke = !!user?.permissions.includes(IdentityPermissions.Impersonation.Revoke);
   const queryClient = useQueryClient();
   const [reason, setReason] = useState("");
   const open = grant !== null;
@@ -45,16 +49,16 @@ export function RevokeGrantDialog({ grant, onOpenChange, onRevoked }: Props) {
     if (open) setReason("");
   }, [open, grant?.id]);
 
-  const mutation = useMutation<ImpersonationGrantDto, Error, void>({
-    mutationFn: () => revokeImpersonationGrant(grant!.id, reason.trim() || undefined),
-    onSuccess: (updated) => {
+  const mutation = useMutation<ImpersonationGrantDto, Error, { id: string; reason?: string }>({
+    mutationFn: ({ id, reason }) => revokeImpersonationGrant(id, reason),
+    onSuccess: async (updated) => {
       toast.success(t("impersonation.revokedToast"), {
         description: t("impersonation.revokedToastBody").replace(
           "{name}",
           updated.impersonatedUserName ?? updated.impersonatedUserId,
         ),
       });
-      queryClient.invalidateQueries({ queryKey: ["impersonation-grants"] });
+      await queryClient.invalidateQueries({ queryKey: ["impersonation-grants"] });
       onRevoked?.(updated);
       onOpenChange(false);
     },
@@ -68,7 +72,7 @@ export function RevokeGrantDialog({ grant, onOpenChange, onRevoked }: Props) {
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && canRevoke} onOpenChange={(next) => { if (!mutation.isPending) onOpenChange(next); }}>
       <DialogContent size="md">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -98,6 +102,7 @@ export function RevokeGrantDialog({ grant, onOpenChange, onRevoked }: Props) {
             <textarea
               id="revoke-reason"
               value={reason}
+              disabled={mutation.isPending}
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("impersonation.revokePlaceholder")}
               rows={3}
@@ -121,8 +126,8 @@ export function RevokeGrantDialog({ grant, onOpenChange, onRevoked }: Props) {
           </Button>
           <Button
             variant="destructive"
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
+            onClick={() => { if (canRevoke && grant?.status === "Active" && !mutation.isPending) mutation.mutate({ id: grant.id, reason: reason.trim() || undefined }); }}
+            disabled={mutation.isPending || grant?.status !== "Active"}
           >
             <ShieldOff className="mr-1 h-3.5 w-3.5" />
             {mutation.isPending ? t("settings.revoking") : t("impersonation.revokeNow")}

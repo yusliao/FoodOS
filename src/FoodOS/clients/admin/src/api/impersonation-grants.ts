@@ -31,6 +31,7 @@ export type ListGrantsParams = {
 
 export async function listImpersonationGrants(
   params: ListGrantsParams = {},
+  signal?: AbortSignal,
 ): Promise<ImpersonationGrantDto[]> {
   const q = new URLSearchParams();
   if (params.status) q.set("Status", params.status);
@@ -39,6 +40,7 @@ export async function listImpersonationGrants(
   q.set("Take", String(params.take ?? 100));
   return apiFetch<ImpersonationGrantDto[]>(
     `/api/v1/identity/impersonation/grants?${q.toString()}`,
+    { signal },
   );
 }
 

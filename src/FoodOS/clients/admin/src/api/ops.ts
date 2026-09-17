@@ -13,7 +13,7 @@ export type OpsKpis = {
   lossQty: number;
 };
 
-export function getOpsKpis(date?: string) {
+export function getOpsKpis(date?: string, signal?: AbortSignal) {
   const qs = date ? `?date=${encodeURIComponent(date)}` : "";
-  return apiFetch<OpsKpis>(`/api/v1/ops/kpis${qs}`);
+  return apiFetch<OpsKpis>(`/api/v1/ops/kpis${qs}`, { signal });
 }

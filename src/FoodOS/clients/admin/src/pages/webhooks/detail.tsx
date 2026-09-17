@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -20,10 +19,9 @@ import { toast } from "sonner";
 import {
   deleteWebhookSubscription,
   listWebhookDeliveries,
-  listWebhookSubscriptions,
+  findWebhookSubscription,
   testWebhookSubscription,
   type WebhookDeliveryDto,
-  type WebhookSubscriptionDto,
 } from "@/api/webhooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,35 +35,39 @@ import {
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { WebhooksPermissions } from "@/lib/permissions";
 
 const PAGE_SIZE = 25;
 
 export function WebhookDetailPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(WebhooksPermissions.Subscriptions.View);
+  const canTest = canView && !!user?.permissions.includes(WebhooksPermissions.Subscriptions.Test);
+  const canDelete = canView && !!user?.permissions.includes(WebhooksPermissions.Subscriptions.Delete);
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deliveryPage, setDeliveryPage] = useState(1);
 
-  // No GET /subscriptions/{id} on the server, so list with a big enough page
-  // and find by id. Subscription counts are typically small (< a few dozen).
   const subsQuery = useQuery({
-    queryKey: ["webhooks", "subscriptions", "all"],
-    queryFn: () => listWebhookSubscriptions(1, 200),
+    queryKey: ["webhooks", "subscriptions", "detail", id],
+    queryFn: ({ signal }) => findWebhookSubscription(id, signal),
+    enabled: canView && !!id,
   });
 
-  const sub: WebhookSubscriptionDto | undefined = subsQuery.data?.items.find((s) => s.id === id);
+  const sub = subsQuery.isError ? null : subsQuery.data;
 
   const deliveries = useQuery({
     queryKey: ["webhooks", "deliveries", id, deliveryPage],
-    queryFn: () => listWebhookDeliveries(id, deliveryPage, PAGE_SIZE),
-    enabled: Boolean(sub),
-    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) => listWebhookDeliveries(id, deliveryPage, PAGE_SIZE, signal),
+    enabled: canView && Boolean(sub),
     refetchInterval: 10_000,
   });
 
   const test = useMutation({
-    mutationFn: () => testWebhookSubscription(id),
+    mutationFn: (subscriptionId: string) => testWebhookSubscription(subscriptionId),
     onSuccess: (data) => {
       toast[data.success ? "success" : "warning"](
         data.success ? t("webhooks.testDelivered") : t("webhooks.rejected"),
@@ -76,7 +78,7 @@ export function WebhookDetailPage() {
   });
 
   const remove = useMutation({
-    mutationFn: () => deleteWebhookSubscription(id),
+    mutationFn: (subscriptionId: string) => deleteWebhookSubscription(subscriptionId),
     onSuccess: () => {
       toast.success(t("webhooks.deleted"));
       queryClient.invalidateQueries({ queryKey: ["webhooks", "subscriptions"] });
@@ -88,7 +90,8 @@ export function WebhookDetailPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        crumbs={[{ label: t("webhooks.crumb") }, { label: sub?.url ?? "…", muted: true }]}
+        className="[&_h1]:break-all"
+        crumbs={[{ label: t("webhooks.crumb") }, { label: t("webhooks.endpoint"), muted: true }]}
         trailing={sub ? (sub.isActive ? t("webhooks.active").toUpperCase() : t("webhooks.inactive").toUpperCase()) : "—"}
         title={sub?.url ?? t("webhooks.fallbackTitle")}
         description={
@@ -97,7 +100,7 @@ export function WebhookDetailPage() {
                 "{n}",
                 String(sub.events.length),
               )
-            : t("webhooks.loadingSub")
+            : subsQuery.isLoading ? t("webhooks.loadingSub") : undefined
         }
         actions={
           <Button variant="ghost" size="sm" onClick={() => navigate("/webhooks")}>
@@ -107,6 +110,7 @@ export function WebhookDetailPage() {
       />
 
       {subsQuery.isError && (
+        <div className="space-y-3">
         <ErrorBand
           message={
             subsQuery.error instanceof ApiRequestError
@@ -114,6 +118,8 @@ export function WebhookDetailPage() {
               : t("webhooks.loadSubFailed")
           }
         />
+        <Button variant="outline" disabled={subsQuery.isFetching || !canView} onClick={() => subsQuery.refetch()}>{t("workbench.retry")}</Button>
+        </div>
       )}
 
       {subsQuery.isLoading && <LoadingRow label={t("webhooks.loadingSub")} />}
@@ -128,26 +134,26 @@ export function WebhookDetailPage() {
             icon={Link2}
             title={t("webhooks.endpoint")}
             description={t("webhooks.endpointDesc")}
-            footer={
+            footer={(canTest || canDelete) &&
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => test.mutate()} disabled={test.isPending}>
+                {canTest && <Button variant="outline" size="sm" onClick={() => { if (canTest) test.mutate(id); }} disabled={test.isPending || remove.isPending || subsQuery.isFetching}>
                   <Send className="mr-1.5 h-3.5 w-3.5" />
                   {test.isPending ? t("webhooks.sending") : t("webhooks.sendTest")}
-                </Button>
-                <Button
+                </Button>}
+                {canDelete && <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (window.confirm(t("webhooks.deleteConfirm").replace("{url}", sub.url))) {
-                      remove.mutate();
+                    if (canDelete && window.confirm(t("webhooks.deleteConfirm").replace("{url}", sub.url))) {
+                      remove.mutate(id);
                     }
                   }}
-                  disabled={remove.isPending}
+                  disabled={remove.isPending || test.isPending || subsQuery.isFetching}
                   className="text-[var(--color-destructive)] hover:bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.08)]"
                 >
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                   {remove.isPending ? t("webhooks.deleting") : t("webhooks.deleteSubscription")}
-                </Button>
+                </Button>}
               </div>
             }
           >
@@ -170,7 +176,7 @@ export function WebhookDetailPage() {
           >
             <div className="flex flex-wrap gap-1.5">
               {sub.events.map((e) => (
-                <code key={e} className="code-chip">{e}</code>
+                <code key={e} className="code-chip max-w-full break-all">{e}</code>
               ))}
               {sub.events.length === 0 && (
                 <span className="text-sm text-[var(--color-muted-foreground)]">{t("webhooks.noEvents")}</span>
@@ -206,7 +212,7 @@ export function WebhookDetailPage() {
               <LoadingRow label={t("webhooks.loadingDeliveries")} />
             ) : (deliveries.data?.items.length ?? 0) === 0 ? (
               <p className="text-sm text-[var(--color-muted-foreground)]">
-                {t("webhooks.noDeliveries")}
+                {t(canTest ? "webhooks.noDeliveries" : "webhooks.noDeliveriesReadOnly")}
               </p>
             ) : (
               <>
@@ -245,12 +251,12 @@ function DeliveryRow({ delivery }: { delivery: WebhookDeliveryDto }) {
   const Icon = delivery.success ? CheckCircle2 : XCircle;
   const tone = delivery.success ? "text-[var(--color-success)]" : "text-[var(--color-destructive)]";
   return (
-    <li className="grid grid-cols-[auto_8rem_auto_1fr_auto_auto] items-center gap-3 px-5 py-2.5">
+    <li className="flex flex-wrap items-center gap-3 px-5 py-2.5 sm:grid sm:grid-cols-[auto_8rem_auto_1fr_auto_auto]">
       <Icon className={cn("h-4 w-4", tone)} />
       <span className="font-mono text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
         {formatTimestamp(delivery.attemptedAtUtc)}
       </span>
-      <code className="code-chip">{delivery.eventType}</code>
+      <code className="code-chip max-w-full break-all">{delivery.eventType}</code>
       <span className="truncate text-[11.5px] text-[var(--color-muted-foreground)]">
         {delivery.errorMessage ?? (delivery.success ? t("webhooks.ok") : t("webhooks.failed"))}
       </span>
@@ -269,7 +275,7 @@ function DeliveryRow({ delivery }: { delivery: WebhookDeliveryDto }) {
 
 function FieldRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="grid grid-cols-[10rem_1fr] items-baseline gap-4">
+    <div className="grid min-w-0 grid-cols-1 items-baseline gap-1 sm:grid-cols-[8rem_1fr] sm:gap-4">
       <dt className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]">{label}</dt>
       <dd className={cn("min-w-0 break-words text-sm", mono && "font-mono text-[0.8125rem]")}>
         {value}

@@ -1,4 +1,6 @@
 {
+  "reports": {"title":"Operations reports","description":"Daily indicators from existing FoodOS records.","boundary":"These are FoodOS business records, not live WMS stock or proof of warehouse execution. WMS integration and reconciliation remain pending.","date":"Report date","invalidDate":"Choose a valid date from 2000-01-01 through 2100-12-31.","loading":"Loading report…","failed":"Could not load report.","resultDate":"Returned report date","empty":"No order or inventory activity is recorded for this date; temperature data is unavailable.","unavailable":"Not available","fulfillmentRate":"Fulfillment rate","stockoutRate":"Stockout rate","shrinkageRate":"Shrinkage rate","temperatureComplianceRate":"Temperature compliance","committedOrderCount":"Committed orders","fulfilledOrderCount":"Fulfilled orders","orderedQty":"Ordered quantity","inboundQty":"Received quantity","lossQty":"Loss quantity","definitions":"Metric definitions","orderBasis":"Orders use business date and exclude drafts and cancellations. Received or reconciled orders count as fulfilled. Fulfillment = fulfilled / committed orders; a zero denominator returns 0%.","stockoutBasis":"Stockout = max(ordered − reserved quantity, 0) / ordered quantity; a zero denominator returns 0%. This is not a live WMS availability measure.","inventoryBasis":"Inventory uses UTC-day transactions: Receive is inbound; Isolate + AdjustShrink is loss. Shrinkage is capped at 100%; loss without inbound returns 100%, neither returns 0%. Quantities are source aggregates without unit conversion.","temperatureBasis":"Temperature compliance currently has no data source and is unavailable, not zero. The initial date is today in UTC."},
+  "deliveryRoutes": {"title":"Delivery routes","description":"Fixed route records only. Store and vehicle IDs are shown without additional lookups. Editing and deletion are not supported.","create":"New route","warehouse":"Search warehouses","selected":"Selected warehouse","selectWarehouse":"Choose a warehouse to load its routes.","warehousePermission":"Warehouse viewing permission is required to select a warehouse.","storePermission":"Store viewing permission is required to create a route.","vehiclePermission":"No vehicle viewing permission: the route will have no default vehicle.","loading":"Loading route records…","failed":"Could not load or save route records.","empty":"No routes for this warehouse.","noChoices":"No matching records.","vehicle":"Default vehicle","none":"No default vehicle","stops":"Store visit order","code":"Route code","searchStores":"Search stores","up":"Move up","down":"Move down","remove":"Remove stop","save":"Register route","createHint":"Add each store once and arrange visit order. Reusing a code in the same warehouse returns the original route without updating it. This does not dispatch a shipment."},
   "drivers": {"title":"Drivers","description":"Driver identity records. User IDs are shown without fetching employee profiles. Editing and deletion are not supported.","create":"New driver","loading":"Loading drivers…","failed":"Could not load or save drivers.","empty":"No drivers registered.","userId":"Operator user ID","phone":"Driver phone","search":"Search active operator users","selected":"Selected user","noUsers":"No matching active users.","lookupRequired":"User viewing permission is required to select an operator account.","save":"Register driver","createHint":"Select an active operator user. Existing users return the original driver record without changing its phone. Dispatch remains unavailable until WMS integration is ready."},
   "vehicles": {"title":"Vehicles","description":"Delivery vehicle records only. Editing and deletion are not supported; warehouse execution remains with WMS.","create":"New vehicle","loading":"Loading vehicles…","failed":"Could not load or save vehicles.","empty":"No vehicles registered.","plate":"License plate","zones":"Compartment zones","payload":"Payload (kg)","save":"Register vehicle","createHint":"Enter compartment zones as recorded (for example Ambient,Chilled). An existing plate returns its original record without updating zones or payload."},
   "wms": {"title":"Warehouse integration","loading":"Checking WMS readiness…","failed":"WMS status could not be verified. Execution remains disabled.","unavailable":"WMS integration is not ready. Stock and delivery cannot be confirmed.","boundary":"Browsing, carts and records remain available. Warehouse execution belongs to WMS; local execution is disabled.","retry":"Retry WMS status"},
@@ -352,7 +354,8 @@
       "operations": "Operations"
     },
     "items": {
-      "logistics": { "vehicles": "Vehicles", "drivers": "Drivers" },
+      "reports": "Operations reports",
+      "logistics": { "vehicles": "Vehicles", "drivers": "Drivers", "routes": "Delivery routes" },
       "procurement": { "suppliers": "Suppliers", "purchase-orders": "Purchase orders" },
       "orders": "Order center",
       "customers": "Partner customers",
@@ -653,6 +656,10 @@
     "na": "N/A"
   },
   "tenants": {
+    "createDefaultPlanOnly": "You cannot view the plan catalog. This tenant will use the configured default plan and generate its subscription invoice.",
+    "planKeyUnsupported": "This plan key is not accepted by the tenant creation API. Select another plan.",
+    "renewCurrentOnly": "No plan-view permission. Renew the current plan only (or the server default if none is assigned). This issues a term invoice; no plan prices are displayed.",
+    "selectRenewPlan": "Choose an active plan",
     "registry": "Registry",
     "unit": "tenant",
     "countOne": "{n} tenant registered on this instance.",
@@ -951,6 +958,7 @@
     "updateFailed": "Update failed",
     "profile": "Profile",
     "profileLocked": "Name and description — system roles cannot be renamed.",
+    "profileReadOnly": "Read-only: editing requires role creation permission and a custom role.",
     "profileDesc": "Name and description shown to operators when assigning users to this role.",
     "saving": "Saving…",
     "saveProfile": "Save profile",
@@ -1073,6 +1081,7 @@
     }
   },
   "impersonation": {
+    "loadedScope": "Counts and filters apply to the latest 200 loaded grants, not all historical grants.",
     "title": "Impersonation",
     "description": "Every impersonation token issued by the server is tracked here. Active grants can be revoked — the token is rejected by the JWT validation hook within seconds.",
     "refresh": "Refresh",
@@ -1151,6 +1160,13 @@
     "expires": "Expires"
   },
   "billing": {
+    "planNameConstraint": "Enter a non-blank name of at most 128 characters.",
+    "planCurrencyConstraint": "Currency must contain exactly three characters.",
+    "averageByCurrency": "Monthly base fee average, separately by currency; no currency conversion.",
+    "pageAmounts": "Current page face amounts, including draft and void invoices; by currency, not revenue.",
+    "pageOutstanding": "Current page issued invoices awaiting payment, by currency.",
+    "pagePaid": "Current page paid invoices, by currency. A dash means no matching amounts.",
+    "invalidPeriod": "Enter a year from 2000 to 2100 and a month from 1 to 12, or leave either blank.",
     "title": "Billing",
     "description": "Manage plans, subscriptions, and invoices across every tenant on this instance.",
     "sectionsAria": "Billing sections",
@@ -1339,6 +1355,7 @@
     "attempts": "{n} attempts",
     "loadingDeliveries": "Loading deliveries",
     "noDeliveries": "No deliveries yet. Try the test button above, or wait for matching events to fire.",
+    "noDeliveriesReadOnly": "No deliveries yet. Waiting for matching events.",
     "rejected": "Endpoint rejected the test event",
     "ok": "OK",
     "failed": "Failed",
@@ -1347,7 +1364,7 @@
     "validUrl": "Must be a valid http(s) URL.",
     "httpScheme": "Use http:// or https://",
     "createdToast": "Subscription created",
-    "createdToastBody": "Use the Test button on the row to verify the endpoint accepts events.",
+    "createdToastBody": "The subscription is registered. Testing delivery requires the separate Test permission.",
     "createFailed": "Create failed",
     "pickEvent": "Pick at least one event",
     "pickEventBody": "Subscriptions with no events would never fire.",
@@ -1366,6 +1383,9 @@
     "createSubscription": "Create subscription"
   },
   "audits": {
+    "summaryScope": "Summary: the last 7 days for the selected identity domain; list search, event type, severity and correlation filters do not affect these totals.",
+    "summaryFailed": "Audit summary unavailable. Counts are not zero; retry to load them.",
+    "crossSummaryOnly": "Cross-domain access supports list summaries only. The current detail endpoint is restricted to the signed-in domain; customer payloads cannot be opened here.",
     "title": "Audit trail",
     "unit": "event",
     "description": "Every security action, entity change, and exception captured by the auditing pipeline. Filter by event type, severity, or correlation id to follow a request end-to-end.",

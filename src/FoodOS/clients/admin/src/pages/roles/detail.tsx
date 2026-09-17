@@ -25,11 +25,13 @@ import {
 } from "@/components/list";
 import {
   PERMISSION_CATALOG,
+  IdentityPermissions,
   type PermissionGroup,
 } from "@/lib/permissions";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
 
 const SYSTEM_ROLE_NAMES = new Set(["Admin", "Basic"]);
 
@@ -43,6 +45,12 @@ type ProfileValues = z.infer<ReturnType<typeof makeProfileSchema>>;
 
 export function RoleDetailPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(IdentityPermissions.Roles.View);
+  // Profile upsert requires Create; permission updates require Update on the server.
+  const canEditProfile = !!user?.permissions.includes(IdentityPermissions.Roles.Create);
+  const canEditPermissions = !!user?.permissions.includes(IdentityPermissions.Roles.Update);
+  const canDelete = !!user?.permissions.includes(IdentityPermissions.Roles.Delete);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -50,7 +58,7 @@ export function RoleDetailPage() {
   const query = useQuery({
     queryKey: ["roles", id],
     queryFn: () => getRoleWithPermissions(id!),
-    enabled: Boolean(id),
+    enabled: canView && Boolean(id),
   });
 
   const role = query.data;
@@ -81,6 +89,7 @@ export function RoleDetailPage() {
       </EntityPageHeader>
 
       {query.isError && (
+        <div className="space-y-2">
         <ErrorBand
           message={
             query.error instanceof ApiRequestError
@@ -88,6 +97,8 @@ export function RoleDetailPage() {
               : t("roles.loadRoleFailed")
           }
         />
+        <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>{t("workbench.retry")}</Button>
+        </div>
       )}
 
       {query.isLoading && <LoadingRow label={t("roles.loadingRole")} />}
@@ -126,9 +137,9 @@ export function RoleDetailPage() {
 
       {role && (
         <>
-          <ProfileSection role={role} disabled={isSystem} />
-          <PermissionEditor role={role} disabled={false} />
-          {!isSystem && (
+          <ProfileSection role={role} disabled={isSystem || !canEditProfile} />
+          <PermissionEditor role={role} disabled={isSystem || !canEditPermissions} />
+          {!isSystem && canDelete && (
             <DangerZone
               role={role}
               onDeleted={() => {
@@ -191,12 +202,12 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
   const submitting = isSubmitting || mutation.isPending;
 
   return (
-    <form onSubmit={handleSubmit((v) => mutation.mutate(v))}>
+    <form onSubmit={handleSubmit((v) => { if (!disabled && !submitting) mutation.mutate(v); })}>
       <SettingsSection
         title={t("roles.profile")}
         icon={ShieldCheck}
-        description={disabled ? t("roles.profileLocked") : t("roles.profileDesc")}
-        footer={
+        description={disabled ? t("roles.profileReadOnly") : t("roles.profileDesc")}
+        footer={!disabled ? (
           <div className="flex items-center gap-2">
             <Button
               type="submit"
@@ -215,7 +226,7 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
               {t("roles.reset")}
             </Button>
           </div>
-        }
+        ) : undefined}
       >
         <div className="grid gap-4 md:grid-cols-2">
           <Field id="name" label={t("roles.name")} required error={errors.name?.message}>
@@ -229,6 +240,7 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
           <Field id="description" label={t("roles.descriptionLabel")} error={errors.description?.message}>
             <Input
               id="description"
+              disabled={disabled}
               aria-invalid={errors.description ? true : undefined}
               {...register("description")}
             />
@@ -250,10 +262,10 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
   useEffect(() => setSelected(new Set(role.permissions ?? [])), [role.permissions]);
 
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (permissions: string[]) =>
       updateRolePermissions({
         roleId: role.id,
-        permissions: Array.from(selected),
+        permissions,
       }),
     onSuccess: () => {
       toast.success(t("roles.permissionsUpdated"));
@@ -336,7 +348,7 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
                 type="button"
                 size="sm"
                 disabled={!dirty || mutation.isPending || disabled}
-                onClick={() => mutation.mutate()}
+                onClick={() => { if (!disabled && !mutation.isPending) mutation.mutate(Array.from(selected)); }}
                 className="h-9 rounded-lg px-3 text-[13px]"
               >
                 <ShieldCheck className="mr-1 h-3.5 w-3.5" />

@@ -105,7 +105,7 @@ test.describe("tenant create dialog", () => {
         body: JSON.stringify({ status: "Running", steps: [], correlationId: "x" }),
       }),
     );
-    await page.route("**/api/v1/tenants/theme", (route) =>
+    await page.route("**/api/v1/tenants/theme?*", (route) =>
       route.fulfill({ status: 200, headers: { "Content-Type": "application/json" }, body: "{}" }),
     );
     await page.route("**/api/v1/identity/impersonation/grants**", (route) =>

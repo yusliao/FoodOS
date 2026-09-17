@@ -48,6 +48,7 @@ function statusLabel(
 export function ImpersonationListPage() {
   const t = useT();
   const { user } = useAuth();
+  const canView = !!user?.permissions.includes(IdentityPermissions.Impersonation.View);
   const canRevoke = (user?.permissions ?? []).includes(IdentityPermissions.Impersonation.Revoke);
   const canImpersonate = (user?.permissions ?? []).includes(IdentityPermissions.Users.Impersonate);
   const currentUserId = user?.id ?? null;
@@ -60,13 +61,15 @@ export function ImpersonationListPage() {
   // derived client-side, so we don't run two overlapping take:200 polls.
   const grants = useQuery({
     queryKey: ["impersonation-grants", "all"],
-    queryFn: () => listImpersonationGrants({ take: 200 }),
+    queryFn: ({ signal }) => listImpersonationGrants({ take: 200 }, signal),
+    enabled: canView,
+    retry: (count, error) => !(error instanceof ApiRequestError && error.status === 403) && count < 1,
     // Poll while viewing — admins watching an active session expect near-real-time updates.
-    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchInterval: query => query.state.error ? false : REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: true,
   });
 
-  const allGrants = useMemo(() => grants.data ?? [], [grants.data]);
+  const allGrants = useMemo(() => grants.isError ? [] : grants.data ?? [], [grants.data, grants.isError]);
 
   const counts = useMemo(
     () => ({
@@ -112,12 +115,13 @@ export function ImpersonationListPage() {
         </Button>
       </EntityPageHeader>
 
-      <StatStrip cols={4}>
+      {grants.isSuccess && <StatStrip cols={4}>
         <Stat label={t("impersonation.active")} value={grants.isLoading ? "—" : counts.active.toString()} hint={t("impersonation.hintActive")} tone={counts.active > 0 ? "signal" : "default"} />
         <Stat label={t("impersonation.ended")} value={grants.isLoading ? "—" : counts.ended.toString()} hint={t("impersonation.hintEnded")} />
         <Stat label={t("impersonation.revoked")} value={grants.isLoading ? "—" : counts.revoked.toString()} hint={t("impersonation.hintRevoked")} tone={counts.revoked > 0 ? "danger" : "default"} />
         <Stat label={t("impersonation.expired")} value={grants.isLoading ? "—" : counts.expired.toString()} hint={t("impersonation.hintExpired")} />
-      </StatStrip>
+      </StatStrip>}
+      {grants.isSuccess && <p className="text-sm text-[var(--color-muted-foreground)]">{t("impersonation.loadedScope")}</p>}
 
       <FilterBar>
         <Select

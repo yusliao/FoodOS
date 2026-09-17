@@ -91,19 +91,20 @@ export function InvoiceDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
-  const canManageBilling = (currentUser?.permissions ?? []).includes(BillingPermissions.Manage);
+  const canView = !!currentUser?.permissions.includes(BillingPermissions.View);
+  const canManageBilling = canView && !!currentUser?.permissions.includes(BillingPermissions.Manage);
 
   const query = useQuery({
     queryKey: ["billing", "invoice", invoiceId],
-    queryFn: () => getInvoice(invoiceId),
-    enabled: !!invoiceId,
+    queryFn: ({ signal }) => getInvoice(invoiceId, signal),
+    enabled: canView && !!invoiceId,
   });
-  const invoice = query.data;
+  const invoice = query.isError ? undefined : query.data;
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["billing", "invoice", invoiceId] });
-    queryClient.invalidateQueries({ queryKey: ["billing", "invoices"] });
-  };
+  const invalidate = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["billing", "invoice", invoiceId] }),
+    queryClient.invalidateQueries({ queryKey: ["billing", "invoices"] }),
+  ]);
 
   const [dueAt, setDueAt] = useState("");
   const [voidReason, setVoidReason] = useState("");
@@ -117,21 +118,21 @@ export function InvoiceDetailPage() {
   });
 
   const issueMutation = useMutation({
-    mutationFn: () => issueInvoice(invoiceId, dueAt ? new Date(dueAt).toISOString() : null),
+    mutationFn: ({ id, due }: { id: string; due: string }) => issueInvoice(id, due ? new Date(due).toISOString() : null),
     onSuccess: () => {
       toast.success(t("billing.issuedToast"), { description: t("billing.issuedToastBody") });
       setDueAt("");
-      invalidate();
+      return invalidate();
     },
     onError: (err) =>
       toast.error(t("billing.issueFailed"), { description: describe(err, t("billing.issueFailedBody")) }),
   });
 
   const payMutation = useMutation({
-    mutationFn: () => markInvoicePaid(invoiceId),
+    mutationFn: (id: string) => markInvoicePaid(id),
     onSuccess: () => {
       toast.success(t("billing.markedPaid"));
-      invalidate();
+      return invalidate();
     },
     onError: (err) =>
       toast.error(t("billing.markPaidFailed"), {
@@ -140,15 +141,17 @@ export function InvoiceDetailPage() {
   });
 
   const voidMutation = useMutation({
-    mutationFn: () => voidInvoice(invoiceId, voidReason.trim() ? voidReason.trim() : null),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => voidInvoice(id, reason.trim() || null),
     onSuccess: () => {
       toast.success(t("billing.voidedToast"));
       setVoidReason("");
-      invalidate();
+      return invalidate();
     },
     onError: (err) =>
       toast.error(t("billing.voidFailed"), { description: describe(err, t("billing.voidFailedBody")) }),
   });
+
+  const busy = issueMutation.isPending || payMutation.isPending || voidMutation.isPending || query.isFetching;
 
   return (
     <div className="space-y-6">
@@ -160,11 +163,12 @@ export function InvoiceDetailPage() {
         {query.isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-7 w-72" />
-            <Skeleton className="h-4 w-96" />
+            <Skeleton className="h-4 w-full max-w-96" />
           </div>
         ) : query.isError ? (
           <div className="text-sm text-[var(--color-destructive)]">
             {describe(query.error, t("billing.loadInvoiceFailed"))}
+            <Button className="ml-3" variant="outline" disabled={!canView || query.isFetching} onClick={() => query.refetch()}>{t("workbench.retry")}</Button>
           </div>
         ) : invoice ? (
           <EntityPageHeader
@@ -218,7 +222,7 @@ export function InvoiceDetailPage() {
               </span>
             }
           >
-            {canManageBilling && (
+            {canView && (
               <Button
                 variant="outline"
                 size="sm"
@@ -301,13 +305,13 @@ export function InvoiceDetailPage() {
                       type="date"
                       value={dueAt}
                       onChange={(e) => setDueAt(e.target.value)}
-                      disabled={invoice.status !== "Draft" || issueMutation.isPending}
+                      disabled={invoice.status !== "Draft" || busy}
                     />
                   </Field>
                   <Button
                     size="sm"
-                    disabled={invoice.status !== "Draft" || issueMutation.isPending}
-                    onClick={() => issueMutation.mutate()}
+                    disabled={invoice.status !== "Draft" || busy}
+                    onClick={() => { if (canManageBilling) issueMutation.mutate({ id: invoiceId, due: dueAt }); }}
                     className="w-full"
                   >
                     {issueMutation.isPending ? t("billing.issuing") : t("billing.issueInvoice")}
@@ -323,8 +327,8 @@ export function InvoiceDetailPage() {
                 <div className={cn(invoice.status !== "Issued" && "opacity-60")}>
                   <Button
                     size="sm"
-                    disabled={invoice.status !== "Issued" || payMutation.isPending}
-                    onClick={() => payMutation.mutate()}
+                    disabled={invoice.status !== "Issued" || busy}
+                    onClick={() => { if (canManageBilling) payMutation.mutate(invoiceId); }}
                     className="w-full"
                   >
                     {payMutation.isPending ? t("billing.saving") : t("billing.markAsPaid")}
@@ -352,7 +356,7 @@ export function InvoiceDetailPage() {
                       disabled={
                         invoice.status === "Paid" ||
                         invoice.status === "Void" ||
-                        voidMutation.isPending
+                        busy
                       }
                     />
                   </Field>
@@ -362,9 +366,9 @@ export function InvoiceDetailPage() {
                     disabled={
                       invoice.status === "Paid" ||
                       invoice.status === "Void" ||
-                      voidMutation.isPending
+                      busy
                     }
-                    onClick={() => voidMutation.mutate()}
+                    onClick={() => { if (canManageBilling) voidMutation.mutate({ id: invoiceId, reason: voidReason }); }}
                     className="w-full"
                   >
                     {voidMutation.isPending ? t("billing.voiding") : t("billing.voidInvoice")}

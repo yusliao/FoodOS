@@ -59,6 +59,7 @@ export function TenantDetailPage() {
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [activationConfirmOpen, setActivationConfirmOpen] = useState(false);
   const permissions = currentUser?.permissions ?? [];
+  const canView = permissions.includes(MultitenancyPermissions.Tenants.View);
   const canImpersonate = permissions.includes(IdentityPermissions.Users.Impersonate);
   // Renew / change plan + adjust validity are root-operator subscription actions.
   const canManageSubscription = permissions.includes(
@@ -69,52 +70,53 @@ export function TenantDetailPage() {
 
   const tenantQuery = useQuery({
     queryKey: ["tenant", id],
-    queryFn: () => getTenantStatus(id),
-    enabled: !!id,
+    queryFn: ({ signal }) => getTenantStatus(id, signal),
+    enabled: !!id && canView,
   });
 
   const provisioningQuery = useQuery({
     queryKey: ["tenant", id, "provisioning"],
-    queryFn: () => getTenantProvisioningStatus(id),
-    enabled: !!id,
+    queryFn: ({ signal }) => getTenantProvisioningStatus(id, signal),
+    enabled: !!id && canView && tenantQuery.isSuccess,
     // A 404 means this tenant was never run through the provisioning pipeline
     // (e.g. demo/directly-created tenants) — a terminal "not tracked" state,
     // not a transient failure. Don't retry or poll it.
     retry: (failureCount, err) =>
-      !(err instanceof ApiRequestError && err.status === 404) && failureCount < 3,
+      !(err instanceof ApiRequestError && [403, 404].includes(err.status)) && failureCount < 3,
     // Poll while provisioning is in flight; stop once terminal (or not tracked).
     refetchInterval: (query) => {
-      if (query.state.error instanceof ApiRequestError && query.state.error.status === 404) {
+      if (query.state.error) {
         return false;
       }
       const status = query.state.data?.status;
-      if (status === "Completed" || status === "Failed") return false;
-      return 2000;
+      return status === "Running" || status === "Pending" ? 2000 : false;
     },
   });
 
   const activationMutation = useMutation({
-    mutationFn: (isActive: boolean) => changeTenantActivation(id, isActive),
-    onSuccess: (result) => {
+    mutationFn: ({ tenantId, isActive }: { tenantId: string; isActive: boolean }) => changeTenantActivation(tenantId, isActive),
+    onSuccess: async (result, variables) => {
       toast.success(result.isActive ? t("tenants.activated") : t("tenants.deactivated"));
       setActivationConfirmOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["tenant", id] });
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tenant", variables.tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ["tenants"] }),
+      ]);
     },
     onError: (err) => toast.error(t("tenants.activationFailed"), { description: describe(err) }),
   });
 
   const retryMutation = useMutation({
-    mutationFn: () => retryTenantProvisioning(id),
-    onSuccess: () => {
+    mutationFn: (tenantId: string) => retryTenantProvisioning(tenantId),
+    onSuccess: (_, tenantId) => {
       toast.success(t("tenants.requeued"));
-      queryClient.invalidateQueries({ queryKey: ["tenant", id, "provisioning"] });
+      return queryClient.invalidateQueries({ queryKey: ["tenant", tenantId, "provisioning"] });
     },
     onError: (err) => toast.error(t("tenants.retryFailed"), { description: describe(err) }),
   });
 
-  const tenant = tenantQuery.data;
-  const provisioning = provisioningQuery.data;
+  const tenant = tenantQuery.isError ? undefined : tenantQuery.data;
+  const provisioning = provisioningQuery.isError ? undefined : provisioningQuery.data;
   const provisioningNotTracked =
     provisioningQuery.error instanceof ApiRequestError &&
     provisioningQuery.error.status === 404;
@@ -133,7 +135,10 @@ export function TenantDetailPage() {
       </EntityPageHeader>
 
       {tenantQuery.isError && (
+        <div className="space-y-2">
         <ErrorBand message={describe(tenantQuery.error)} />
+        <Button variant="outline" disabled={tenantQuery.isFetching} onClick={() => tenantQuery.refetch()}>{t("workbench.retry")}</Button>
+        </div>
       )}
 
       {tenantQuery.isLoading && !tenant && <LoadingRow label={t("tenants.loadingTenant")} />}
@@ -216,6 +221,7 @@ export function TenantDetailPage() {
                   <Button
                     variant="outline"
                     onClick={() => setAdjustOpen(true)}
+                    disabled={tenant.id === "root"}
                     className="shrink-0"
                     title={t("tenants.adjustTitle")}
                   >
@@ -227,7 +233,7 @@ export function TenantDetailPage() {
                   <Button
                     variant={tenant.isActive ? "outline" : "default"}
                     onClick={() => setActivationConfirmOpen(true)}
-                    disabled={activationMutation.isPending}
+                    disabled={activationMutation.isPending || tenant.id === "root"}
                     className="shrink-0"
                   >
                     {activationMutation.isPending
@@ -280,13 +286,16 @@ export function TenantDetailPage() {
             }
             confirmLabel={tenant.isActive ? t("tenants.deactivate") : t("tenants.activate")}
             pending={activationMutation.isPending}
-            onConfirm={() => activationMutation.mutate(!tenant.isActive)}
+            onConfirm={() => {
+              if (canView && canUpdateTenant && tenant.id !== "root" && !activationMutation.isPending)
+                activationMutation.mutate({ tenantId: tenant.id, isActive: !tenant.isActive });
+            }}
           />
           )}
 
           <ActiveGrantsCard tenantId={tenant.id} />
 
-          <TenantBrandingCard tenantId={tenant.id} />
+          <TenantBrandingCard key={tenant.id} tenantId={tenant.id} />
 
           {/* ── Details section ────────────────────────────────────────── */}
           <SettingsSection
@@ -335,10 +344,16 @@ export function TenantDetailPage() {
               // through the pipeline. Swallow it and show the neutral state.
               error={provisioningNotTracked ? undefined : provisioningQuery.error}
               notTracked={provisioningNotTracked}
-              onRetry={() => retryMutation.mutate()}
+              onRetry={() => {
+                if (canView && canUpdateTenant && provisioning?.status === "Failed" && !retryMutation.isPending)
+                  retryMutation.mutate(id);
+              }}
               retryPending={retryMutation.isPending}
               canRetry={canUpdateTenant}
             />
+            {provisioningQuery.isError && !provisioningNotTracked && (
+              <Button className="mt-3" variant="outline" disabled={provisioningQuery.isFetching} onClick={() => provisioningQuery.refetch()}>{t("workbench.retry")}</Button>
+            )}
           </SettingsSection>
         </>
       )}

@@ -64,8 +64,8 @@ test.describe("webhooks subscriptions list", () => {
 
 test.describe("webhook detail (deliveries)", () => {
   test("loads the endpoint sections and a delivery row", async ({ page }) => {
-    // Detail finds the sub by listing subscriptions (page 1, big page size).
-    await mockJsonResponse(page, "**/api/v1/webhooks/subscriptions?*", paged([SUB], { pageSize: 200 }));
+    // Detail searches the paged directory within the server's 100-item limit.
+    await mockJsonResponse(page, "**/api/v1/webhooks/subscriptions?*", paged([SUB], { pageSize: 100 }));
     await mockJsonResponse(
       page,
       `**/api/v1/webhooks/subscriptions/${SUB.id}/deliveries?*`,
@@ -94,7 +94,7 @@ test.describe("webhook detail (deliveries)", () => {
   });
 
   test("shows the no-deliveries copy when the subscription has none", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/webhooks/subscriptions?*", paged([SUB], { pageSize: 200 }));
+    await mockJsonResponse(page, "**/api/v1/webhooks/subscriptions?*", paged([SUB], { pageSize: 100 }));
     await mockJsonResponse(
       page,
       `**/api/v1/webhooks/subscriptions/${SUB.id}/deliveries?*`,

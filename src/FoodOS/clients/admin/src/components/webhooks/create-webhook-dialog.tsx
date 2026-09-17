@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
   SUGGESTED_EVENT_TYPES,
   createWebhookSubscription,
+  type CreateWebhookSubscriptionInput,
 } from "@/api/webhooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,12 +72,7 @@ export function CreateWebhookDialog({
   };
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) =>
-      createWebhookSubscription({
-        url: values.url,
-        secret: values.secret,
-        events,
-      }),
+    mutationFn: (values: CreateWebhookSubscriptionInput) => createWebhookSubscription(values),
     onSuccess: (id) => {
       toast.success(t("webhooks.createdToast"), {
         description: t("webhooks.createdToastBody"),
@@ -101,7 +97,7 @@ export function CreateWebhookDialog({
       });
       return;
     }
-    mutation.mutate(values);
+    if (!mutation.isPending) mutation.mutate({ ...values, events: [...events] });
   });
 
   const addEvent = (raw: string) => {

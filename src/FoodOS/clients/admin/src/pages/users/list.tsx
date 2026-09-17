@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Users } from "lucide-react";
 import { searchUsers, type UserDto } from "@/api/users";
-import { listRoles } from "@/api/roles";
+import { RoleFilter } from "@/components/roles/role-filter";
+import { useAuth } from "@/auth/use-auth";
+import { IdentityPermissions } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { Monogram } from "@/components/monogram";
 import { EntityPageHeader, ErrorBand } from "@/components/list";
 import { ApiRequestError } from "@/lib/api-client";
@@ -29,6 +30,10 @@ const DESKTOP_COLS =
 
 export function UsersListPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(IdentityPermissions.Users.View);
+  const canViewRoles = canView && !!user?.permissions.includes(IdentityPermissions.Roles.View);
+  const canCreate = canView && !!user?.permissions.includes(IdentityPermissions.Users.Create);
   const navigate = useNavigate();
 
   const [pageNumber, setPageNumber] = useState(1);
@@ -53,12 +58,6 @@ export function UsersListPage() {
     setPageNumber(1);
   }, [activeFilter, confirmedFilter, roleId]);
 
-  const rolesQuery = useQuery({
-    queryKey: ["roles"],
-    queryFn: listRoles,
-    staleTime: 5 * 60_000,
-  });
-
   const usersQuery = useQuery({
     queryKey: [
       "users",
@@ -74,6 +73,7 @@ export function UsersListPage() {
         roleId: roleId || undefined,
       }),
     placeholderData: keepPreviousData,
+    enabled: canView,
   });
 
   const data = usersQuery.data;
@@ -112,12 +112,12 @@ export function UsersListPage() {
             )
           : t("users.loadingRoster")}
       >
-        <Button
+        {canCreate && <Button
           onClick={() => setCreateOpen(true)}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <Plus className="size-4" /> {t("users.newUser")}
-        </Button>
+        </Button>}
       </EntityPageHeader>
 
       {/* Filter row */}
@@ -157,17 +157,11 @@ export function UsersListPage() {
           ]}
         />
 
-        <Select
-          label={t("users.role")}
-          value={roleId}
-          onChange={(v) => setRoleId(v)}
-          options={(rolesQuery.data ?? []).map((r) => ({ value: r.id ?? "", label: r.name ?? r.id ?? "" }))}
-          placeholder={t("users.anyRole")}
-          minWidth="9rem"
-        />
+        {canViewRoles && <RoleFilter value={roleId} onChange={id => { setRoleId(id); setPageNumber(1); }} />}
       </div>
 
       {usersQuery.isError && (
+        <div className="space-y-2">
         <ErrorBand
           message={
             usersQuery.error instanceof ApiRequestError
@@ -175,6 +169,8 @@ export function UsersListPage() {
               : t("users.loadFailed")
           }
         />
+        <Button variant="outline" disabled={usersQuery.isFetching} onClick={() => void usersQuery.refetch()}>{t("workbench.retry")}</Button>
+        </div>
       )}
 
       {usersQuery.isLoading && items.length === 0 && (
@@ -286,7 +282,7 @@ export function UsersListPage() {
         </div>
       )}
 
-      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {canCreate && <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />}
     </div>
   );
 }

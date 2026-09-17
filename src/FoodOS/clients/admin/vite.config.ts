@@ -19,7 +19,8 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         "/api": { target: apiBase, changeOrigin: true, secure: false },
-        "/health": { target: apiBase, changeOrigin: true, secure: false },
+        // /health is the SPA management page; only probe paths go to the API.
+        "/health/": { target: apiBase, changeOrigin: true, secure: false },
         "/openapi": { target: apiBase, changeOrigin: true, secure: false },
         "/scalar": { target: apiBase, changeOrigin: true, secure: false },
       },

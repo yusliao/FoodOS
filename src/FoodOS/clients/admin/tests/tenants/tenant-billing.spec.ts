@@ -61,7 +61,7 @@ test.describe("create tenant — plan selector", () => {
     await page.route("**/api/v1/tenants/*/provisioning", (route) =>
       route.fulfill({ status: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "Running", steps: [], correlationId: "x" }) }),
     );
-    await page.route("**/api/v1/tenants/theme", (route) =>
+    await page.route("**/api/v1/tenants/theme?*", (route) =>
       route.fulfill({ status: 200, headers: { "Content-Type": "application/json" }, body: "{}" }),
     );
     await page.route("**/api/v1/identity/impersonation/grants**", (route) =>
@@ -119,7 +119,7 @@ test.describe("tenant detail — renew", () => {
     );
     // Theme must carry the palette keys; the branding card's ThemePreview reads
     // palette.background, so an empty {} crashes the detail page (undefined.background).
-    await page.route("**/api/v1/tenants/theme", (route) =>
+    await page.route("**/api/v1/tenants/theme?*", (route) =>
       route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -185,7 +185,7 @@ test.describe("tenant detail — adjust validity", () => {
     await page.route("**/api/v1/tenants/*/provisioning", (route) =>
       route.fulfill({ status: 404, headers: { "Content-Type": "application/json" }, body: "{}" }),
     );
-    await page.route("**/api/v1/tenants/theme", (route) =>
+    await page.route("**/api/v1/tenants/theme?*", (route) =>
       route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },

@@ -21,7 +21,7 @@ import { getPlans, planTermPrice } from "@/api/billing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Monogram } from "@/components/monogram";
-import { Field, Select, type SelectOption } from "@/components/list";
+import { ErrorBand, Field, Select, type SelectOption } from "@/components/list";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,8 @@ import {
 import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/auth/use-auth";
+import { BillingPermissions, MultitenancyPermissions } from "@/lib/permissions";
 
 // ─── Schema (unchanged contract) ────────────────────────────────────────────
 
@@ -51,7 +53,7 @@ function makeSchema(t: (key: string, fallback?: string) => string) {
       .max(128, t("tenants.max128")),
     issuer: z.string().trim().min(2, t("settings.required")).max(256),
     connectionString: z.string().trim().max(2048).optional(),
-    planKey: z.string().trim().optional(),
+    planKey: z.string().optional(),
   });
 }
 
@@ -205,6 +207,10 @@ export function CreateTenantDialog({
 }) {
   const t = useT();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canCreate = !!user?.permissions.includes(MultitenancyPermissions.Tenants.View)
+    && user.permissions.includes(MultitenancyPermissions.Tenants.Create);
+  const canViewPlans = !!user?.permissions.includes(BillingPermissions.View);
   const queryClient = useQueryClient();
   const schema = useMemo(() => makeSchema(t), [t]);
 
@@ -216,18 +222,19 @@ export function CreateTenantDialog({
 
   const plansQuery = useQuery({
     queryKey: ["billing", "plans", "active"],
-    queryFn: () => getPlans(false),
-    enabled: open,
+    queryFn: ({ signal }) => getPlans(false, signal),
+    enabled: open && canCreate && canViewPlans,
   });
 
-  const planOptions: SelectOption[] = (plansQuery.data ?? []).map((p) => ({
+  const activePlans = (plansQuery.data ?? []).filter(p => p.isActive);
+  const planOptions: SelectOption[] = activePlans.map((p) => ({
     value: p.key,
     label: p.name,
-    hint: `${p.interval} · ${formatMoney(planTermPrice(p), p.currency)}`,
+    hint: `${t(p.interval === "Yearly" ? "billing.yearly" : "billing.monthly")} · ${formatMoney(planTermPrice(p), p.currency)}`,
   }));
   // Prefer the conventional trial plan, else the first active plan.
   const defaultPlanKey =
-    plansQuery.data?.find((p) => p.key === "free")?.key ?? plansQuery.data?.[0]?.key ?? "";
+    activePlans.find((p) => p.key === "free")?.key ?? activePlans[0]?.key ?? "";
 
   const {
     register,
@@ -260,17 +267,17 @@ export function CreateTenantDialog({
   const idValid = TENANT_ID_RE.test((idValue ?? "").trim());
   const idTouched = (idValue ?? "").trim().length > 0;
 
-  const selectedPlan = plansQuery.data?.find((p) => p.key === planKey);
+  const selectedPlan = canViewPlans ? activePlans.find((p) => p.key === planKey) : undefined;
   const planLabel = selectedPlan
     ? `${selectedPlan.name} · ${formatMoney(planTermPrice(selectedPlan), selectedPlan.currency)}`
     : null;
 
   // Preselect the default/trial plan once plans load (without clobbering a choice).
   useEffect(() => {
-    if (defaultPlanKey && !getValues("planKey")) {
+    if (open && canViewPlans && defaultPlanKey && !getValues("planKey")) {
       setValue("planKey", defaultPlanKey);
     }
-  }, [defaultPlanKey, getValues, setValue]);
+  }, [open, canViewPlans, defaultPlanKey, getValues, setValue]);
 
   // Auto-derive the identifier slug from the display name until the operator
   // unlocks the field for manual editing.
@@ -339,15 +346,21 @@ export function CreateTenantDialog({
     setShowPassword(true);
   }
 
-  const onSubmit = handleSubmit((values) => mutation.mutate(values));
   const submitting = isSubmitting || mutation.isPending;
+  const planSupported = !!selectedPlan && selectedPlan.key.length <= 64 && !!selectedPlan.key.trim();
+  const canSubmit = canCreate && !submitting && (!canViewPlans ||
+    (plansQuery.isSuccess && !plansQuery.isFetching && planSupported));
+  const onSubmit = handleSubmit((values) => {
+    if (canSubmit) mutation.mutate({ ...values, planKey: canViewPlans ? values.planKey : "" });
+  });
 
   const issuerField = register("issuer");
 
   return (
     <Dialog
-      open={open}
+      open={open && canCreate}
       onOpenChange={(o) => {
+        if (submitting) return;
         if (!o) handleClose();
         else onOpenChange(true);
       }}
@@ -376,7 +389,7 @@ export function CreateTenantDialog({
             </div>
 
             {/* Fields */}
-            <div className="space-y-4 px-6 py-4">
+            <fieldset disabled={submitting} className="min-w-0 space-y-4 px-6 py-4">
               <Field id="ct-name" label={t("tenants.displayName")} required error={errors.name?.message}>
                 <Input
                   id="ct-name"
@@ -491,6 +504,12 @@ export function CreateTenantDialog({
               </Field>
 
               {/* Plan */}
+              {!canViewPlans ? <p className="text-sm">{t("tenants.createDefaultPlanOnly")}</p> : <>
+              {plansQuery.isError && <div className="space-y-2">
+                <ErrorBand message={plansQuery.error instanceof ApiRequestError ? plansQuery.error.problem?.detail ?? plansQuery.error.message : t("tenants.planLoadFailed")} />
+                <Button type="button" variant="outline" disabled={plansQuery.isFetching} onClick={() => plansQuery.refetch()}>{t("workbench.retry")}</Button>
+              </div>}
+              {selectedPlan && !planSupported && <ErrorBand message={t("tenants.planKeyUnsupported")} />}
               <Field
                 id="ct-plan"
                 label={t("tenants.billingPlan")}
@@ -517,11 +536,12 @@ export function CreateTenantDialog({
                             ? t("tenants.noActivePlans")
                             : undefined
                       }
-                      disabled={plansQuery.isLoading || planOptions.length === 0}
+                      disabled={submitting || plansQuery.isFetching || plansQuery.isError || planOptions.length === 0}
                     />
                   )}
                 />
               </Field>
+              </>}
 
               {/* Advanced disclosure — issuer + dedicated database */}
               <div className="rounded-lg border border-[var(--color-border)]">
@@ -585,14 +605,14 @@ export function CreateTenantDialog({
                   </div>
                 )}
               </div>
-            </div>
+            </fieldset>
 
             {/* Footer */}
             <DialogFooter className="px-6">
               <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
                 {t("chrome.cancel")}
               </Button>
-              <Button type="submit" disabled={submitting} className="min-w-[8.5rem]">
+              <Button type="submit" disabled={!canSubmit} className="min-w-[8.5rem]">
                 {submitting ? (
                   <>
                     <Loader2 className="size-4 animate-spin" aria-hidden />

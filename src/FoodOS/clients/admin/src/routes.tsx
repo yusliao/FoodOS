@@ -9,6 +9,7 @@ import { DashboardPage } from "@/pages/dashboard";
 import { NotFoundPage } from "@/pages/not-found";
 import {
   AuditingPermissions,
+  OpsPermissions,
   BillingPermissions,
   CatalogPermissions,
   IdentityPermissions,
@@ -33,6 +34,7 @@ const lazyNamed = <T extends string>(
   });
 
 const TenantsListPage = lazyNamed(() => import("@/pages/tenants/list"), "TenantsListPage");
+const ReportsPage = lazyNamed(() => import("@/pages/reports"), "ReportsPage");
 const CustomersPage = lazyNamed(() => import("@/pages/customers/list"), "CustomersPage");
 const StoresPage = lazyNamed(() => import("@/pages/customers/stores"), "StoresPage");
 const BrandsPage = lazyNamed(() => import("@/pages/catalog/brands"), "BrandsPage");
@@ -161,6 +163,7 @@ export const router = createBrowserRouter([
           },
 
           // Roles
+          { path: "reports", element: <RouteGuard perms={[OpsPermissions.Kpis.View]}><ReportsPage /></RouteGuard> },
           {
             path: "roles",
             element: (

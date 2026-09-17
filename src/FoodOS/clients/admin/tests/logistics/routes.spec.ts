@@ -1,0 +1,118 @@
+import { expect, test, type Page } from "@playwright/test";
+import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
+import { installAdminShellMocks } from "../helpers/shell-mocks";
+const view = "Permissions.Logistics.Routes.View", create = "Permissions.Logistics.Routes.Create", wh = "Permissions.Inventory.Warehouses.View", stores = "Permissions.Ordering.Stores.View", vehicles = "Permissions.Logistics.Vehicles.View";
+async function setup(page: Page, permissions: string[]) {
+  await seedAuthedSession(page, { ...TEST_USER, permissions });
+  await installAdminShellMocks(page, permissions);
+  await page.route("**/api/v1/inventory/warehouses?**", route => { const p = Number(new URL(route.request().url()).searchParams.get("pageNumber")); return route.fulfill({ json: { items: [{ id: "w" + p, code: "W" + p, name: "Warehouse" }], totalCount: 2, totalPages: 2, hasNext: p === 1, hasPrevious: p === 2 } }); });
+  await page.route("**/api/v1/logistics/routes?**", route => route.fulfill({ json: [] }));
+  await page.route("**/api/v1/ordering/stores?**", route => route.fulfill({ json: [1, 2].map(n => ({ id: "s" + n, code: "S" + n, name: "Store " + n })) }));
+  await page.route("**/api/v1/logistics/vehicles", route => route.fulfill({ json: [{ id: "v1", plate: "TRUCK" }] }));
+}
+for (const permissions of [[], [create, wh, stores]]) test(`direct URL denies missing route view ${permissions.length}`, async ({ page }) => {
+  await setup(page, permissions);
+  const reads: string[] = [];
+  page.on("request", r => { if (/\/api\/v1\/(inventory|ordering|logistics)/.test(r.url())) reads.push(r.url()); });
+  await page.goto("/logistics/routes");
+  await expect(page.getByRole("heading", { name: "You don't hold the permissions to view this surface." })).toBeVisible();
+  expect(reads).toEqual([]);
+});
+test("no warehouse permission means no warehouse or route requests", async ({ page }) => {
+  await setup(page, [view, create, stores]);
+  const reads: string[] = [];
+  page.on("request", r => { if (/\/api\/v1\/(inventory|ordering|logistics)/.test(r.url())) reads.push(r.url()); });
+  await page.goto("/logistics/routes");
+  await expect(page.getByText("Warehouse viewing permission is required to select a warehouse.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New route" })).toBeDisabled();
+  expect(reads).toEqual([]);
+});
+test("readonly navigation selects warehouse before querying and retries 403", async ({ page }) => {
+  await setup(page, [view, wh]);
+  let reads = 0, fail = true;
+  await page.route("**/api/v1/logistics/routes?**", route => { reads++; expect(route.request().headers().tenant).toBe("root"); return route.fulfill(fail ? { status: 403, json: { detail: "Routes denied" } } : { json: [] }); });
+  await page.goto("/");
+  await page.getByRole("main").getByRole("link", { name: "Delivery routes", exact: true }).click();
+  await expect(page.getByText("Choose a warehouse to load its routes.")).toBeVisible();
+  expect(reads).toBe(0);
+  await page.getByRole("button", { name: "W1 · Warehouse" }).click();
+  await expect(page.getByText("Routes denied")).toBeVisible();
+  fail = false;
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByText("No routes for this warehouse.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New route" })).toHaveCount(0);
+});
+test("create without store view is disabled without store requests", async ({ page }) => {
+  await setup(page, [view, create, wh]);
+  let reads = 0;
+  page.on("request", r => { if (r.url().includes("/api/v1/ordering/stores")) reads++; });
+  await page.goto("/logistics/routes");
+  await page.getByRole("button", { name: "W1 · Warehouse" }).click();
+  await expect(page.getByRole("button", { name: "New route" })).toBeDisabled();
+  expect(reads).toBe(0);
+});
+test("warehouse change does not show the previous warehouse routes while loading", async ({ page }) => {
+  await setup(page, [view, wh]);
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/v1/logistics/routes?**", async route => {
+    const warehouseId = new URL(route.request().url()).searchParams.get("warehouseId");
+    if (warehouseId === "w2") await pending;
+    await route.fulfill({ json: [{ id: warehouseId, code: "ROUTE-" + warehouseId, storeIds: ["s2", "s1"], defaultVehicleId: null }] });
+  });
+  await page.goto("/logistics/routes");
+  await page.getByRole("button", { name: "W1 · Warehouse" }).click();
+  await expect(page.getByRole("heading", { name: "ROUTE-w1" })).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "W2 · Warehouse" }).click();
+  await expect(page.getByText("Loading route records…")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ROUTE-w1" })).toHaveCount(0);
+  release();
+  await expect(page.getByRole("heading", { name: "ROUTE-w2" })).toBeVisible();
+});
+for (const vehicleAccess of [false, true]) test(`ordered unique stops and retry keys with vehicle access ${vehicleAccess}`, async ({ page }) => {
+  await setup(page, [view, create, wh, stores, ...(vehicleAccess ? [vehicles] : [])]);
+  const writes: { key: string; body: Record<string, unknown> }[] = [];
+  let vehicleReads = 0;
+  page.on("request", r => { if (r.url().endsWith("/api/v1/logistics/vehicles")) vehicleReads++; });
+  await page.route("**/api/v1/logistics/routes", route => { expect(route.request().headers().tenant).toBe("root"); writes.push({ key: route.request().headers()["idempotency-key"], body: route.request().postDataJSON() }); return route.fulfill(writes.length < 3 ? { status: 409, json: { detail: "Retry route" } } : { json: "r1" }); });
+  await page.goto("/logistics/routes");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "W2 · Warehouse" }).click();
+  await page.getByRole("button", { name: "New route" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Route code").fill("R1");
+  await expect(dialog.getByRole("button", { name: "Register route" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "S1 · Store 1", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "S1 · Store 1", exact: true })).toBeDisabled();
+  await dialog.getByRole("button", { name: "S2 · Store 2", exact: true }).click();
+  await dialog.getByRole("button", { name: "Move down" }).first().click();
+  if (vehicleAccess) await dialog.getByRole("button", { name: "TRUCK", exact: true }).click();
+  await dialog.getByRole("button", { name: "Register route" }).click();
+  await expect(dialog.getByText("Retry route")).toBeVisible();
+  await dialog.getByRole("button", { name: "Register route" }).click();
+  await expect.poll(() => writes.length).toBe(2);
+  await dialog.getByLabel("Route code").fill("R2");
+  await dialog.getByRole("button", { name: "Register route" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(writes[0].key).toBeTruthy(); expect(writes[0]).toEqual(writes[1]); expect(writes[2].key).not.toBe(writes[0].key);
+  expect(writes[2].body).toEqual({ code: "R2", warehouseId: "w2", storeIds: ["s2", "s1"], defaultVehicleId: vehicleAccess ? "v1" : null });
+  expect(vehicleReads > 0).toBe(vehicleAccess);
+});
+test("Chinese mobile store lookup failure retries into empty", async ({ page }) => {
+  await setup(page, [view, create, wh, stores]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => localStorage.setItem("foodos.culture", "zh-CN"));
+  let fail = true;
+  await page.route("**/api/v1/ordering/stores?**", route => route.fulfill(fail ? { status: 500, json: {} } : { json: [] }));
+  await page.goto("/logistics/routes");
+  await page.getByRole("button", { name: "W1 · Warehouse" }).click();
+  await page.getByRole("button", { name: "新增路线" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: "重试", exact: true })).toBeVisible();
+  fail = false;
+  await dialog.getByRole("button", { name: "重试", exact: true }).click();
+  await expect(dialog.getByText("没有匹配的档案。")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "登记路线" })).toBeDisabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

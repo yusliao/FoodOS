@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, Search, ShieldAlert, UserCog } from "lucide-react";
 import { toast } from "sonner";
-import { searchUsers, type UserDto } from "@/api/users";
-import { startImpersonation, type ImpersonationResponse } from "@/api/impersonation";
+import type { UserDto } from "@/api/users";
+import { searchImpersonationUsers, startImpersonation, type ImpersonationResponse } from "@/api/impersonation";
+import { useAuth } from "@/auth/use-auth";
+import { IdentityPermissions } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +53,8 @@ export function ImpersonateDialog({
   prefillUser,
 }: Props) {
   const t = useT();
+  const { user } = useAuth();
+  const canImpersonate = !!user?.permissions.includes(IdentityPermissions.Users.Impersonate);
   const [step, setStep] = useState<"pick" | "configure">(prefillUser ? "configure" : "pick");
   const [selected, setSelected] = useState<UserDto | null>(prefillUser ?? null);
 
@@ -63,7 +67,7 @@ export function ImpersonateDialog({
   }, [open, prefillUser]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && canImpersonate} onOpenChange={onOpenChange}>
       <DialogContent size="lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -84,6 +88,7 @@ export function ImpersonateDialog({
 
         {step === "pick" ? (
           <PickStep
+            key={tenantId}
             tenantId={tenantId}
             onPick={(user) => {
               setSelected(user);
@@ -136,20 +141,10 @@ function PickStep({
 
   const query = useQuery({
     queryKey: ["impersonation", "users", tenantId, debounced],
-    queryFn: () =>
-      searchUsers({
-        tenantId,
-        search: debounced || undefined,
-        pageSize: 25,
-        // Skip disabled accounts — impersonating a deactivated user is a footgun
-        // (the impersonation token would be valid, but the user's normal sign-in
-        // is disabled — confusing to debug).
-        isActive: true,
-      }),
-    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) => searchImpersonationUsers(tenantId, debounced, signal),
   });
 
-  const users = query.data?.items ?? [];
+  const users = query.isError ? [] : query.data?.items ?? [];
 
   return (
     <>
@@ -169,9 +164,12 @@ function PickStep({
         <div className="-mx-2 max-h-[22rem] overflow-y-auto">
           {query.isError && (
             <div className="px-3 py-6 text-sm text-[var(--color-destructive)]">
+              <p>
               {query.error instanceof ApiRequestError
                 ? query.error.problem?.detail ?? query.error.message
                 : t("impersonation.loadUsersFailed")}
+              </p>
+              <Button variant="outline" className="mt-3" disabled={query.isFetching} onClick={() => query.refetch()}>{t("workbench.retry")}</Button>
             </div>
           )}
 
@@ -182,7 +180,7 @@ function PickStep({
             </div>
           )}
 
-          {!query.isLoading && users.length === 0 && (
+          {!query.isLoading && !query.isError && users.length === 0 && (
             <div className="px-3 py-10 text-center text-sm text-[var(--color-muted-foreground)]">
               {debounced
                 ? t("impersonation.noUsersMatchQuery").replace("{q}", debounced)

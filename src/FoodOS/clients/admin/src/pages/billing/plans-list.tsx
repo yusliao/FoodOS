@@ -11,6 +11,7 @@ import { ApiRequestError } from "@/lib/api-client";
 import { useAuth } from "@/auth/use-auth";
 import { BillingPermissions } from "@/lib/permissions";
 import { useT } from "@/i18n/locale-provider";
+import { CurrencySummary } from "@/components/billing/currency-summary";
 
 function formatMoney(amount: number, currency: string) {
   try {
@@ -42,7 +43,8 @@ export function PlansListPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<BillingPlanDto | undefined>(undefined);
   const { user: currentUser } = useAuth();
-  const canManageBilling = (currentUser?.permissions ?? []).includes(BillingPermissions.Manage);
+  const canView = !!currentUser?.permissions.includes(BillingPermissions.View);
+  const canManageBilling = canView && !!currentUser?.permissions.includes(BillingPermissions.Manage);
 
   const openCreate = () => {
     setEditingPlan(undefined);
@@ -55,22 +57,17 @@ export function PlansListPage() {
 
   const query = useQuery({
     queryKey: ["billing", "plans", { includeInactive: true }],
-    queryFn: () => getPlans(true),
+    queryFn: ({ signal }) => getPlans(true, signal),
+    enabled: canView,
   });
 
   const plans = useMemo<BillingPlanDto[]>(() => query.data ?? [], [query.data]);
 
   const totals = useMemo(() => {
-    if (plans.length === 0) {
-      return { count: 0, active: 0, averagePrice: 0, currency: "USD" };
-    }
     const active = plans.filter((p) => p.isActive).length;
-    const sum = plans.reduce((acc, p) => acc + p.monthlyBasePrice, 0);
     return {
       count: plans.length,
       active,
-      averagePrice: sum / plans.length,
-      currency: plans[0].currency,
     };
   }, [plans]);
 
@@ -79,14 +76,14 @@ export function PlansListPage() {
       <StatStrip cols={3}>
         <Stat
           label={t("billing.plans")}
-          value={query.isLoading ? <Skeleton className="h-7 w-16" /> : totals.count}
-          hint={t("billing.activeHint").replace("{n}", String(totals.active))}
+          value={query.isLoading ? <Skeleton className="h-7 w-16" /> : query.isError ? "—" : totals.count}
+          hint={query.isError ? t("billing.unavailable") : t("billing.activeHint").replace("{n}", String(totals.active))}
         />
         <Stat
           label={t("billing.active")}
-          value={query.isLoading ? <Skeleton className="h-7 w-16" /> : totals.active}
+          value={query.isLoading ? <Skeleton className="h-7 w-16" /> : query.isError ? "—" : totals.active}
           hint={
-            totals.count - totals.active > 0
+            query.isError ? t("billing.unavailable") : totals.count - totals.active > 0
               ? t("billing.inactiveHint").replace("{n}", String(totals.count - totals.active))
               : t("billing.allActive")
           }
@@ -96,11 +93,11 @@ export function PlansListPage() {
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
-            ) : (
-              formatMoney(totals.averagePrice, totals.currency)
+            ) : query.isError ? "—" : (
+              <CurrencySummary mode="average" values={plans.map(plan => ({ currency: plan.currency, amount: plan.monthlyBasePrice }))} />
             )
           }
-          hint={t("billing.monthlyFeeHint")}
+          hint={t("billing.averageByCurrency")}
         />
       </StatStrip>
 
@@ -118,11 +115,12 @@ export function PlansListPage() {
       >
         {query.isError && (
           <div className="mb-4 rounded-md border border-[oklch(from_var(--color-destructive)_l_c_h_/_0.30)] bg-[oklch(from_var(--color-destructive)_l_c_h_/_0.05)] px-4 py-3 text-sm text-[var(--color-destructive)]">
-            {describe(query.error, t)}
+            <p>{describe(query.error, t)}</p>
+            <Button className="mt-3" variant="outline" disabled={!canView || query.isFetching} onClick={() => query.refetch()}>{t("workbench.retry")}</Button>
           </div>
         )}
 
-        {query.isLoading ? (
+        {query.isError ? null : query.isLoading ? (
           <ul className="-mx-5 divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
             {Array.from({ length: 3 }).map((_, i) => (
               <li key={i} className="px-5 py-5">
@@ -140,7 +138,7 @@ export function PlansListPage() {
             {plans.map((plan, i) => (
               <li
                 key={plan.id}
-                className="fsh-enter grid grid-cols-[1fr_auto] items-center gap-x-6 gap-y-1 border-b border-[var(--color-border)] last:border-b-0 px-5 py-4 transition-colors hover:bg-[var(--color-muted)]"
+                className="fsh-enter grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-x-6 gap-y-3 border-b border-[var(--color-border)] last:border-b-0 px-5 py-4 transition-colors hover:bg-[var(--color-muted)]"
                 style={{ animationDelay: `${Math.min(i, 6) * 30}ms` }}
               >
                 <div className="min-w-0">
@@ -191,7 +189,7 @@ export function PlansListPage() {
         )}
       </SettingsSection>
 
-      <PlanFormDialog open={dialogOpen} onOpenChange={setDialogOpen} plan={editingPlan} />
+      {canManageBilling && <PlanFormDialog open={dialogOpen} onOpenChange={setDialogOpen} plan={editingPlan} />}
     </div>
   );
 }

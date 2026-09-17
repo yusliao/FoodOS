@@ -24,8 +24,10 @@ import {
 } from "@/components/ui/dialog";
 import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { BillingPermissions } from "@/lib/permissions";
 
-const PLAN_KEY_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
+const PLAN_KEY_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 type Translate = (key: string, fallback?: string) => string;
 
@@ -109,6 +111,9 @@ export function PlanFormDialog({
   plan?: BillingPlanDto;
 }) {
   const t = useT();
+  const { user } = useAuth();
+  const canManage = !!user?.permissions.includes(BillingPermissions.View)
+    && user.permissions.includes(BillingPermissions.Manage);
   const queryClient = useQueryClient();
   const isEdit = !!plan;
   const { requiredNonNegative, optionalNonNegative } = useMemo(() => makeMoneySchemas(t), [t]);
@@ -154,12 +159,14 @@ export function PlanFormDialog({
     setOverage(next);
   }, [open, plan]);
 
-  const keyInvalid = !isEdit && key.length > 0 && !PLAN_KEY_PATTERN.test(key);
+  const keyInvalid = !isEdit && !PLAN_KEY_PATTERN.test(key.trim());
+  const nameInvalid = !name.trim() || name.trim().length > 128;
+  const currencyInvalid = !isEdit && currency.trim().length !== 3;
   const priceNum = Number(monthlyBasePrice);
   const priceError =
     monthlyBasePrice.length > 0 ? fieldError(requiredNonNegative, monthlyBasePrice) : undefined;
   const annualNum = Number(annualPrice);
-  const annualError = fieldError(optionalNonNegative, annualPrice);
+  const annualError = interval === "Yearly" ? fieldError(optionalNonNegative, annualPrice) : undefined;
   const annualPricePayload = interval === "Yearly" && annualPrice.trim().length > 0 ? annualNum : null;
 
   const overageErrors = useMemo(() => {
@@ -202,7 +209,7 @@ export function PlanFormDialog({
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (pricingInvalid) return;
+    if (!canManage || pending || pricingInvalid || nameInvalid || currencyInvalid || keyInvalid) return;
     const overageRates = toOverageNumbers(overage, overageResources);
 
     if (isEdit && plan) {
@@ -229,7 +236,7 @@ export function PlanFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && canManage} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
       <DialogContent size="lg">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -251,6 +258,7 @@ export function PlanFormDialog({
         </DialogHeader>
 
         <form onSubmit={onSubmit}>
+          <fieldset disabled={pending} className="min-w-0">
           <DialogBody className="space-y-6">
             <div className="space-y-3">
               <SectionLabel
@@ -265,10 +273,11 @@ export function PlanFormDialog({
                   label={t("billing.key")}
                   hint={t("billing.keyHint")}
                   required={!isEdit}
-                  error={keyInvalid ? t("billing.invalidSlug") : undefined}
+                  error={key.length > 0 && keyInvalid ? t("billing.invalidSlug") : undefined}
                 >
                   <Input
                     id="pf-key"
+                    maxLength={64}
                     value={key}
                     onChange={(e) => setKey(e.target.value)}
                     placeholder="pro"
@@ -277,12 +286,13 @@ export function PlanFormDialog({
                     autoComplete="off"
                   />
                 </Field>
-                <Field id="pf-name" label={t("billing.displayName")} required>
-                  <Input id="pf-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Pro" />
+                <Field id="pf-name" label={t("billing.displayName")} required error={name.length > 0 && nameInvalid ? t("billing.planNameConstraint") : undefined}>
+                  <Input id="pf-name" maxLength={128} value={name} onChange={(e) => setName(e.target.value)} placeholder="Pro" />
                 </Field>
-                <Field id="pf-currency" label={t("billing.currency")} hint={t("billing.currencyHint")} required={!isEdit}>
+                <Field id="pf-currency" label={t("billing.currency")} hint={t("billing.currencyHint")} required={!isEdit} error={currencyInvalid ? t("billing.planCurrencyConstraint") : undefined}>
                   <Input
                     id="pf-currency"
+                    maxLength={3}
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value.toUpperCase())}
                     placeholder="USD"
@@ -365,10 +375,11 @@ export function PlanFormDialog({
             <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
               {t("chrome.cancel")}
             </Button>
-            <Button type="submit" disabled={pending || keyInvalid || pricingInvalid}>
+            <Button type="submit" disabled={!canManage || pending || keyInvalid || nameInvalid || currencyInvalid || pricingInvalid}>
               {pending ? t("billing.saving") : isEdit ? t("billing.saveChanges") : t("billing.createPlan")}
             </Button>
           </DialogFooter>
+          </fieldset>
         </form>
       </DialogContent>
     </Dialog>

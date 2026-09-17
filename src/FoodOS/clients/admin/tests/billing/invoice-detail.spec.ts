@@ -73,7 +73,7 @@ test.describe("billing invoice detail", () => {
     await expect(main.getByText("BaseFee", { exact: true })).toBeVisible();
   });
 
-  test("hides Issue/Mark-paid/Void + Download for a Billing.View-only user", async ({ page }) => {
+  test("hides writes but permits PDF download for a Billing.View-only user", async ({ page }) => {
     // Keep Billing.View so the route guard passes; drop Billing.Manage.
     const viewOnly = ADMIN_PERMS.filter((p) => p !== "Permissions.Billing.Manage");
     await seedAuthedSession(page, { ...TEST_USER, permissions: viewOnly });
@@ -102,7 +102,7 @@ test.describe("billing invoice detail", () => {
     await expect(main.getByRole("button", { name: /issue invoice/i })).toHaveCount(0);
     await expect(main.getByRole("button", { name: /mark as paid/i })).toHaveCount(0);
     await expect(main.getByRole("button", { name: /void invoice/i })).toHaveCount(0);
-    await expect(main.getByRole("button", { name: /download pdf/i })).toHaveCount(0);
+    await expect(main.getByRole("button", { name: /download pdf/i })).toBeVisible();
   });
 
   test("renders an error state (not a stuck Loading…) when the invoice fails to load", async ({ page }) => {

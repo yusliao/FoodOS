@@ -14,18 +14,19 @@ public static class UpdateTenantThemeEndpoint
 {
     public static RouteHandlerBuilder Map(IEndpointRouteBuilder endpoints)
     {
-        return endpoints.MapPut("/theme", async (TenantThemeDto theme, IMediator mediator, CancellationToken cancellationToken) =>
+        return endpoints.MapPut("/theme", async (string? targetTenantId, TenantThemeDto theme, IMediator mediator, CancellationToken cancellationToken) =>
             {
-                await mediator.Send(new UpdateTenantThemeCommand(theme), cancellationToken);
+                await mediator.Send(new UpdateTenantThemeCommand(theme, targetTenantId), cancellationToken);
                 return TypedResults.NoContent();
             })
             .WithName("UpdateTenantTheme")
-            .WithSummary("Update current tenant theme")
-            .WithDescription("Update the theme settings for the current tenant, including colors, typography, and layout.")
+            .WithSummary("Update tenant theme")
+            .WithDescription("Update the current tenant theme. Root operators may specify targetTenantId without changing their identity domain.")
             .RequirePermission(MultitenancyPermissions.Tenants.UpdateTheme)
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status403Forbidden);
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
     }
 }

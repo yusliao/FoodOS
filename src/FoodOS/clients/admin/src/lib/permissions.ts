@@ -103,6 +103,8 @@ export const IdentityPermissions = Object.freeze({
 
 export const MultitenancyPermissions = Object.freeze({
   Tenants: {
+    ViewTheme: "Permissions.Tenants.ViewTheme",
+    UpdateTheme: "Permissions.Tenants.UpdateTheme",
     View: "Permissions.Tenants.View",
     Create: "Permissions.Tenants.Create",
     Update: "Permissions.Tenants.Update",
@@ -230,6 +232,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
       { name: MultitenancyPermissions.Tenants.Create, description: "Create tenants", root: true },
       { name: MultitenancyPermissions.Tenants.Update, description: "Update tenants", root: true },
       { name: MultitenancyPermissions.Tenants.UpgradeSubscription, description: "Upgrade tenant subscription", root: true },
+      { name: MultitenancyPermissions.Tenants.ViewTheme, description: "View tenant theme", basic: true },
+      { name: MultitenancyPermissions.Tenants.UpdateTheme, description: "Update tenant theme" },
     ],
   },
   {

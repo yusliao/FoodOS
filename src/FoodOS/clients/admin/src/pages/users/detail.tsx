@@ -23,9 +23,17 @@ import {
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { IdentityPermissions } from "@/lib/permissions";
+
+const EMPTY_ROLES: UserRoleDto[] = [];
 
 export function UserDetailPage() {
   const t = useT();
+  const { user: actor } = useAuth();
+  const canView = !!actor?.permissions.includes(IdentityPermissions.Users.View);
+  const canUpdate = !!actor?.permissions.includes(IdentityPermissions.Users.Update);
+  const canManageRoles = !!actor?.permissions.includes(IdentityPermissions.Users.ManageRoles);
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -33,21 +41,23 @@ export function UserDetailPage() {
   const userQuery = useQuery({
     queryKey: ["user", id],
     queryFn: () => getUser(id),
-    enabled: !!id,
+    enabled: canView && !!id,
   });
 
   const rolesQuery = useQuery({
     queryKey: ["user", id, "roles"],
     queryFn: () => getUserRoles(id),
-    enabled: !!id,
+    enabled: canView && !!id && userQuery.isSuccess,
   });
 
   const toggleMutation = useMutation({
     mutationFn: (activate: boolean) => toggleUserStatus(id, activate),
-    onSuccess: (_, activate) => {
+    onSuccess: async (_, activate) => {
       toast.success(activate ? t("users.activated") : t("users.deactivated"));
-      queryClient.invalidateQueries({ queryKey: ["user", id] });
-      queryClient.invalidateQueries({ queryKey: ["users"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["user", id] }),
+        queryClient.invalidateQueries({ queryKey: ["users"] }),
+      ]);
     },
     onError: (err) => toast.error(t("users.statusFailed"), { description: describeErr(err) }),
   });
@@ -78,7 +88,7 @@ export function UserDetailPage() {
         </Button>
       </EntityPageHeader>
 
-      {userQuery.isError && <ErrorBand message={describeErr(userQuery.error)} />}
+      {userQuery.isError && <><ErrorBand message={describeErr(userQuery.error)} /><Button variant="outline" disabled={userQuery.isFetching} onClick={() => void userQuery.refetch()}>{t("workbench.retry")}</Button></>}
 
       {userQuery.isLoading && !user && <LoadingRow label={t("users.loadingAccount")} />}
 
@@ -87,7 +97,7 @@ export function UserDetailPage() {
           {/* Hero card */}
           <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-xs">
             <div className="flex flex-col items-start gap-6 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-              <div className="flex items-center gap-5">
+              <div className="flex min-w-0 max-w-full items-center gap-5">
                 <Monogram
                   seed={user.id ?? user.userName ?? "user"}
                   firstName={user.firstName ?? undefined}
@@ -95,8 +105,8 @@ export function UserDetailPage() {
                   fallback={user.userName ?? user.email ?? undefined}
                   size="lg"
                 />
-                <div>
-                  <h2 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">
+                <div className="min-w-0">
+                  <h2 className="break-words font-display text-2xl font-semibold tracking-tight md:text-3xl">
                     {displayName}
                   </h2>
                   <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-xs text-[var(--color-muted-foreground)]">
@@ -125,10 +135,10 @@ export function UserDetailPage() {
                 </div>
               </div>
 
-              <Button
+              {canUpdate && <Button
                 variant={user.isActive ? "outline" : "default"}
-                onClick={() => toggleMutation.mutate(!user.isActive)}
-                disabled={toggleMutation.isPending}
+                onClick={() => { if (canUpdate && !toggleMutation.isPending && !userQuery.isError) toggleMutation.mutate(!user.isActive); }}
+                disabled={toggleMutation.isPending || userQuery.isError}
                 className="shrink-0 h-9 rounded-lg px-4 text-[13px]"
               >
                 {toggleMutation.isPending
@@ -136,7 +146,7 @@ export function UserDetailPage() {
                   : user.isActive
                     ? t("users.deactivateAccount")
                     : t("users.activateAccount")}
-              </Button>
+              </Button>}
             </div>
           </div>
 
@@ -171,13 +181,18 @@ export function UserDetailPage() {
 
             {/* Roles editor */}
             <RolesEditor
+              key={id}
               userId={user.id ?? id}
-              roles={roles ?? []}
-              loading={rolesQuery.isLoading}
+              roles={roles ?? EMPTY_ROLES}
+              loading={rolesQuery.isPending}
               error={rolesQuery.error}
-              onSaved={() => {
-                queryClient.invalidateQueries({ queryKey: ["user", id, "roles"] });
-                queryClient.invalidateQueries({ queryKey: ["users"] });
+              canEdit={canManageRoles && !userQuery.isError}
+              onRetry={() => void rolesQuery.refetch()}
+              onSaved={async () => {
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ["user", id, "roles"] }),
+                  queryClient.invalidateQueries({ queryKey: ["users"] }),
+                ]);
               }}
             />
           </div>
@@ -222,16 +237,19 @@ function RolesEditor({
   roles,
   loading,
   error,
+  canEdit,
+  onRetry,
   onSaved,
 }: {
   userId: string;
   roles: UserRoleDto[];
   loading: boolean;
   error: unknown;
-  onSaved: () => void;
+  canEdit: boolean;
+  onRetry: () => void;
+  onSaved: () => Promise<void>;
 }) {
   const t = useT();
-  const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -253,15 +271,15 @@ function RolesEditor({
 
   const mutation = useMutation({
     mutationFn: (next: UserRoleDto[]) => assignUserRoles(userId, next),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t("users.rolesUpdated"));
-      queryClient.invalidateQueries({ queryKey: ["user", userId, "roles"] });
-      onSaved();
+      await onSaved();
     },
     onError: (err) => toast.error(t("users.roleUpdateFailed"), { description: describeErr(err) }),
   });
 
   const onSave = () => {
+    if (!canEdit || loading || error || mutation.isPending || dirtyCount === 0) return;
     const next = roles.map<UserRoleDto>((r) => ({ ...r, enabled: !!draft[r.roleId] }));
     mutation.mutate(next);
   };
@@ -280,7 +298,7 @@ function RolesEditor({
           : t("users.roleHint")
       }
       footer={
-        !loading && roles.length > 0 ? (
+        canEdit && !error && !loading && roles.length > 0 ? (
           <div className="flex items-center gap-2">
             <Button
               onClick={onSave}
@@ -303,7 +321,7 @@ function RolesEditor({
       }
     >
       {error ? (
-        <ErrorBand message={describeErr(error)} />
+        <><ErrorBand message={describeErr(error)} /><Button variant="outline" onClick={onRetry}>{t("workbench.retry")}</Button></>
       ) : loading ? (
         <p className="text-sm text-[var(--color-muted-foreground)]">
           {t("users.loadingRoles")}
@@ -321,6 +339,7 @@ function RolesEditor({
               role={r}
               enabled={!!draft[r.roleId]}
               changed={Boolean(draft[r.roleId]) !== Boolean(original[r.roleId])}
+              disabled={!canEdit || mutation.isPending}
               onToggle={() => setDraft((d) => ({ ...d, [r.roleId]: !d[r.roleId] }))}
             />
           ))}
@@ -334,11 +353,13 @@ function RoleRow({
   role,
   enabled,
   changed,
+  disabled,
   onToggle,
 }: {
   role: UserRoleDto;
   enabled: boolean;
   changed: boolean;
+  disabled: boolean;
   onToggle: () => void;
 }) {
   const t = useT();
@@ -363,6 +384,7 @@ function RoleRow({
         )}
       </div>
       <RoleChip
+        disabled={disabled}
         enabled={enabled}
         changed={changed}
         onToggle={onToggle}
@@ -375,11 +397,13 @@ function RoleRow({
 function RoleChip({
   enabled,
   changed,
+  disabled,
   onToggle,
   label,
 }: {
   enabled: boolean;
   changed: boolean;
+  disabled: boolean;
   onToggle: () => void;
   label: string;
 }) {
@@ -387,6 +411,8 @@ function RoleChip({
   return (
     <button
       type="button"
+      disabled={disabled}
+      aria-pressed={enabled}
       onClick={onToggle}
       aria-label={t("users.toggleRole").replace("{label}", label)}
       className={cn(

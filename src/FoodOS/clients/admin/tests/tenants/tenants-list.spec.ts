@@ -62,6 +62,7 @@ test.describe("tenants registry list", () => {
   });
 
   test("the New tenant button opens the create dialog", async ({ page }) => {
+    await page.route("**/api/v1/billing/plans?*", route => route.fulfill({ json: [] }));
     await page.route("**/api/v1/tenants/?*", async (route) => {
       await route.fulfill({
         status: 200,

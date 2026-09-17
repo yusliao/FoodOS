@@ -14,14 +14,15 @@ public static class GetTenantThemeEndpoint
 {
     public static RouteHandlerBuilder Map(IEndpointRouteBuilder endpoints)
     {
-        return endpoints.MapGet("/theme", async (IMediator mediator, CancellationToken cancellationToken) =>
-                TypedResults.Ok(await mediator.Send(new GetTenantThemeQuery(), cancellationToken)))
+        return endpoints.MapGet("/theme", async (string? targetTenantId, IMediator mediator, CancellationToken cancellationToken) =>
+                TypedResults.Ok(await mediator.Send(new GetTenantThemeQuery(targetTenantId), cancellationToken)))
             .WithName("GetTenantTheme")
-            .WithSummary("Get current tenant theme")
-            .WithDescription("Retrieve the theme settings for the current tenant, including colors, typography, and brand assets.")
+            .WithSummary("Get tenant theme")
+            .WithDescription("Retrieve the current tenant theme. Root operators may specify targetTenantId without changing their identity domain.")
             .RequirePermission(MultitenancyPermissions.Tenants.ViewTheme)
             .Produces<TenantThemeDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status403Forbidden);
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
     }
 }

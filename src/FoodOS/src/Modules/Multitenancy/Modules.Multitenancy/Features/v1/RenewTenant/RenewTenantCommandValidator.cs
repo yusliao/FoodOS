@@ -10,8 +10,8 @@ public sealed class RenewTenantCommandValidator : AbstractValidator<RenewTenantC
         RuleFor(t => t.TenantId).NotEmpty();
 
         RuleFor(t => t.PlanKey)
-            .Matches("^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$")
+            .MaximumLength(64)
             .When(t => !string.IsNullOrWhiteSpace(t.PlanKey))
-            .WithMessage("Plan key must be a lowercase slug (a-z, 0-9, hyphen).");
+            .WithMessage("Plan key must not exceed 64 characters.");
     }
 }

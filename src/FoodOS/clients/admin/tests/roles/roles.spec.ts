@@ -3,8 +3,7 @@ import { mockJsonResponse } from "../helpers/api-mocks";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installAdminShellMocks, ADMIN_PERMS, paged } from "../helpers/shell-mocks";
 
-// listRoles hits the paged roles endpoint (`PagedResponse<RoleDto>`) and unwraps
-// `.items`. System roles Admin/Basic sort first.
+// Role search preserves the server's paged response and stable ordering.
 const ROLES = [
   { id: "role-manager", name: "Manager", description: "Manages a team" },
   { id: "role-admin", name: "Admin", description: "Full system access" },
@@ -18,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 
 test.describe("roles list", () => {
   test("renders the Roles heading and a role row from the mock data", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/identity/roles", paged(ROLES));
+    await mockJsonResponse(page, "**/api/v1/identity/roles{,?*}", paged(ROLES));
 
     await page.goto("/roles");
 
@@ -41,7 +40,7 @@ test.describe("roles list", () => {
   });
 
   test("shows the empty state when no roles are defined", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/identity/roles", paged([]));
+    await mockJsonResponse(page, "**/api/v1/identity/roles{,?*}", paged([]));
 
     await page.goto("/roles");
 
@@ -59,7 +58,7 @@ test.describe("roles create form", () => {
   // Mock a populated list so the empty-state's own "New role" button doesn't
   // collide with the header trigger.
   test("renders the name + description fields and the create action", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/identity/roles", paged(ROLES), { method: "GET" });
+    await mockJsonResponse(page, "**/api/v1/identity/roles{,?*}", paged(ROLES), { method: "GET" });
 
     await page.goto("/roles");
 
@@ -81,8 +80,8 @@ test.describe("roles create form", () => {
 
   test("filling the form and submitting POSTs to /identity/roles with an empty id", async ({ page }) => {
     // GET roles list (registered first so the POST handler's fallback reaches it).
-    await mockJsonResponse(page, "**/api/v1/identity/roles", paged(ROLES), { method: "GET" });
-    await page.route("**/api/v1/identity/roles", async (route) => {
+    await mockJsonResponse(page, "**/api/v1/identity/roles{,?*}", paged(ROLES), { method: "GET" });
+    await page.route("**/api/v1/identity/roles{,?*}", async (route) => {
       if (route.request().method() !== "POST") {
         await route.fallback();
         return;
@@ -128,7 +127,7 @@ test.describe("roles create form", () => {
 
   test("client-side validation blocks submit when the name is too short", async ({ page }) => {
     let posted = false;
-    await page.route("**/api/v1/identity/roles", async (route) => {
+    await page.route("**/api/v1/identity/roles{,?*}", async (route) => {
       if (route.request().method() === "POST") {
         posted = true;
         await route.fulfill({

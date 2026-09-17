@@ -13,17 +13,18 @@ public static class ResetTenantThemeEndpoint
 {
     public static RouteHandlerBuilder Map(IEndpointRouteBuilder endpoints)
     {
-        return endpoints.MapPost("/theme/reset", async (IMediator mediator, CancellationToken cancellationToken) =>
+        return endpoints.MapPost("/theme/reset", async (string? targetTenantId, IMediator mediator, CancellationToken cancellationToken) =>
             {
-                await mediator.Send(new ResetTenantThemeCommand(), cancellationToken);
+                await mediator.Send(new ResetTenantThemeCommand(targetTenantId), cancellationToken);
                 return TypedResults.NoContent();
             })
             .WithName("ResetTenantTheme")
             .WithSummary("Reset tenant theme to defaults")
-            .WithDescription("Reset the theme settings for the current tenant to the default values.")
+            .WithDescription("Reset the current tenant theme. Root operators may specify targetTenantId without changing their identity domain.")
             .RequirePermission(MultitenancyPermissions.Tenants.UpdateTheme)
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status403Forbidden);
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
     }
 }

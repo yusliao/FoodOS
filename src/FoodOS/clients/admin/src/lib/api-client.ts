@@ -23,7 +23,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-type RequestInitEx = RequestInit & { skipAuth?: boolean; timeoutMs?: number };
+type RequestInitEx = RequestInit & { skipAuth?: boolean; timeoutMs?: number; responseType?: "json" | "blob" };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -100,7 +100,7 @@ export async function apiFetch<T = unknown>(
   path: string,
   init: RequestInitEx = {},
 ): Promise<T> {
-  const { skipAuth, headers, timeoutMs, signal, ...rest } = init;
+  const { skipAuth, headers, timeoutMs, signal, responseType, ...rest } = init;
   const effectiveTimeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const mergedHeaders = new Headers(headers);
@@ -174,6 +174,8 @@ export async function apiFetch<T = unknown>(
   if (response.status === 204) {
     return undefined as T;
   }
+
+  if (responseType === "blob") return (await response.blob()) as T;
 
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("json")) {

@@ -3,7 +3,7 @@ import { mockJsonResponse } from "../helpers/api-mocks";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installAdminShellMocks, ADMIN_PERMS, paged } from "../helpers/shell-mocks";
 
-// Shared role list used by the directory's role filter dropdown.
+// Shared role list used by the directory's paged role filter.
 const ROLES = [
   { id: "role-admin", name: "Admin", description: "Full access" },
   { id: "role-manager", name: "Manager", description: "Manages a team" },
@@ -35,8 +35,8 @@ test.beforeEach(async ({ page }) => {
   await seedAuthedSession(page, { ...TEST_USER, permissions: [...ADMIN_PERMS] });
   await installAdminShellMocks(page);
   // Role filter dropdown source — page-specific, registered after shell.
-  // The roles endpoint is paged (`PagedResponse<RoleDto>`); listRoles unwraps `.items`.
-  await mockJsonResponse(page, "**/api/v1/identity/roles", paged(ROLES));
+  // The roles endpoint returns PagedResponse<RoleDto>.
+  await mockJsonResponse(page, "**/api/v1/identity/roles{,?*}", paged(ROLES));
 });
 
 test.describe("users directory list", () => {

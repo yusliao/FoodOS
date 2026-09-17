@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { MultitenancyPermissions } from "@/lib/permissions";
 
 // A `type="date"` input yields a `YYYY-MM-DD` string. zod validates the shape
 // and that it parses to a real calendar date.
@@ -71,6 +73,9 @@ export function AdjustValidityDialog({
   validUpto?: string;
 }) {
   const t = useT();
+  const { user } = useAuth();
+  const canAdjust = tenantId !== "root" && !!user?.permissions.includes(MultitenancyPermissions.Tenants.View)
+    && user.permissions.includes(MultitenancyPermissions.Tenants.UpgradeSubscription);
   const queryClient = useQueryClient();
   const schema = useMemo(() => makeAdjustSchema(t), [t]);
 
@@ -91,13 +96,15 @@ export function AdjustValidityDialog({
 
   const mutation = useMutation({
     // Pass the date via mutate(arg) — never close over form state at submit time.
-    mutationFn: (value: string) => adjustTenantValidity(tenantId, new Date(value).toISOString()),
-    onSuccess: (result) => {
+    mutationFn: ({ id, value }: { id: string; value: string }) => adjustTenantValidity(id, new Date(value).toISOString()),
+    onSuccess: async (result) => {
       toast.success(t("tenants.validityAdjusted"), {
         description: t("tenants.adjustedUntil").replace("{date}", formatDate(result.validUpto)),
       });
-      queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ["tenants"] }),
+      ]);
       handleClose();
     },
     onError: (err) => toast.error(t("tenants.adjustFailed"), { description: describe(err, t("tenants.adjustFailedFallback")) }),
@@ -108,13 +115,14 @@ export function AdjustValidityDialog({
     onOpenChange(false);
   }
 
-  const onSubmit = handleSubmit((values) => mutation.mutate(values.validUpto));
+  const onSubmit = handleSubmit((values) => { if (canAdjust && !mutation.isPending) mutation.mutate({ id: tenantId, value: values.validUpto }); });
   const submitting = isSubmitting || mutation.isPending;
 
   return (
     <Dialog
-      open={open}
+      open={open && canAdjust}
       onOpenChange={(o) => {
+        if (submitting) return;
         if (!o) handleClose();
         else onOpenChange(true);
       }}
@@ -146,7 +154,7 @@ export function AdjustValidityDialog({
               hint={t("tenants.adjustHint")}
               error={errors.validUpto?.message}
             >
-              <Input id="av-validUpto" type="date" {...register("validUpto")} />
+              <Input id="av-validUpto" type="date" disabled={submitting} {...register("validUpto")} />
             </Field>
           </DialogBody>
 

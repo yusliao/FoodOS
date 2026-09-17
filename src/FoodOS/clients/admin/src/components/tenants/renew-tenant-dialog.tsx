@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { renewTenant } from "@/api/tenants";
 import { getPlans, planTermPrice } from "@/api/billing";
 import { Button } from "@/components/ui/button";
-import { Field, Select, type SelectOption } from "@/components/list";
+import { ErrorBand, Field, Select, type SelectOption } from "@/components/list";
 import {
   Dialog,
   DialogBody,
@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { BillingPermissions, MultitenancyPermissions } from "@/lib/permissions";
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -50,38 +52,45 @@ export function RenewTenantDialog({
   validUpto?: string;
 }) {
   const t = useT();
+  const { user } = useAuth();
+  const canRenew = !!user?.permissions.includes(MultitenancyPermissions.Tenants.View)
+    && user.permissions.includes(MultitenancyPermissions.Tenants.UpgradeSubscription);
+  const canViewPlans = !!user?.permissions.includes(BillingPermissions.View);
   const queryClient = useQueryClient();
   const [planKey, setPlanKey] = useState<string>("");
 
   const plansQuery = useQuery({
     queryKey: ["billing", "plans", "active"],
-    queryFn: () => getPlans(false),
-    enabled: open,
+    queryFn: ({ signal }) => getPlans(false, signal),
+    enabled: open && canRenew && canViewPlans,
   });
 
   // Default the selection to the tenant's current plan once plans (and the current key) are known.
   useEffect(() => {
     if (!open) return;
-    if (currentPlanKey && !planKey) setPlanKey(currentPlanKey);
-  }, [open, currentPlanKey, planKey]);
+    setPlanKey(currentPlanKey ?? "");
+  }, [open, currentPlanKey, tenantId]);
 
-  const options: SelectOption[] = (plansQuery.data ?? []).map((p) => ({
+  const options: SelectOption[] = (plansQuery.data ?? []).filter(p => p.isActive).map((p) => ({
     value: p.key,
     label: p.key === currentPlanKey ? t("tenants.currentPlan").replace("{name}", p.name) : p.name,
-    hint: `${p.interval} · ${formatMoney(planTermPrice(p), p.currency)}`,
+    hint: `${t(p.interval === "Yearly" ? "billing.yearly" : "billing.monthly")} · ${formatMoney(planTermPrice(p), p.currency)}`,
   }));
 
   const mutation = useMutation({
-    mutationFn: (key: string) => renewTenant(tenantId, key || null),
-    onSuccess: (result) => {
+    mutationFn: ({ id, key }: { id: string; key: string | null }) => renewTenant(id, key),
+    onSuccess: async (result) => {
       toast.success(
         result.planChanged
           ? t("tenants.planChanged").replace("{plan}", result.planKey)
           : t("tenants.tenantRenewed"),
         { description: t("tenants.renewedUntil").replace("{date}", formatDate(result.validUpto)) },
       );
-      queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ["tenants"] }),
+        queryClient.invalidateQueries({ queryKey: ["billing", "invoices"] }),
+      ]);
       onOpenChange(false);
     },
     onError: (err) => {
@@ -93,10 +102,13 @@ export function RenewTenantDialog({
     },
   });
 
-  const planChanged = !!planKey && planKey !== currentPlanKey;
+  const planChanged = canViewPlans && !!planKey && planKey !== currentPlanKey;
+  const canSubmit = canRenew && !mutation.isPending && (!canViewPlans || (
+    plansQuery.isSuccess && !plansQuery.isFetching && options.some(option => option.value === planKey)
+  ));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && canRenew} onOpenChange={(next) => { if (!mutation.isPending) onOpenChange(next); }}>
       <DialogContent size="md">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -116,6 +128,11 @@ export function RenewTenantDialog({
         </DialogHeader>
 
         <DialogBody className="space-y-4">
+          {!canViewPlans ? <p className="text-sm">{t("tenants.renewCurrentOnly")}</p> : <>
+          {plansQuery.isError && <div className="space-y-2">
+            <ErrorBand message={plansQuery.error instanceof ApiRequestError ? plansQuery.error.problem?.detail ?? plansQuery.error.message : t("billing.loadPlansFailed")} />
+            <Button variant="outline" disabled={plansQuery.isFetching} onClick={() => plansQuery.refetch()}>{t("workbench.retry")}</Button>
+          </div>}
           <Field
             id="renew-plan"
             label={t("tenants.plan")}
@@ -131,17 +148,19 @@ export function RenewTenantDialog({
               value={planKey}
               onValueChange={setPlanKey}
               options={options}
-              emptyLabel={plansQuery.isLoading ? t("tenants.loadingPlans") : options.length === 0 ? t("tenants.noActivePlans") : undefined}
-              disabled={plansQuery.isLoading || options.length === 0}
+              emptyLabel={plansQuery.isLoading ? t("tenants.loadingPlans") : t("tenants.selectRenewPlan")}
+              disabled={mutation.isPending || plansQuery.isFetching || plansQuery.isError || options.length === 0}
             />
           </Field>
+          {plansQuery.isSuccess && options.length === 0 && <p className="text-sm">{t("tenants.noActivePlans")}</p>}
+          </>}
         </DialogBody>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             {t("chrome.cancel")}
           </Button>
-          <Button type="button" onClick={() => mutation.mutate(planKey)} disabled={mutation.isPending || !planKey}>
+          <Button type="button" onClick={() => { if (canSubmit) mutation.mutate({ id: tenantId, key: canViewPlans ? planKey : null }); }} disabled={!canSubmit}>
             {mutation.isPending ? t("tenants.renewing") : planChanged ? t("tenants.changeAndRenew") : t("tenants.renew")}
           </Button>
         </DialogFooter>

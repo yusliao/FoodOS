@@ -31,12 +31,23 @@ const ROOT = "/api/v1/webhooks";
 export function listWebhookSubscriptions(
   pageNumber = 1,
   pageSize = 50,
+  signal?: AbortSignal,
 ): Promise<PagedResponse<WebhookSubscriptionDto>> {
   const q = new URLSearchParams({
     pageNumber: String(pageNumber),
     pageSize: String(pageSize),
   });
-  return apiFetch<PagedResponse<WebhookSubscriptionDto>>(`${ROOT}/subscriptions?${q.toString()}`);
+  return apiFetch<PagedResponse<WebhookSubscriptionDto>>(`${ROOT}/subscriptions?${q.toString()}`, { signal });
+}
+
+// The server exposes only a paged directory (maximum 100), not an item endpoint.
+export async function findWebhookSubscription(id: string, signal?: AbortSignal): Promise<WebhookSubscriptionDto | null> {
+  for (let page = 1; ; page++) {
+    const result = await listWebhookSubscriptions(page, 100, signal);
+    const subscription = result.items.find((item) => item.id === id);
+    if (subscription) return subscription;
+    if (page >= result.totalPages) return null;
+  }
 }
 
 export function createWebhookSubscription(input: CreateWebhookSubscriptionInput): Promise<string> {
@@ -67,6 +78,7 @@ export function listWebhookDeliveries(
   subscriptionId: string,
   pageNumber = 1,
   pageSize = 50,
+  signal?: AbortSignal,
 ): Promise<PagedResponse<WebhookDeliveryDto>> {
   const q = new URLSearchParams({
     pageNumber: String(pageNumber),
@@ -74,6 +86,7 @@ export function listWebhookDeliveries(
   });
   return apiFetch<PagedResponse<WebhookDeliveryDto>>(
     `${ROOT}/subscriptions/${encodeURIComponent(subscriptionId)}/deliveries?${q.toString()}`,
+    { signal },
   );
 }
 

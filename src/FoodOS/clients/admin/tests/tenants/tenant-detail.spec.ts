@@ -56,7 +56,7 @@ test.beforeEach(async ({ page }) => {
   await installAdminShellMocks(page);
   // Branding card + impersonation grants fetch on the detail page — keep them
   // satisfied so the page renders, but we don't assert on them here.
-  await mockJsonResponse(page, "**/api/v1/tenants/theme", THEME_DEFAULT);
+  await mockJsonResponse(page, "**/api/v1/tenants/theme?*", THEME_DEFAULT);
   await mockJsonResponse(page, "**/api/v1/identity/impersonation/grants**", []);
 });
 
@@ -108,7 +108,7 @@ test.describe("tenant detail header + provisioning", () => {
     );
     await seedAuthedSession(page, { ...TEST_USER, permissions: viewOnly });
     await installAdminShellMocks(page, viewOnly);
-    await mockJsonResponse(page, "**/api/v1/tenants/theme", THEME_DEFAULT);
+    await mockJsonResponse(page, "**/api/v1/tenants/theme?*", THEME_DEFAULT);
     await mockJsonResponse(page, "**/api/v1/identity/impersonation/grants**", []);
 
     await mockJsonResponse(page, `**/api/v1/tenants/${TENANT_ID}/status`, TENANT);

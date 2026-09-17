@@ -1,4 +1,11 @@
 import { apiFetch } from "@/lib/api-client";
+import type { UserDto } from "@/api/users";
+import type { PagedResponse } from "@/lib/api-types";
+
+export function searchImpersonationUsers(targetTenantId: string, search: string, signal?: AbortSignal) {
+  const query = new URLSearchParams({ targetTenantId, search, pageSize: "25", pageNumber: "1" });
+  return apiFetch<PagedResponse<UserDto>>(`/api/v1/identity/impersonation/users?${query}`, { signal });
+}
 
 export type StartImpersonationInput = {
   targetUserId: string;
@@ -24,9 +31,9 @@ export type ImpersonationResponse = {
  * impersonated session in a fresh tab.
  *
  * Note: the admin's apiFetch attaches the operator's current tenant header
- * by default, which the server uses for the cross-tenant authorization
- * check (root operators may impersonate any tenant; tenant admins only
- * their own). We do NOT override the tenant header here for that reason.
+ * by default. The server authorizes only root operators and validates the
+ * explicit target. Customer identities cannot start impersonation.
+ * We do NOT override the tenant header.
  *
  * ---
  * Why there is no `endImpersonation()` in this file (compare dashboard):

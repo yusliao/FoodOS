@@ -9,7 +9,8 @@ import type { UserDto } from "@/api/users";
 import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SettingsSection } from "@/components/list";
+import { ErrorBand, LoadingRow, SettingsSection } from "@/components/list";
+import { ApiRequestError } from "@/lib/api-client";
 import { ImpersonateDialog } from "@/components/impersonation/impersonate-dialog";
 import { RevokeGrantDialog } from "@/components/impersonation/revoke-grant-dialog";
 import { IdentityPermissions } from "@/lib/permissions";
@@ -32,14 +33,15 @@ export function ActiveGrantsCard({ tenantId }: { tenantId: string }) {
 
   const query = useQuery({
     queryKey: ["impersonation-grants", "tenant-active", tenantId],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       listImpersonationGrants({
         status: "Active",
         impersonatedTenantId: tenantId,
         take: 50,
-      }),
+      }, signal),
     enabled: canView,
-    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchInterval: query => query.state.error ? false : REFRESH_INTERVAL_MS,
+    retry: (count, error) => !(error instanceof ApiRequestError && error.status === 403) && count < 1,
   });
 
   const [targetGrant, setTargetGrant] = useState<ImpersonationGrantDto | null>(null);
@@ -61,7 +63,11 @@ export function ActiveGrantsCard({ tenantId }: { tenantId: string }) {
   // Quiet hide when there's nothing to show — busy operators don't need
   // an empty box on every tenant page.
   if (!canView) return null;
-  if (query.isLoading) return null;
+  if (query.isLoading) return <LoadingRow label={t("impersonation.loading")} />;
+  if (query.isError) return <SettingsSection title={t("impersonation.activeCardTitle")} icon={UserCog}>
+    <ErrorBand message={query.error instanceof ApiRequestError ? query.error.problem?.detail ?? query.error.message : t("impersonation.loadFailed")} />
+    <Button className="mt-3" variant="outline" disabled={query.isFetching} onClick={() => query.refetch()}>{t("workbench.retry")}</Button>
+  </SettingsSection>;
   const items = query.data ?? [];
   if (items.length === 0) return null;
 

@@ -1,7 +1,5 @@
-import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
 import type { PagedResponse } from "@/lib/api-types";
-import { env } from "@/env";
-import { tokenStore } from "@/auth/token-store";
 
 // ─── shared enums ────────────────────────────────────────────────────
 
@@ -62,9 +60,9 @@ export function planTermPrice(plan: Pick<BillingPlanDto, "interval" | "monthlyBa
     : plan.monthlyBasePrice;
 }
 
-export function getPlans(includeInactive = false): Promise<BillingPlanDto[]> {
+export function getPlans(includeInactive = false, signal?: AbortSignal): Promise<BillingPlanDto[]> {
   const query = new URLSearchParams({ includeInactive: includeInactive ? "true" : "false" });
-  return apiFetch<BillingPlanDto[]>(`/api/v1/billing/plans?${query.toString()}`);
+  return apiFetch<BillingPlanDto[]>(`/api/v1/billing/plans?${query.toString()}`, { signal });
 }
 
 export function createPlan(input: CreatePlanInput): Promise<string> {
@@ -169,7 +167,7 @@ export type ListInvoicesParams = {
   pageSize?: number;
 };
 
-export function listInvoices(params: ListInvoicesParams = {}): Promise<PagedResponse<InvoiceDto>> {
+export function listInvoices(params: ListInvoicesParams = {}, signal?: AbortSignal): Promise<PagedResponse<InvoiceDto>> {
   const query = new URLSearchParams();
   if (params.tenantId) query.set("tenantId", params.tenantId);
   if (params.status) query.set("status", params.status);
@@ -177,42 +175,23 @@ export function listInvoices(params: ListInvoicesParams = {}): Promise<PagedResp
   if (params.periodMonth) query.set("periodMonth", String(params.periodMonth));
   query.set("pageNumber", String(params.pageNumber ?? 1));
   query.set("pageSize", String(params.pageSize ?? 20));
-  return apiFetch<PagedResponse<InvoiceDto>>(`/api/v1/billing/invoices?${query.toString()}`);
+  return apiFetch<PagedResponse<InvoiceDto>>(`/api/v1/billing/invoices?${query.toString()}`, { signal });
 }
 
-export function getInvoice(invoiceId: string): Promise<InvoiceDto> {
-  return apiFetch<InvoiceDto>(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}`);
+export function getInvoice(invoiceId: string, signal?: AbortSignal): Promise<InvoiceDto> {
+  return apiFetch<InvoiceDto>(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}`, { signal });
 }
 
 /**
  * Fetch the invoice PDF as a blob and trigger a browser download named
- * `{invoiceNumber}.pdf`. The endpoint streams `application/pdf`, so it can't
- * go through `apiFetch` (which only parses JSON). We replicate apiFetch's
- * auth + tenant headers by hand so cross-tenant viewing works identically to
- * how the detail page loads the invoice via `getInvoice`.
+ * `{invoiceNumber}.pdf`, using the same token identity, refresh and error
+ * handling as the invoice detail request.
  */
 export async function downloadInvoicePdf(invoiceId: string, invoiceNumber: string): Promise<void> {
-  const headers = new Headers({ Accept: "application/pdf" });
-
-  const accessToken = tokenStore.getAccessToken();
-  if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
-  }
-  const tenant = tokenStore.getTenant() ?? env.defaultTenant;
-  if (tenant) {
-    headers.set("tenant", tenant);
-  }
-
-  const response = await fetch(
-    `${env.apiBase}/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`,
-    { headers },
+  const blob = await apiFetch<Blob>(
+    `/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+    { headers: { Accept: "application/pdf" }, responseType: "blob" },
   );
-
-  if (!response.ok) {
-    throw new ApiRequestError(response.status, `Failed to download invoice PDF (${response.status})`);
-  }
-
-  const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
   try {
     const link = document.createElement("a");

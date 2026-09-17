@@ -3,4 +3,4 @@ using Mediator;
 
 namespace FSH.Modules.Multitenancy.Contracts.v1.UpdateTenantTheme;
 
-public sealed record UpdateTenantThemeCommand(TenantThemeDto Theme) : ICommand;
+public sealed record UpdateTenantThemeCommand(TenantThemeDto Theme, string? TargetTenantId = null) : ICommand;

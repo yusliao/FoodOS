@@ -4,11 +4,7 @@ import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 
 const TENANT_ID = "acme";
 
-// RouteGuard on /tenants/:id requires Tenants.View. The branding card itself
-// makes ViewTheme / UpdateTheme calls; the server enforces permissions on
-// those calls, but in tests we mock the API so the in-app permissions list
-// only needs to satisfy the page-level RouteGuard. We grant the full
-// multitenancy permission set for simplicity.
+// Route and branding capabilities are authorized independently.
 const ROOT_PERMS = [
   "Permissions.Tenants.View",
   "Permissions.Tenants.ViewTheme",
@@ -83,7 +79,7 @@ test.beforeEach(async ({ page }) => {
     isActive: true,
     emailConfirmed: true,
   });
-  await mockJsonResponse(page, "**/api/v1/identity/permissions", []);
+  await mockJsonResponse(page, "**/api/v1/identity/permissions", ROOT_PERMS);
   await mockJsonResponse(page, `**/api/v1/tenants/${TENANT_ID}/status`, TENANT);
   await mockJsonResponse(
     page,
@@ -95,8 +91,60 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("tenant branding card", () => {
+  test("without ViewTheme makes no theme requests even with UpdateTheme", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", [
+      "Permissions.Tenants.View", "Permissions.Tenants.UpdateTheme",
+    ]);
+    const requests: string[] = [];
+    page.on("request", request => { if (request.url().includes("/tenants/theme")) requests.push(request.url()); });
+    await page.goto(`/tenants/${TENANT_ID}`);
+    await expect(page.getByRole("heading", { name: "Acme Corp", level: 1 })).toBeVisible();
+    await expect(page.getByLabel("Logo URL", { exact: true })).toHaveCount(0);
+    expect(requests).toEqual([]);
+  });
+
+  test("read-only operator loads explicit target with root identity and cannot edit", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", [
+      "Permissions.Tenants.View", "Permissions.Tenants.ViewTheme",
+    ]);
+    await page.route("**/api/v1/tenants/theme?*", async route => {
+      expect(route.request().method()).toBe("GET");
+      expect(route.request().headers().tenant).toBe("root");
+      expect(new URL(route.request().url()).searchParams.get("targetTenantId")).toBe(TENANT_ID);
+      await route.fulfill({ json: THEME_DEFAULT });
+    });
+    await page.goto(`/tenants/${TENANT_ID}`);
+    await expect(page.getByLabel("Logo URL", { exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /save branding/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /reset (branding )?to defaults/i })).toHaveCount(0);
+  });
+
+  test("failed load retries and failed save preserves the mobile draft", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    let failLoad = true;
+    await page.route("**/api/v1/tenants/theme?*", async route => {
+      if (route.request().method() === "PUT") {
+        await route.fulfill({ status: 403, json: { title: "Forbidden", detail: "Theme write denied" } });
+      } else if (failLoad) {
+        await route.fulfill({ status: 500, json: { title: "Theme unavailable", detail: "Theme unavailable" } });
+      } else {
+        await route.fulfill({ json: THEME_DEFAULT });
+      }
+    });
+    await page.goto(`/tenants/${TENANT_ID}`);
+    await expect(page.getByText("Theme unavailable", { exact: true })).toBeVisible();
+    failLoad = false;
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    await page.getByLabel("Logo URL", { exact: true }).fill("/test-logo.svg");
+    await page.getByRole("button", { name: /save branding/i }).click();
+    await expect(page.getByText("Theme write denied", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Logo URL", { exact: true })).toHaveValue("/test-logo.svg");
+    await expect(page.getByRole("button", { name: /save branding/i })).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
   test("loads + renders the editor with default-palette badge", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/tenants/theme", THEME_DEFAULT);
+    await mockJsonResponse(page, "**/api/v1/tenants/theme?*", THEME_DEFAULT);
 
     await page.goto(`/tenants/${TENANT_ID}`);
 
@@ -118,7 +166,7 @@ test.describe("tenant branding card", () => {
   });
 
   test("Save button is disabled until the operator edits something", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/tenants/theme", THEME_DEFAULT);
+    await mockJsonResponse(page, "**/api/v1/tenants/theme?*", THEME_DEFAULT);
 
     await page.goto(`/tenants/${TENANT_ID}`);
     const save = page.getByRole("button", { name: /save branding/i });
@@ -132,8 +180,8 @@ test.describe("tenant branding card", () => {
     await expect(page.locator("text=/^unsaved$/i").first()).toBeVisible();
   });
 
-  test("Save PUTs the edited theme with the tenant header", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/tenants/theme", THEME_DEFAULT);
+  test("Save PUTs the edited theme with an explicit target and root identity", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/tenants/theme?*", THEME_DEFAULT);
 
     await page.goto(`/tenants/${TENANT_ID}`);
     await expect(page.getByLabel("Logo URL", { exact: true })).toBeVisible({ timeout: 10_000 });
@@ -142,21 +190,22 @@ test.describe("tenant branding card", () => {
 
     const reqPromise = page.waitForRequest(
       (r) =>
-        r.url().endsWith("/api/v1/tenants/theme") && r.method() === "PUT",
+        new URL(r.url()).pathname === "/api/v1/tenants/theme" && r.method() === "PUT",
       { timeout: 5_000 },
     );
     await page.getByRole("button", { name: /save branding/i }).click();
     const req = await reqPromise;
 
-    expect(req.headers().tenant).toBe(TENANT_ID);
+    expect(req.headers().tenant).toBe("root");
+    expect(new URL(req.url()).searchParams.get("targetTenantId")).toBe(TENANT_ID);
     const body = JSON.parse(req.postData() ?? "{}");
     expect(body.brandAssets.logoUrl).toBe("https://cdn.example.com/acme.svg");
     expect(body.lightPalette).toMatchObject({ primary: "#2563EB" });
   });
 
   test("Reset POSTs to /theme/reset and shows a confirmation toast", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/tenants/theme", THEME_DEFAULT);
-    await mockJsonResponse(page, "**/api/v1/tenants/theme/reset", '""');
+    await mockJsonResponse(page, "**/api/v1/tenants/theme?*", THEME_DEFAULT);
+    await mockJsonResponse(page, "**/api/v1/tenants/theme/reset?*", '""');
 
     await page.goto(`/tenants/${TENANT_ID}`);
     await expect(page.getByRole("button", { name: /reset (branding )?to defaults/i })).toBeVisible({
@@ -165,18 +214,19 @@ test.describe("tenant branding card", () => {
 
     const reqPromise = page.waitForRequest(
       (r) =>
-        r.url().endsWith("/api/v1/tenants/theme/reset") && r.method() === "POST",
+        new URL(r.url()).pathname === "/api/v1/tenants/theme/reset" && r.method() === "POST",
       { timeout: 5_000 },
     );
     await page.getByRole("button", { name: /reset (branding )?to defaults/i }).click();
     const req = await reqPromise;
-    expect(req.headers().tenant).toBe(TENANT_ID);
+    expect(req.headers().tenant).toBe("root");
+    expect(new URL(req.url()).searchParams.get("targetTenantId")).toBe(TENANT_ID);
 
     await expect(page.getByText(/branding reset to defaults/i)).toBeVisible();
   });
 
   test("surfaces a server error in the error band, not as a toast", async ({ page }) => {
-    await mockProblemDetails(page, "**/api/v1/tenants/theme", 403, {
+    await mockProblemDetails(page, "**/api/v1/tenants/theme?*", 403, {
       title: "Forbidden",
       detail: "Tenant theme is read-only for this caller.",
     });

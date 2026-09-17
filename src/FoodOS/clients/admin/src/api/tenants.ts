@@ -78,20 +78,20 @@ export type TenantProvisioningStatus = {
   steps: TenantProvisioningStep[];
 };
 
-export async function listTenants(params: ListTenantsParams = {}): Promise<PagedResponse<TenantDto>> {
+export async function listTenants(params: ListTenantsParams = {}, signal?: AbortSignal): Promise<PagedResponse<TenantDto>> {
   const query = new URLSearchParams();
   query.set("PageNumber", String(params.pageNumber ?? 1));
   query.set("PageSize", String(params.pageSize ?? 10));
   if (params.sort) query.set("Sort", params.sort);
-  return apiFetch<PagedResponse<TenantDto>>(`/api/v1/tenants/?${query.toString()}`);
+  return apiFetch<PagedResponse<TenantDto>>(`/api/v1/tenants/?${query.toString()}`, { signal });
 }
 
-export async function getTenantStatus(id: string): Promise<TenantDto> {
-  return apiFetch<TenantDto>(`/api/v1/tenants/${encodeURIComponent(id)}/status`);
+export async function getTenantStatus(id: string, signal?: AbortSignal): Promise<TenantDto> {
+  return apiFetch<TenantDto>(`/api/v1/tenants/${encodeURIComponent(id)}/status`, { signal });
 }
 
-export async function getTenantProvisioningStatus(id: string): Promise<TenantProvisioningStatus> {
-  return apiFetch<TenantProvisioningStatus>(`/api/v1/tenants/${encodeURIComponent(id)}/provisioning`);
+export async function getTenantProvisioningStatus(id: string, signal?: AbortSignal): Promise<TenantProvisioningStatus> {
+  return apiFetch<TenantProvisioningStatus>(`/api/v1/tenants/${encodeURIComponent(id)}/provisioning`, { signal });
 }
 
 export async function createTenant(input: CreateTenantInput): Promise<CreateTenantResponse> {
@@ -145,11 +145,8 @@ export async function retryTenantProvisioning(id: string): Promise<TenantProvisi
 // ─────────────────────────────────────────────────────────────────────────
 // Tenant theme / branding
 //
-// The theme endpoints are CURRENT-TENANT scoped server-side — they read
-// the request's tenant header and act on that tenant's row. The admin
-// operator is in the root tenant by default, so we explicitly send
-// `tenant: <targetId>` to operate on a different tenant. The server's
-// root-operator override middleware permits this for root callers.
+// Explicit resource target; the API verifies operator identity and target existence.
+// The authenticated request identity always remains root.
 // ─────────────────────────────────────────────────────────────────────────
 
 export type PaletteDto = {
@@ -219,10 +216,8 @@ export const DEFAULT_DARK_PALETTE: PaletteDto = {
 };
 
 /** Fetch a tenant's theme. Caller needs MultitenancyPermissions.Tenants.ViewTheme. */
-export async function getTenantTheme(tenantId: string): Promise<TenantThemeDto> {
-  return apiFetch<TenantThemeDto>(`/api/v1/tenants/theme`, {
-    headers: { tenant: tenantId },
-  });
+export async function getTenantTheme(tenantId: string, signal?: AbortSignal): Promise<TenantThemeDto> {
+  return apiFetch<TenantThemeDto>(`/api/v1/tenants/theme?targetTenantId=${encodeURIComponent(tenantId)}`, { signal });
 }
 
 /** Save a tenant's theme. Caller needs MultitenancyPermissions.Tenants.UpdateTheme. */
@@ -230,17 +225,15 @@ export async function updateTenantTheme(
   tenantId: string,
   theme: TenantThemeDto,
 ): Promise<void> {
-  await apiFetch<void>(`/api/v1/tenants/theme`, {
+  await apiFetch<void>(`/api/v1/tenants/theme?targetTenantId=${encodeURIComponent(tenantId)}`, {
     method: "PUT",
-    headers: { tenant: tenantId },
     body: JSON.stringify(theme),
   });
 }
 
 /** Reset a tenant's theme to framework defaults. */
 export async function resetTenantTheme(tenantId: string): Promise<void> {
-  await apiFetch<void>(`/api/v1/tenants/theme/reset`, {
+  await apiFetch<void>(`/api/v1/tenants/theme/reset?targetTenantId=${encodeURIComponent(tenantId)}`, {
     method: "POST",
-    headers: { tenant: tenantId },
   });
 }

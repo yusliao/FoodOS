@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { AuditingPermissions } from "@/lib/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────
 // AuditDetailSheet — side sheet shown when an audit row is clicked on the
@@ -62,10 +64,11 @@ export function AuditDetailSheetBody({
   auditId: string | null;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const query = useQuery({
     queryKey: ["audits", auditId],
     queryFn: () => getAudit(auditId!),
-    enabled: Boolean(auditId),
+    enabled: Boolean(auditId) && !!user?.permissions.includes(AuditingPermissions.AuditTrails.View),
     staleTime: 60_000,
   });
 
@@ -123,10 +126,11 @@ export function AuditDetailSheetBody({
                   : t("audits.loadEventFailed")
               }
             />
+            <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>{t("workbench.retry")}</Button>
           </div>
         )}
 
-        {event && (
+        {event && !query.isError && (
           <div className="space-y-0 divide-y divide-[var(--color-border)]">
             <IdentityBand event={event} />
             <CorrelationBand event={event} />

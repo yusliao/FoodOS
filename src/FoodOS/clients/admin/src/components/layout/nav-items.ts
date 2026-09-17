@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import {
   AuditingPermissions,
+  OpsPermissions,
   BillingPermissions,
   CatalogPermissions,
   NotificationPermissions,
@@ -85,6 +86,7 @@ export const sections: NavSection[] = [
   {
     id: "operations", caption: "Operations", icon: Activity,
     items: [
+      { to: "/reports", label: "Operations reports", icon: Activity, perms: [OpsPermissions.Kpis.View] },
       { to: "/procurement/purchase-orders", label: "Purchase orders", icon: Receipt, perms: [ProcurementPermissions.Purchase.View] },
       { to: "/procurement/suppliers", label: "Suppliers", icon: Building2, perms: [ProcurementPermissions.Suppliers.View] },
       { to: "/logistics/vehicles", label: "Vehicles", icon: Package, perms: [LogisticsPermissions.Vehicles.View] },

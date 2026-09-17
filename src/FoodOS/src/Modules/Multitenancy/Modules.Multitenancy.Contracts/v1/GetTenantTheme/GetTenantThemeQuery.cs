@@ -3,4 +3,4 @@ using Mediator;
 
 namespace FSH.Modules.Multitenancy.Contracts.v1.GetTenantTheme;
 
-public sealed record GetTenantThemeQuery : IQuery<TenantThemeDto>;
+public sealed record GetTenantThemeQuery(string? TargetTenantId = null) : IQuery<TenantThemeDto>;

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Building2, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { listTenants, type TenantDto } from "@/api/tenants";
 import { Button } from "@/components/ui/button";
@@ -35,11 +35,11 @@ export function TenantsListPage() {
 
   const query = useQuery({
     queryKey: ["tenants", { pageNumber, pageSize: PAGE_SIZE }],
-    queryFn: () => listTenants({ pageNumber, pageSize: PAGE_SIZE }),
-    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) => listTenants({ pageNumber, pageSize: PAGE_SIZE }, signal),
+    enabled: !!currentUser?.permissions.includes(MultitenancyPermissions.Tenants.View),
   });
 
-  const data = query.data;
+  const data = query.isError ? undefined : query.data;
   const items: TenantDto[] = data?.items ?? [];
 
   const pageBadge = useMemo(() => {
@@ -77,6 +77,7 @@ export function TenantsListPage() {
       </EntityPageHeader>
 
       {query.isError && (
+        <div className="space-y-2">
         <ErrorBand
           message={
             query.error instanceof ApiRequestError
@@ -84,6 +85,8 @@ export function TenantsListPage() {
               : t("tenants.loadFailed")
           }
         />
+        <Button variant="outline" disabled={query.isFetching} onClick={() => query.refetch()}>{t("workbench.retry")}</Button>
+        </div>
       )}
 
       {query.isLoading && items.length === 0 && (
@@ -182,7 +185,7 @@ export function TenantsListPage() {
         </div>
       )}
 
-      <CreateTenantDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {canCreateTenant && <CreateTenantDialog open={createOpen} onOpenChange={setCreateOpen} />}
     </div>
   );
 }

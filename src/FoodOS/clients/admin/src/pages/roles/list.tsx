@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Plus, Shield, ShieldCheck } from "lucide-react";
-import { listRoles, type RoleDto } from "@/api/roles";
+import { searchRoles, type RoleDto } from "@/api/roles";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { EntityPageHeader, ErrorBand, LoadingRow } from "@/components/list";
+import { EntityPageHeader, ErrorBand, LoadingRow, Pagination } from "@/components/list";
 import { EmptyState } from "@/components/empty-state";
 import { ApiRequestError } from "@/lib/api-client";
 import { CreateRoleDialog } from "@/components/roles/create-role-dialog";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { IdentityPermissions } from "@/lib/permissions";
 
 const ROOT_ROLE_NAMES = new Set(["Admin", "Basic"]);
 
@@ -19,37 +21,28 @@ const DESKTOP_COLS =
 
 export function RolesListPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(IdentityPermissions.Roles.View);
+  const canCreate = canView && !!user?.permissions.includes(IdentityPermissions.Roles.Create);
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(search.trim().toLowerCase()), 200);
+    if (search.trim() === debounced) return;
+    const timer = setTimeout(() => { setDebounced(search.trim()); setPage(1); }, 200);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, debounced]);
 
-  const query = useQuery({ queryKey: ["roles"], queryFn: listRoles });
-
-  const roles = useMemo(() => {
-    const items = query.data ?? [];
-    return [...items].sort((a, b) => {
-      // System roles first, then alphabetical.
-      const aSys = ROOT_ROLE_NAMES.has(a.name) ? 0 : 1;
-      const bSys = ROOT_ROLE_NAMES.has(b.name) ? 0 : 1;
-      if (aSys !== bSys) return aSys - bSys;
-      return a.name.localeCompare(b.name);
-    });
-  }, [query.data]);
-
-  const filtered = useMemo(() => {
-    if (!debounced) return roles;
-    return roles.filter(
-      (r) =>
-        r.name.toLowerCase().includes(debounced) ||
-        (r.description ?? "").toLowerCase().includes(debounced),
-    );
-  }, [roles, debounced]);
+  const query = useQuery({
+    queryKey: ["roles", "list", page, debounced],
+    queryFn: ({ signal }) => searchRoles({ pageNumber: page, pageSize: 20, search: debounced }, signal),
+    enabled: canView,
+  });
+  // Preserve the server's stable name/id ordering across page boundaries.
+  const filtered = query.data?.items ?? [];
 
   const searchActive = debounced.length > 0;
 
@@ -58,17 +51,17 @@ export function RolesListPage() {
       <EntityPageHeader
         icon={Shield}
         title={t("roles.title")}
-        total={query.data ? roles.length : null}
+        total={query.data?.totalCount ?? null}
         unit={t("roles.unit")}
         description={t("roles.description")}
       >
-        <Button
+        {canCreate && <Button
           onClick={() => setCreateOpen(true)}
           className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
         >
           <Plus className="size-4" />
           {t("roles.newRole")}
-        </Button>
+        </Button>}
       </EntityPageHeader>
 
       {/* Search */}
@@ -87,6 +80,7 @@ export function RolesListPage() {
       </div>
 
       {query.isError && (
+        <div className="space-y-2">
         <ErrorBand
           message={
             query.error instanceof ApiRequestError
@@ -94,6 +88,8 @@ export function RolesListPage() {
               : t("roles.loadFailed")
           }
         />
+        <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>{t("workbench.retry")}</Button>
+        </div>
       )}
 
       {query.isLoading && <LoadingRow label={t("roles.loading")} />}
@@ -119,11 +115,11 @@ export function RolesListPage() {
             kicker={t("roles.emptyKicker")}
             title={t("roles.emptyTitle")}
             description={t("roles.emptyBody")}
-            action={
+            action={canCreate ? (
               <Button onClick={() => setCreateOpen(true)} className="h-9 rounded-lg px-4 text-[13px]">
                 <Plus className="mr-1.5 h-4 w-4" /> {t("roles.newRole")}
               </Button>
-            }
+            ) : undefined}
           />
         )
       )}
@@ -131,9 +127,9 @@ export function RolesListPage() {
       {filtered.length > 0 && (
         <div>
           <p className="mb-3 text-[12px] font-medium text-[var(--color-muted-foreground)]">
-            {t(filtered.length === 1 ? "roles.foundOne" : "roles.foundMany").replace(
+            {t(query.data?.totalCount === 1 ? "roles.foundOne" : "roles.foundMany").replace(
               "{n}",
-              String(filtered.length),
+              String(query.data?.totalCount ?? 0),
             )}
           </p>
 
@@ -180,7 +176,8 @@ export function RolesListPage() {
         </div>
       )}
 
-      <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {query.data && <Pagination page={page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} shown={filtered.length} hasPrev={page > 1} hasNext={query.data.hasNext} fetching={query.isFetching} onPrev={() => setPage(value => Math.max(1, value - 1))} onNext={() => setPage(value => value + 1)} />}
+      {canCreate && <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} />}
     </div>
   );
 }

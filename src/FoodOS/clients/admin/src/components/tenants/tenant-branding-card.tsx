@@ -19,14 +19,13 @@ import {
 import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/auth/use-auth";
+import { MultitenancyPermissions } from "@/lib/permissions";
 
 /**
  * TenantBrandingCard — operator-facing theme editor for a single tenant.
  *
- * Scopes every API call to `tenantId` via the `tenant:` header override.
- * The endpoints are current-tenant-scoped server-side, so the operator
- * has to explicitly declare which tenant they're targeting — only root
- * operators get past the override middleware.
+ * Uses an explicit targetTenantId resource parameter, never a tenant header override.
  *
  * Scope: palette (light + dark) + brand asset URLs. Typography and layout
  * fields exist on the server-side DTO but are intentionally omitted from
@@ -35,6 +34,9 @@ import { cn } from "@/lib/cn";
  */
 export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(MultitenancyPermissions.Tenants.ViewTheme);
+  const canUpdate = canView && !!user?.permissions.includes(MultitenancyPermissions.Tenants.UpdateTheme);
   const queryClient = useQueryClient();
 
   const themeQueryKey = useMemo(
@@ -44,10 +46,10 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
 
   const themeQuery = useQuery({
     queryKey: themeQueryKey,
-    queryFn: () => getTenantTheme(tenantId),
-    // Re-fetch when the page regains focus so other admins' edits are
-    // picked up without a manual refresh.
-    refetchOnWindowFocus: true,
+    queryFn: ({ signal }) => getTenantTheme(tenantId, signal),
+    enabled: canView,
+    // Do not overwrite an unsaved draft when window focus changes.
+    refetchOnWindowFocus: false,
   });
 
   const [draft, setDraft] = useState<TenantThemeDto | null>(null);
@@ -62,25 +64,26 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
   }, [themeQuery.data]);
 
   const saveMutation = useMutation({
-    mutationFn: (theme: TenantThemeDto) => updateTenantTheme(tenantId, theme),
+    mutationFn: ({ id, theme }: { id: string; theme: TenantThemeDto }) => updateTenantTheme(id, theme),
     onSuccess: () => {
       toast.success(t("tenants.brandingSaved"));
-      void queryClient.invalidateQueries({ queryKey: themeQueryKey });
+      return queryClient.invalidateQueries({ queryKey: themeQueryKey });
     },
     onError: (err) =>
       toast.error(t("tenants.saveFailed"), { description: apiErr(err, t) }),
   });
 
   const resetMutation = useMutation({
-    mutationFn: () => resetTenantTheme(tenantId),
+    mutationFn: (id: string) => resetTenantTheme(id),
     onSuccess: () => {
       toast.success(t("tenants.brandingReset"));
-      void queryClient.invalidateQueries({ queryKey: themeQueryKey });
+      return queryClient.invalidateQueries({ queryKey: themeQueryKey });
     },
     onError: (err) =>
       toast.error(t("tenants.resetFailed"), { description: apiErr(err, t) }),
   });
 
+  if (!canView) return null;
   if (themeQuery.isLoading) {
     return (
       <SettingsSection
@@ -97,6 +100,7 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
     return (
       <SettingsSection title={t("tenants.branding")} icon={Palette}>
         <ErrorBand message={apiErr(themeQuery.error, t)} />
+        <Button className="mt-3" variant="outline" disabled={themeQuery.isFetching} onClick={() => themeQuery.refetch()}>{t("workbench.retry")}</Button>
       </SettingsSection>
     );
   }
@@ -113,7 +117,7 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
   const onAssets = (next: Partial<BrandAssetsDto>) =>
     setDraft((d) => (d ? { ...d, brandAssets: { ...d.brandAssets, ...next } } : d));
 
-  const footer = (
+  const footer = canUpdate && (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-2">
         {draft.isDefault && !dirty && (
@@ -131,7 +135,7 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => resetMutation.mutate()}
+          onClick={() => { if (canUpdate) resetMutation.mutate(tenantId); }}
           disabled={resetMutation.isPending || saveMutation.isPending}
           aria-label={t("tenants.resetDefaults")}
         >
@@ -141,8 +145,8 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
         <Button
           type="button"
           variant="signal"
-          onClick={() => draft && saveMutation.mutate(draft)}
-          disabled={!dirty || saveMutation.isPending}
+          onClick={() => { if (canUpdate && draft) saveMutation.mutate({ id: tenantId, theme: draft }); }}
+          disabled={!dirty || saveMutation.isPending || resetMutation.isPending}
         >
           {saveMutation.isPending ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -162,7 +166,7 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
       description={t("tenants.brandingDesc")}
       footer={footer}
     >
-      <div className="space-y-6">
+      <fieldset disabled={!canUpdate || resetMutation.isPending || saveMutation.isPending} className="min-w-0 space-y-6">
         <ThemePreview palette={draft.lightPalette} label={t("tenants.lightPreview")} />
 
         <div className="grid gap-5 lg:grid-cols-2">
@@ -181,7 +185,7 @@ export function TenantBrandingCard({ tenantId }: { tenantId: string }) {
         </div>
 
         <BrandAssetsEditor assets={draft.brandAssets} onChange={onAssets} />
-      </div>
+      </fieldset>
     </SettingsSection>
   );
 }

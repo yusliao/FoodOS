@@ -24,6 +24,7 @@ using FSH.Modules.Identity.Features.v1.Impersonation.EndImpersonation;
 using FSH.Modules.Identity.Features.v1.Impersonation.GetImpersonationGrants;
 using FSH.Modules.Identity.Features.v1.Impersonation.RevokeImpersonationGrant;
 using FSH.Modules.Identity.Features.v1.Impersonation.StartImpersonation;
+using FSH.Modules.Identity.Features.v1.Impersonation.SearchImpersonationUsers;
 using FSH.Modules.Identity.Features.v1.Permissions.GetPermissionCatalog;
 using FSH.Modules.Identity.Features.v1.Roles;
 using FSH.Modules.Identity.Features.v1.Roles.DeleteRole;
@@ -248,6 +249,7 @@ public class IdentityModule : IModule
 
         // impersonation
         group.MapStartImpersonationEndpoint();
+        group.MapSearchImpersonationUsersEndpoint();
         group.MapEndImpersonationEndpoint();
         group.MapGetImpersonationGrantsEndpoint();
         group.MapRevokeImpersonationGrantEndpoint();

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,6 +26,9 @@ import { KpiTile } from "@/components/kpi-tile";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { BillingPermissions } from "@/lib/permissions";
+import { CurrencySummary } from "@/components/billing/currency-summary";
 
 const PAGE_SIZE = 20;
 
@@ -99,6 +102,8 @@ function describe(
 
 export function InvoicesListPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(BillingPermissions.View);
   const navigate = useNavigate();
   const [pageNumber, setPageNumber] = useState(1);
 
@@ -106,6 +111,8 @@ export function InvoicesListPage() {
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "">("");
   const [periodYear, setPeriodYear] = useState("");
   const [periodMonth, setPeriodMonth] = useState("");
+  const validFilters = (!periodYear || (Number(periodYear) >= 2000 && Number(periodYear) <= 2100))
+    && (!periodMonth || (Number(periodMonth) >= 1 && Number(periodMonth) <= 12));
 
   const filters = useMemo(
     () => ({
@@ -119,29 +126,21 @@ export function InvoicesListPage() {
 
   const query = useQuery({
     queryKey: ["billing", "invoices", { pageNumber, ...filters }],
-    queryFn: () => listInvoices({ pageNumber, pageSize: PAGE_SIZE, ...filters }),
-    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) => listInvoices({ pageNumber, pageSize: PAGE_SIZE, ...filters }, signal),
+    enabled: canView && validFilters,
   });
 
-  const data = query.data;
+  const unavailable = query.isError || !validFilters;
+  const data = unavailable ? undefined : query.data;
   const items = useMemo<InvoiceDto[]>(() => data?.items ?? [], [data]);
 
   const totals = useMemo(() => {
-    let totalBilled = 0;
-    let outstanding = 0;
-    let paid = 0;
-    let paidCount = 0;
-    const firstCurrency = items[0]?.currency ?? "USD";
-    for (const inv of items) {
-      totalBilled += inv.subtotalAmount;
-      if (inv.status === "Paid") {
-        paid += inv.subtotalAmount;
-        paidCount += 1;
-      } else if (inv.status === "Issued") {
-        outstanding += inv.subtotalAmount;
-      }
-    }
-    return { totalBilled, outstanding, paid, paidCount, currency: firstCurrency };
+    const amounts = (rows: InvoiceDto[]) => rows.map(inv => ({ currency: inv.currency, amount: inv.subtotalAmount }));
+    return {
+      all: amounts(items),
+      outstanding: amounts(items.filter(inv => inv.status === "Issued")),
+      paid: amounts(items.filter(inv => inv.status === "Paid")),
+    };
   }, [items]);
 
   const filtersDirty =
@@ -160,11 +159,11 @@ export function InvoicesListPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile
           label={t("billing.pageInvoices")}
-          value={query.isLoading ? <Skeleton className="h-7 w-16" /> : data?.items.length ?? 0}
+          value={query.isLoading ? <Skeleton className="h-7 w-16" /> : unavailable ? "—" : data?.items.length ?? 0}
           subtitle={
             data
               ? t("billing.totalCount").replace("{n}", data.totalCount.toLocaleString())
-              : t("billing.loadingEllipsis")
+              : t(unavailable ? "billing.unavailable" : "billing.loadingEllipsis")
           }
         />
         <KpiTile
@@ -172,35 +171,33 @@ export function InvoicesListPage() {
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
-            ) : (
-              formatMoney(totals.totalBilled, totals.currency)
+            ) : unavailable ? "—" : (
+              <CurrencySummary values={totals.all} />
             )
           }
-          subtitle={t("billing.thisPage")}
+          subtitle={t("billing.pageAmounts")}
         />
         <KpiTile
           label={t("billing.outstanding")}
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
-            ) : (
-              formatMoney(totals.outstanding, totals.currency)
+            ) : unavailable ? "—" : (
+              <CurrencySummary values={totals.outstanding} />
             )
           }
-          subtitle={t("billing.outstandingHint")}
+          subtitle={t("billing.pageOutstanding")}
         />
         <KpiTile
           label={t("billing.paid")}
           value={
             query.isLoading ? (
               <Skeleton className="h-7 w-24" />
-            ) : (
-              formatMoney(totals.paid, totals.currency)
+            ) : unavailable ? "—" : (
+              <CurrencySummary values={totals.paid} />
             )
           }
-          subtitle={t(
-            totals.paidCount === 1 ? "billing.paidInvoiceOne" : "billing.paidInvoiceMany",
-          ).replace("{n}", String(totals.paidCount))}
+          subtitle={t("billing.pagePaid")}
         />
       </div>
 
@@ -250,6 +247,7 @@ export function InvoicesListPage() {
             <Label htmlFor="filter-year">{t("billing.year")}</Label>
             <Input
               id="filter-year"
+              aria-invalid={!!periodYear && (Number(periodYear) < 2000 || Number(periodYear) > 2100)}
               inputMode="numeric"
               placeholder="2026"
               value={periodYear}
@@ -263,6 +261,7 @@ export function InvoicesListPage() {
             <Label htmlFor="filter-month">{t("billing.month")}</Label>
             <Input
               id="filter-month"
+              aria-invalid={!!periodMonth && (Number(periodMonth) < 1 || Number(periodMonth) > 12)}
               inputMode="numeric"
               placeholder={t("billing.monthPlaceholder")}
               value={periodMonth}
@@ -285,18 +284,20 @@ export function InvoicesListPage() {
                 .replace("{pages}", String(Math.max(data.totalPages, 1)))
                 .replace("{total}", data.totalCount.toLocaleString())
             ) : (
-              t("billing.loading")
+              t(unavailable ? "billing.unavailable" : "billing.loading")
             )}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          {!validFilters && <p role="alert" className="px-6 py-4 text-sm text-[var(--color-destructive)]">{t("billing.invalidPeriod")}</p>}
           {query.isError && (
             <div className="border-t border-[var(--color-border)] px-6 py-4 text-sm text-[var(--color-destructive)]">
-              {describe(query.error, t)}
+              <p>{describe(query.error, t)}</p>
+              <Button className="mt-3" variant="outline" disabled={!canView || query.isFetching} onClick={() => query.refetch()}>{t("workbench.retry")}</Button>
             </div>
           )}
 
-          {query.isLoading && items.length === 0 ? (
+          {unavailable ? null : query.isLoading && items.length === 0 ? (
             <ul className="divide-y divide-[var(--color-border)]">
               {Array.from({ length: 5 }).map((_, i) => (
                 <li key={i} className="px-6 py-4">
@@ -322,7 +323,7 @@ export function InvoicesListPage() {
                     type="button"
                     onClick={() => navigate(`/billing/invoices/${inv.id}`)}
                     className={cn(
-                      "fsh-enter grid w-full grid-cols-[1fr_auto] items-center gap-x-6 gap-y-1 px-6 py-4 text-left transition-colors hover:bg-[var(--color-muted)] cursor-pointer",
+                      "fsh-enter grid w-full grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-x-6 gap-y-2 px-6 py-4 text-left transition-colors hover:bg-[var(--color-muted)] cursor-pointer",
                     )}
                     style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
                   >
@@ -335,7 +336,7 @@ export function InvoicesListPage() {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-tight">
+                        <code className="max-w-full break-all rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-tight">
                           {inv.invoiceNumber}
                         </code>
                         <Badge variant={statusVariant(inv.status)}>{statusLabel(inv.status, t)}</Badge>
