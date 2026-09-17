@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CheckCheck, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -11,6 +11,7 @@ import {
 import { useRealtimeEvent } from "@/realtime/realtime-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { NotificationLink } from "@/components/notifications/notification-link";
 import {
   EntityPageHeader,
   ErrorBand,
@@ -22,19 +23,26 @@ import { EmptyState } from "@/components/empty-state";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { NotificationPermissions } from "@/lib/permissions";
 
 type Filter = "all" | "unread";
 type Translate = (key: string, fallback?: string) => string;
 
 export function NotificationsInboxPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(NotificationPermissions.Inbox.View);
+  const canMark = canView && !!user?.permissions.includes(NotificationPermissions.Inbox.MarkRead);
+  const busy = useIsMutating({ mutationKey: ["notifications", "write"] }) > 0;
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Filter>("unread");
 
   const query = useQuery({
     queryKey: ["notifications", "inbox", filter],
-    queryFn: () =>
-      listNotifications({ unreadOnly: filter === "unread", pageSize: 100 }),
+    queryFn: ({ signal }) =>
+      listNotifications({ unreadOnly: filter === "unread", pageSize: 100 }, signal),
+    enabled: canView,
     staleTime: 15_000,
   });
 
@@ -44,26 +52,28 @@ export function NotificationsInboxPage() {
   });
 
   const markOne = useMutation({
+    mutationKey: ["notifications", "write"],
     mutationFn: (id: string) => markNotificationRead(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
     onError: (err) => toast.error(t("notifications.markReadFailed"), { description: describe(err) }),
   });
 
   const markAll = useMutation({
+    mutationKey: ["notifications", "write"],
     mutationFn: markAllNotificationsRead,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success(
         (data.updated === 1 ? t("notifications.markedOne") : t("notifications.markedMany")).replace(
           "{n}",
           String(data.updated),
         ),
       );
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
     onError: (err) => toast.error(t("notifications.markAllFailed"), { description: describe(err) }),
   });
 
-  const items = query.data ?? [];
+  const items = query.isError ? [] : query.data ?? [];
   const filterOptions = [
     { value: "unread", label: t("notifications.filterUnread") },
     { value: "all", label: t("notifications.filterAll") },
@@ -82,22 +92,22 @@ export function NotificationsInboxPage() {
           variant="outline"
           size="sm"
           disabled={query.isFetching}
-          onClick={() => query.refetch()}
+          onClick={() => { if (canView) void query.refetch(); }}
           className="flex-1 sm:flex-none"
         >
           <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", query.isFetching && "animate-spin")} />
           {t("notifications.refresh")}
         </Button>
-        <Button
+        {canMark && <Button
           variant="signal"
           size="sm"
-          onClick={() => markAll.mutate()}
-          disabled={markAll.isPending}
+          onClick={() => { if (canMark && !busy && !query.isError) markAll.mutate(); }}
+          disabled={busy || query.isLoading || query.isError}
           className="flex-1 sm:flex-none"
         >
           <CheckCheck className="mr-1.5 h-3.5 w-3.5" />
           {markAll.isPending ? t("notifications.marking") : t("notifications.markAll")}
-        </Button>
+        </Button>}
       </EntityPageHeader>
 
       <FilterBar>
@@ -135,7 +145,7 @@ export function NotificationsInboxPage() {
       {items.length > 0 && (
         <ul className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
           {items.map((n) => (
-            <Row key={n.id} notif={n} onMarkRead={() => markOne.mutate(n.id)} t={t} />
+            <Row key={n.id} notif={n} canMark={canMark} busy={busy} onMarkRead={() => { if (canMark && !busy && !n.readAtUtc) markOne.mutate(n.id); }} t={t} />
           ))}
         </ul>
       )}
@@ -146,17 +156,21 @@ export function NotificationsInboxPage() {
 function Row({
   notif,
   onMarkRead,
+  canMark,
+  busy,
   t,
 }: {
   notif: NotificationDto;
   onMarkRead: () => void;
+  canMark: boolean;
+  busy: boolean;
   t: Translate;
 }) {
   const unread = !notif.readAtUtc;
   return (
     <li
       className={cn(
-        "grid grid-cols-[auto_auto_1fr_auto] items-start gap-3 px-1 py-3.5 text-sm",
+        "grid grid-cols-[auto_auto_minmax(0,1fr)] sm:grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-3 px-1 py-3.5 text-sm",
         unread && "bg-[oklch(from_var(--color-accent-signal)_l_c_h_/_0.03)]",
       )}
     >
@@ -184,19 +198,17 @@ function Row({
           </p>
         )}
         {notif.link && (
-          <a
+          <NotificationLink
             href={notif.link}
-            target={notif.link.startsWith("http") ? "_blank" : undefined}
-            rel="noopener noreferrer"
             className="mt-1 inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-foreground)] hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
             {t("notifications.open")}
-          </a>
+          </NotificationLink>
         )}
       </div>
-      {unread && (
-        <Button variant="ghost" size="sm" onClick={onMarkRead}>
+      {unread && canMark && (
+        <Button variant="ghost" size="sm" disabled={busy} onClick={onMarkRead} className="col-start-3 sm:col-start-auto">
           <CheckCheck className="mr-1 h-3.5 w-3.5" /> {t("notifications.markRead")}
         </Button>
       )}

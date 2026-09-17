@@ -11,6 +11,8 @@ import type { LucideIcon } from "lucide-react";
 import { EntityPageHeader } from "@/components/list";
 import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/auth/use-auth";
+import { IdentityPermissions } from "@/lib/permissions";
 
 type Tab = {
   to: string;
@@ -57,13 +59,15 @@ const pad2 = (n: number) => n.toString().padStart(2, "0");
  * visible at page level. Child routes render via <Outlet />.
  */
 export function SettingsLayout() {
+  const { user } = useAuth();
+  const tabs = TABS.filter(tab => tab.to !== "/settings/sessions" || user?.permissions.includes(IdentityPermissions.Sessions.View));
   const t = useT();
   const location = useLocation();
   const activeIndex = Math.max(
     0,
-    TABS.findIndex((tab) => location.pathname.startsWith(tab.to)),
+    tabs.findIndex((tab) => location.pathname.startsWith(tab.to)),
   );
-  const active = TABS[activeIndex] ?? TABS[0]!;
+  const active = tabs[activeIndex] ?? tabs[0]!;
 
   return (
     <div className="space-y-6">
@@ -102,7 +106,7 @@ export function SettingsLayout() {
                 aria-hidden
                 className="absolute bottom-1 left-[14px] top-1 w-px bg-[oklch(from_var(--color-border)_l_c_h_/_0.6)]"
               />
-              {TABS.map((tab, i) => {
+              {tabs.map((tab, i) => {
                 const num = pad2(i + 1);
                 return (
                   <li key={tab.to}>
@@ -172,7 +176,7 @@ export function SettingsLayout() {
           {/* Mobile: horizontal pill tabs (overflow scroll) */}
           <div className="-mx-2 overflow-x-auto pb-1 lg:hidden">
             <div className="flex gap-1 px-2">
-              {TABS.map(({ to, labelKey, icon: Icon }) => (
+              {tabs.map(({ to, labelKey, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}

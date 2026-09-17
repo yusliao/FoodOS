@@ -6,6 +6,7 @@ import { ArrowRight, LogOut, ShieldAlert, UserCog } from "lucide-react";
 import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { useT } from "@/i18n/locale-provider";
 
 /**
  * Sticky banner shown across every page while the operator is impersonating
@@ -25,6 +26,7 @@ import { cn } from "@/lib/cn";
  *     left ribbon, slightly bolder copy).
  */
 export function ImpersonationBanner() {
+  const t = useT();
   const { impersonation, user, stopImpersonation } = useAuth();
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
@@ -43,16 +45,16 @@ export function ImpersonationBanner() {
       // admin app) → land on /login. Otherwise the operator's own session was
       // restored → back to the dashboard home.
       if (result.signedOut) {
-        toast.success("Impersonation ended");
+        toast.success(t("impersonationSession.signedOut"), { description: t("impersonationSession.remoteNotice") });
         navigate("/login", { replace: true });
       } else {
-        toast.success("Returned to your session");
+        toast.success(t("impersonationSession.returned"));
         navigate("/", { replace: true });
       }
     },
-    onError: (err) => {
-      toast.error("Could not end impersonation cleanly", {
-        description: err instanceof Error ? err.message : "Restored local session.",
+    onError: () => {
+      toast.error(t("impersonationSession.endFailed"), {
+        description: t("impersonationSession.endFailedBody"),
       });
       navigate("/", { replace: true });
     },
@@ -60,7 +62,7 @@ export function ImpersonationBanner() {
 
   if (!impersonation) return null;
 
-  const subjectLabel = user?.name ?? user?.email ?? "Unknown";
+  const subjectLabel = user?.name ?? user?.email ?? t("impersonationSession.unknown");
   const tenantLabel = user?.tenant ?? "—";
   const actorLabel = impersonation.actorName ?? impersonation.actorUserId.slice(0, 8) + "…";
   const actorTenantLabel = impersonation.actorTenant ?? "—";
@@ -71,12 +73,13 @@ export function ImpersonationBanner() {
   // flip between warning / destructive without scattering conditionals.
   const tone = isCrossTenant ? "var(--color-destructive)" : "var(--color-warning)";
   const metaLabel = isCrossTenant
-    ? "Cross-tenant impersonation"
-    : "Impersonating";
+    ? t("impersonationSession.crossTenant")
+    : t("impersonationSession.impersonating");
 
   return (
     <div
       role="status"
+      aria-label={t("impersonationSession.bannerLabel")}
       aria-live="polite"
       className={cn(
         "relative z-40 flex flex-wrap items-center justify-between gap-3 overflow-hidden",
@@ -133,7 +136,7 @@ export function ImpersonationBanner() {
           {/* Tenant flow — for cross-tenant we show actorTenant → tenant
               so the cross-boundary jump is the most obvious shape in the
               bar. For same-tenant just the one chip. */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
             {isCrossTenant && (
               <>
                 <TenantChip label={actorTenantLabel} tone={tone} />
@@ -151,7 +154,7 @@ export function ImpersonationBanner() {
               bar to one line on mobile. The `acting as` phrasing covers
               both variants. */}
           <span className="hidden items-center gap-1 text-[12px] text-[var(--color-muted-foreground)] sm:inline-flex">
-            <span>· operator</span>
+            <span>· {t("impersonationSession.operator")}</span>
             <UserCog className="h-3 w-3" aria-hidden />
             <span className="text-[var(--color-foreground)]">
               {actorLabel}
@@ -172,7 +175,7 @@ export function ImpersonationBanner() {
         }}
       >
         <LogOut className="mr-1.5 h-3.5 w-3.5" />
-        {pending ? "Ending…" : "End impersonation"}
+        {pending ? t("impersonationSession.ending") : t("impersonationSession.end")}
       </Button>
     </div>
   );
@@ -195,7 +198,7 @@ function TenantChip({
   return (
     <code
       className={cn(
-        "rounded-md px-1.5 py-0.5 font-mono text-[11px] leading-tight",
+        "min-w-0 max-w-full break-all rounded-md px-1.5 py-0.5 font-mono text-[11px] leading-tight",
         emphasis ? "font-semibold" : "font-medium",
       )}
       style={{

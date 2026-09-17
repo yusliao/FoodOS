@@ -13,6 +13,7 @@ using FSH.Modules.Files.Features.v1.FinalizeUpload;
 using FSH.Modules.Files.Features.v1.GetFileDownloadUrl;
 using FSH.Modules.Files.Features.v1.GetFileMetadata;
 using FSH.Modules.Files.Features.v1.ListMyFiles;
+using FSH.Modules.Files.Features.v1.ListOwnerFiles;
 using FSH.Modules.Files.Features.v1.ListSharedFiles;
 using FSH.Modules.Files.Features.v1.ListTrashedFiles;
 using FSH.Modules.Files.Features.v1.RequestUploadUrl;
@@ -82,6 +83,7 @@ public sealed class FilesModule : IModule
         // pattern for /trash etc.).
         group.MapRequestUploadUrlEndpoint();         // POST  /upload-url
         group.MapListMyFilesEndpoint();              // GET   /mine
+        group.MapListOwnerFilesEndpoint();           // GET   /owners/{ownerType}/{ownerId}
         group.MapListSharedFilesEndpoint();          // GET   /shared
         group.MapListTrashedFilesEndpoint();         // GET   /trash
         group.MapRestoreFileEndpoint();              // POST  /{id}/restore  (literal verb path)

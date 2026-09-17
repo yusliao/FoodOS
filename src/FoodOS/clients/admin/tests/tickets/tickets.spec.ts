@@ -1,0 +1,116 @@
+import { expect, test, type Page } from "@playwright/test";
+import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
+import { installAdminShellMocks, paged } from "../helpers/shell-mocks";
+import en from "../../src/i18n/locales/en-US.json" with { type: "json" };
+import zh from "../../src/i18n/locales/zh-CN.json" with { type: "json" };
+const id = "33333333-3333-3333-3333-333333333333";
+const ticket = { id, number: "TK-1", title: "Missing delivery", description: "Please check", status: "Open", priority: "High", customerTenantId: "acme", reporterUserId: "customer-user", assignedToUserId: "operator-user", createdAtUtc: "2026-09-17T00:00:00Z", commentCount: 0 };
+const view = "Permissions.Tickets.View", comment = "Permissions.Tickets.Comment";
+async function setup(page: Page, permissions: string[]) {
+  await seedAuthedSession(page, { ...TEST_USER, permissions });
+  await installAdminShellMocks(page, permissions);
+  await page.route("**/api/v1/tickets?**", route => route.fulfill({ json: paged([ticket]) }));
+  await page.route(`**/api/v1/tickets/${id}`, route => route.fulfill({ json: ticket }));
+  await page.route(`**/api/v1/tickets/${id}/comments`, route => route.fulfill({ json: [] }));
+}
+for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) test(`${culture} notification opens ticket and reply retries safely in root`, async ({ page }) => {
+  await setup(page, [view, comment, "Permissions.Notifications.Inbox.View"]);
+  await page.addInitScript(value => localStorage.setItem("foodos.culture", value), culture);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v1/notifications/?*", route => route.fulfill({ json: [{ id: "notice", title: "Ticket update", type: "tickets.comment", source: "Tickets", createdAtUtc: ticket.createdAtUtc, readAtUtc: null, link: `/tickets/${id}` }] }));
+  const writes: { body: unknown; key: string }[] = [];
+  let release!: () => void;
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/api/v1/tickets/${id}/comments`, async route => {
+    expect(route.request().headers().tenant).toBe("root");
+    if (route.request().method() === "GET") return route.fulfill({ json: writes.length > 1 ? [{ id: "reply", ticketId: id, authorUserId: "operator-user", body: "Checking delivery", createdAtUtc: ticket.createdAtUtc }] : [] });
+    writes.push({ body: route.request().postDataJSON(), key: route.request().headers()["idempotency-key"] });
+    if (writes.length === 1) return route.fulfill({ status: 403, json: { detail: "Reply denied" } });
+    await hold;
+    return route.fulfill({ json: "reply" });
+  });
+  await page.goto("/notifications");
+  await page.getByRole("main").getByRole("link", { name: m.common.open, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/tickets/${id}$`));
+  await expect(page.getByRole("heading", { name: ticket.title })).toBeVisible();
+  await expect(page.getByRole("definition").filter({ hasText: /^acme$/ })).toBeVisible();
+  const reply = page.getByRole("textbox", { name: m.tickets.reply, exact: true });
+  await expect(page.getByRole("button", { name: m.tickets.send, exact: true })).toBeDisabled();
+  await reply.fill(" Checking delivery ");
+  await page.getByRole("button", { name: m.tickets.send, exact: true }).click();
+  await expect(page.getByText("Reply denied")).toBeVisible();
+  await expect(reply).toHaveValue(" Checking delivery ");
+  await page.getByRole("button", { name: m.tickets.send, exact: true }).click();
+  await expect(reply).toBeDisabled();
+  release();
+  await expect(reply).toHaveValue("");
+  await expect(page.getByRole("region", { name: m.tickets.comments }).getByText("Checking delivery")).toBeVisible();
+  expect(writes[0].key).toBeTruthy();
+  expect(writes[1]).toEqual(writes[0]);
+  expect(writes[0].body).toEqual({ body: "Checking delivery" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+for (const status of [403, 404]) test(`ticket ${status} does not request comments and retries`, async ({ page }) => {
+  await setup(page, [view]);
+  let fail = true, comments = 0;
+  await page.route(`**/api/v1/tickets/${id}`, route => route.fulfill(fail ? { status, json: { detail: "Ticket unavailable" } } : { json: ticket }));
+  await page.route(`**/api/v1/tickets/${id}/comments`, route => { comments++; return route.fulfill({ json: [] }); });
+  await page.goto(`/tickets/${id}`);
+  await expect(page.getByText("Ticket unavailable")).toBeVisible();
+  expect(comments).toBe(0);
+  fail = false;
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("heading", { name: ticket.title })).toBeVisible();
+  await expect(page.getByText("No comments yet.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Reply", exact: true })).toHaveCount(0);
+});
+test("closed ticket cannot be replied to even with comment permission", async ({ page }) => {
+  await setup(page, [view, comment]);
+  await page.route(`**/api/v1/tickets/${id}`, route => route.fulfill({ json: { ...ticket, status: "Closed" } }));
+  await page.goto(`/tickets/${id}`);
+  await expect(page.getByRole("heading", { name: ticket.title })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send reply", exact: true })).toHaveCount(0);
+});
+test("ticket list retries, paginates and resets page on search", async ({ page }) => {
+  await setup(page, [view]);
+  let fail = true;
+  await page.route("**/api/v1/tickets?**", route => {
+    expect(route.request().headers().tenant).toBe("root");
+    const url = new URL(route.request().url());
+    const pageNumber = Number(url.searchParams.get("pageNumber"));
+    if (fail) return route.fulfill({ status: 500, json: { detail: "List unavailable" } });
+    if (url.searchParams.get("search")) { expect(pageNumber).toBe(1); return route.fulfill({ json: paged([]) }); }
+    return route.fulfill({ json: paged([{ ...ticket, title: `Ticket page ${pageNumber}` }], { pageNumber, totalCount: 21, totalPages: 2 }) });
+  });
+  await page.goto("/tickets");
+  await expect(page.getByText("List unavailable")).toBeVisible();
+  fail = false;
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Ticket page 1" })).toBeVisible();
+  await page.getByRole("button", { name: /Next/ }).click();
+  await expect(page.getByRole("link", { name: "Ticket page 2" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Search tickets" }).fill("missing");
+  await page.getByRole("button", { name: "Search tickets" }).click();
+  await expect(page.getByText("No tickets match this search.")).toBeVisible();
+});
+test("ticket navigation is permission gated and comments can retry independently", async ({ page }) => {
+  await setup(page, [view]);
+  let fails = true;
+  await page.route(`**/api/v1/tickets/${id}/comments`, route => route.fulfill(fails ? { status: 403, json: { detail: "Comments unavailable" } } : { json: [] }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Operations", exact: true }).click();
+  await page.locator('a[href="/tickets"]').first().click();
+  await page.getByRole("link", { name: ticket.title }).click();
+  await expect(page.getByText("Comments unavailable")).toBeVisible();
+  await expect(page.getByText("No comments yet.")).toHaveCount(0);
+  fails = false;
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByText("No comments yet.")).toBeVisible();
+  await setup(page, [comment]);
+  const reads: string[] = [];
+  await page.route("**/api/v1/tickets**", route => { reads.push(route.request().url()); return route.abort(); });
+  await page.goto(`/tickets/${id}`);
+  await expect(page.getByRole("heading", { name: en.common.forbiddenTitle })).toBeVisible();
+  await expect(page.locator('a[href="/tickets"]')).toHaveCount(0);
+  expect(reads).toEqual([]);
+});

@@ -10,6 +10,9 @@
  * Convention follows the server: `Permissions.{Resource}.{Action}`.
  */
 
+export const FilesPermissions = Object.freeze({ Upload: "Permissions.Files.Upload", DeleteOwn: "Permissions.Files.DeleteOwn" });
+export const TicketsPermissions = Object.freeze({ Delete: "Permissions.Tickets.Delete", Restore: "Permissions.Tickets.Restore", Create: "Permissions.Tickets.Create", Update: "Permissions.Tickets.Update", View: "Permissions.Tickets.View", Comment: "Permissions.Tickets.Comment", Assign: "Permissions.Tickets.Assign", Resolve: "Permissions.Tickets.Resolve", Reopen: "Permissions.Tickets.Reopen", Close: "Permissions.Tickets.Close" });
+
 export const OrderingPermissions = Object.freeze({
   Orders: {
     View: "Permissions.Ordering.Orders.View",
@@ -169,6 +172,18 @@ export type PermissionGroup = {
 };
 
 export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
+  { category: "Tickets", blurb: "Read support tickets and reply.", entries: [
+    { name: TicketsPermissions.View, description: "View tickets", basic: true },
+    { name: TicketsPermissions.Comment, description: "Reply to tickets" },
+    { name: TicketsPermissions.Delete, description: "Soft-delete tickets" },
+    { name: TicketsPermissions.Restore, description: "Restore tickets" },
+    { name: TicketsPermissions.Create, description: "Create tickets" },
+    { name: TicketsPermissions.Update, description: "Edit tickets" },
+    { name: TicketsPermissions.Assign, description: "Assign tickets" },
+    { name: TicketsPermissions.Resolve, description: "Resolve tickets" },
+    { name: TicketsPermissions.Reopen, description: "Reopen tickets" },
+    { name: TicketsPermissions.Close, description: "Close tickets" },
+  ] },
   {
     category: "Delivery records",
     blurb: "Read and register operator delivery vehicles and drivers.",

@@ -1,4 +1,5 @@
 import { tokenStore } from "@/auth/token-store";
+import { decodeJwt, isTokenExpired } from "@/auth/jwt";
 
 /**
  * Cross-app impersonation handoff. The admin app issues an impersonation
@@ -26,20 +27,25 @@ export function installImpersonationFromHash(): void {
   const params = new URLSearchParams(hash.slice("#impersonate?".length));
   const token = params.get("token");
   const tenant = params.get("tenant");
-  if (!token) {
-    // Malformed handoff — strip the hash and let the normal sign-in flow
-    // take over rather than getting stuck.
-    stripHash();
-    return;
-  }
-
-  // beginImpersonation stashes the currently-installed actor tokens (if any)
-  // before swapping. In the typical cross-app handoff there are none — this
-  // is a fresh tab — so the stash is a no-op. When the user later clicks
-  // End-impersonation, the dashboard's stopImpersonation() calls the server
-  // which mints a real actor token+refresh for the admin operator's account.
-  tokenStore.beginImpersonation(token, tenant);
+  // Scrub even rejected links, before installing a session or rendering React.
   stripHash();
+  const claims = decodeJwt(token);
+  const expiresAt = params.get("expiresAt");
+  if (!token || !tenant || tenant === "root" || claims?.tenant !== tenant
+    || claims.business_actor === "operator"
+    || typeof claims.sub !== "string" || !claims.sub.trim()
+    || typeof claims.act_sub !== "string" || !claims.act_sub.trim()
+    || claims.act_tenant !== "root"
+    || typeof claims.exp !== "number" || !Number.isFinite(claims.exp)
+    || isTokenExpired(claims)
+    || (expiresAt !== null && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now()))) return;
+
+  // These are shape/expiry checks, NOT signature verification; the API remains
+  // the authentication authority. Invalid links leave the existing session alone.
+  // A cross-app handoff must never stash an unrelated customer (or old root)
+  // session as the actor. Ending this session signs out of the customer portal.
+  tokenStore.clear();
+  tokenStore.beginImpersonation(token, tenant);
 }
 
 function stripHash(): void {

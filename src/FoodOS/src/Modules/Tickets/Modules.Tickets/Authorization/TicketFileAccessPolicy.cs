@@ -12,10 +12,21 @@ namespace FSH.Modules.Tickets.Authorization;
 public sealed class TicketFileAccessPolicy(
     TicketsDbContext dbContext,
     ICurrentUser currentUser,
-    IUserPermissionService permissions) : ICrossTenantFileReadPolicy
+    IUserPermissionService permissions) : ICrossTenantFileReadPolicy, IFileOwnerListPolicy
 {
     public string OwnerType => "Ticket";
     public bool AllowsPublicFiles => false;
+
+    public async Task<IReadOnlyCollection<string>?> GetReadTenantIdsAsync(
+        Guid ownerId, string currentUserId, CancellationToken cancellationToken)
+    {
+        if (!await CanAccessTicketAsync(ownerId, currentUserId, cancellationToken).ConfigureAwait(false))
+            return null;
+        var customerTenant = await dbContext.Tickets.AsNoTracking().ApplyParticipantScope(currentUser)
+            .Where(t => t.Id == ownerId).Select(t => t.CustomerTenantId)
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(customerTenant) ? null : [MultitenancyConstants.Root.Id, customerTenant];
+    }
 
     public async Task<bool> CanReadAcrossTenantsAsync(
         FileAccessContext context, string fileTenantId, string currentUserId, CancellationToken cancellationToken)

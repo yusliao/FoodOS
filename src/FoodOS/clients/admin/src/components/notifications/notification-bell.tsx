@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, BellRing, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,9 @@ import { useRealtimeEvent } from "@/realtime/realtime-context";
 import { useAuth } from "@/auth/use-auth";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { NotificationPermissions } from "@/lib/permissions";
+import { Button } from "@/components/ui/button";
+import { NotificationLink } from "@/components/notifications/notification-link";
 
 /**
  * NotificationBell — topbar trigger with unread badge and a popover preview
@@ -23,23 +26,26 @@ import { useT } from "@/i18n/locale-provider";
  */
 export function NotificationBell() {
   const t = useT();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const canView = isAuthenticated && !!user?.permissions.includes(NotificationPermissions.Inbox.View);
+  const canMark = canView && !!user?.permissions.includes(NotificationPermissions.Inbox.MarkRead);
+  const busy = useIsMutating({ mutationKey: ["notifications", "write"] }) > 0;
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
 
   const unread = useQuery({
     queryKey: ["notifications", "unread-count"],
-    queryFn: getUnreadCount,
-    enabled: isAuthenticated,
+    queryFn: ({ signal }) => getUnreadCount(signal),
+    enabled: canView,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
 
   const recent = useQuery({
     queryKey: ["notifications", "recent"],
-    queryFn: () => listNotifications({ pageSize: 8 }),
-    enabled: isAuthenticated && open,
+    queryFn: ({ signal }) => listNotifications({ pageSize: 8 }, signal),
+    enabled: canView && open,
     staleTime: 15_000,
   });
 
@@ -73,27 +79,31 @@ export function NotificationBell() {
   }, [open]);
 
   const markOne = useMutation({
+    mutationKey: ["notifications", "write"],
     mutationFn: (id: string) => markNotificationRead(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+    onError: () => toast.error(t("notifications.markReadFailed")),
   });
 
   const markAll = useMutation({
+    mutationKey: ["notifications", "write"],
     mutationFn: markAllNotificationsRead,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success(
         (data.updated === 1 ? t("notifications.markedOne") : t("notifications.markedMany")).replace(
           "{n}",
           String(data.updated),
         ),
       );
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
+    onError: () => toast.error(t("notifications.markAllFailed")),
   });
 
-  if (!isAuthenticated) return null;
+  if (!canView) return null;
 
-  const count = unread.data ?? 0;
-  const items = recent.data ?? [];
+  const count = unread.isError ? 0 : unread.data ?? 0;
+  const items = recent.isError ? [] : recent.data ?? [];
 
   return (
     <div className="relative">
@@ -132,15 +142,16 @@ export function NotificationBell() {
           />
           <div
             aria-label={t("notifications.title")}
-            className="absolute right-0 z-50 mt-2 w-[22rem] overflow-hidden rounded-xl card-shell shadow-[0_24px_64px_-24px_oklch(0_0_0/0.30)]"
+            role="region"
+            className="fixed right-4 sm:absolute sm:right-0 z-50 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl card-shell shadow-[0_24px_64px_-24px_oklch(0_0_0/0.30)]"
           >
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2.5">
               <div className="meta text-[var(--color-muted-foreground)]">{t("notifications.kicker")}</div>
-              {count > 0 && (
+              {canMark && count > 0 && (
                 <button
                   type="button"
-                  onClick={() => markAll.mutate()}
-                  disabled={markAll.isPending}
+                  onClick={() => { if (canMark && !busy) markAll.mutate(); }}
+                  disabled={busy}
                   className="inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)]"
                 >
                   <CheckCheck className="h-3 w-3" />
@@ -159,7 +170,13 @@ export function NotificationBell() {
                 </p>
               )}
 
-              {!recent.isLoading && items.length === 0 && (
+              {(recent.isError || unread.isError) && <div className="space-y-2 p-3">
+                <p role="alert">{t("notifications.loadFailed")}</p>
+                <Button size="sm" variant="outline" disabled={recent.isFetching || unread.isFetching} onClick={() => {
+                  if (canView) { void recent.refetch(); void unread.refetch(); }
+                }}>{t("notifications.refresh")}</Button>
+              </div>}
+              {!recent.isLoading && !recent.isError && !unread.isError && items.length === 0 && (
                 <p className="px-3 py-8 text-center text-sm text-[var(--color-muted-foreground)]">
                   {t("notifications.caughtUp")}
                 </p>
@@ -170,7 +187,9 @@ export function NotificationBell() {
                   <Row
                     key={n.id}
                     notif={n}
-                    onMarkRead={() => markOne.mutate(n.id)}
+                    canMark={canMark}
+                    busy={busy}
+                    onMarkRead={() => { if (canMark && !busy && !n.readAtUtc) markOne.mutate(n.id); }}
                     onClick={() => setOpen(false)}
                     t={t}
                   />
@@ -197,11 +216,15 @@ export function NotificationBell() {
 function Row({
   notif,
   onMarkRead,
+  canMark,
+  busy,
   onClick,
   t,
 }: {
   notif: NotificationDto;
   onMarkRead: () => void;
+  canMark: boolean;
+  busy: boolean;
   onClick: () => void;
   t: (key: string, fallback?: string) => string;
 }) {
@@ -237,23 +260,20 @@ function Row({
           unread ? "bg-[var(--color-accent-signal)]" : "bg-transparent",
         )}
       />
-      {notif.link ? (
-        <Link to={notif.link} onClick={onClick} className="block min-w-0 flex-1">
+        <NotificationLink href={notif.link} fallback={body} onClick={onClick} className="block min-w-0 flex-1">
           {body}
-        </Link>
-      ) : (
-        body
-      )}
-      {unread && (
+        </NotificationLink>
+      {unread && canMark && (
         <button
           type="button"
+          disabled={busy}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             onMarkRead();
           }}
           aria-label={t("notifications.markReadAria")}
-          className="invisible mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] group-hover/notif:visible"
+          className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
         >
           <CheckCheck className="h-3 w-3" />
         </button>

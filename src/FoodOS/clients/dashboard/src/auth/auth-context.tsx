@@ -194,12 +194,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, permissionsHydrated]);
 
   useEffect(() => {
+    let observedToken = tokenStore.getAccessToken();
+    let reloading = false;
     const refresh = () => {
-      const claims = decodeJwt(tokenStore.getAccessToken());
-      setUser(claimsToUser(claims, tokenStore.getPermissions()));
-      setImpersonation(claimsToImpersonation(claims));
+      observedToken = tokenStore.getAccessToken();
+      const { claims, usable } = readStoredSession();
+      setUser(usable ? claimsToUser(claims, tokenStore.getPermissions()) : null);
+      setImpersonation(usable ? claimsToImpersonation(claims) : null);
     };
     const unsubscribe = tokenStore.subscribe(refresh);
+
+    const refreshExternalSession = () => {
+      if (reloading) return;
+      if (observedToken === tokenStore.getAccessToken()) {
+        refresh();
+        return;
+      }
+      // Another tab replaced the session. Rebootstrap instead of retaining
+      // mounted forms, pending callbacks or queries belonging to the old user.
+      // External account changes intentionally discard this tab's old drafts.
+      reloading = true;
+      if (readStoredSession().usable) tokenStore.setPermissions([]);
+      else tokenStore.clear();
+      queryClient.clear();
+      window.location.reload();
+    };
 
     // The token store's subscribe() only fires for in-app mutations. Storage
     // changes from another tab fire a `storage` event, and same-tab manual
@@ -207,10 +226,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // to the tab — otherwise `isAuthenticated` stays true while the token
     // is gone, and protected requests silently 401 with no header attached.
     const onStorage = (e: StorageEvent) => {
-      if (e.key === null || e.key.startsWith("fsh.dashboard.")) refresh();
+      if (e.storageArea === localStorage && (e.key === null || e.key.startsWith("fsh.dashboard."))) refreshExternalSession();
     };
     const onVisibility = () => {
-      if (document.visibilityState === "visible") refresh();
+      if (document.visibilityState === "visible") refreshExternalSession();
     };
     window.addEventListener("storage", onStorage);
     document.addEventListener("visibilitychange", onVisibility);
@@ -220,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("storage", onStorage);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+  }, [queryClient]);
 
   const login = useCallback(
     async (input: { email: string; password: string; tenant: string }) => {
@@ -282,7 +301,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // audit; the short-lived impersonation token expires shortly regardless.
     // Restoring the operator here would also drop a root-tenant account into
     // the tenant dashboard, which `login` forbids.
-    if (!tokenStore.hasImpersonationStash()) {
+    // Old cross-app sessions may still carry a stash from before handoff cleanup.
+    // A root actor belongs in admin, never in a restored dashboard session.
+    if (decodeJwt(tokenStore.getAccessToken())?.act_tenant === "root" || !tokenStore.hasImpersonationStash()) {
       void endImpersonation().catch(() => {
         /* best-effort: token expires shortly, nothing to recover here */
       });

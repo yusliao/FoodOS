@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
-import { installAdminShellMocks, paged } from "../helpers/shell-mocks";
+import { installAdminShellMocks, paged, WMS_NOT_CONFIGURED } from "../helpers/shell-mocks";
 
 const view = "Permissions.Ordering.Orders.View";
 const reconcile = "Permissions.Ordering.Orders.Reconcile";
@@ -129,53 +129,44 @@ test("store filter sends the business store ID with root identity", async ({ pag
   expect((await request).headers().tenant).toBe("root");
 });
 
-test("amend existing quantities without product permission preserves retry payload", async ({ page }) => {
+test("WMS status failure retries without enabling quantity amendments", async ({ page }) => {
   await setup(page, [view, "Permissions.Ordering.Orders.Manage"]);
   await page.route(`**/api/v1/ordering/orders/${id}`, route => route.fulfill({ json: { ...order, status: "Reserved", cutoffAt: "2099-01-01T00:00:00Z" } }));
-  const writes: { key: string; body: unknown }[] = [];
-  await page.route(`**/api/v1/ordering/orders/${id}/amend`, async route => {
+  let failed = true;
+  await page.route("**/api/v1/fulfillment/capabilities", route => {
     expect(route.request().headers().tenant).toBe("root");
-    writes.push({ key: route.request().headers()["idempotency-key"], body: route.request().postDataJSON() });
-    await route.fulfill(writes.length === 1 ? { status: 409, json: { detail: "Stock unavailable" } } : { json: id });
+    return route.fulfill(failed ? { status: 403, json: {} } : { json: WMS_NOT_CONFIGURED });
   });
+  const writes: string[] = [];
+  page.on("request", request => { if (request.method() === "POST") writes.push(request.url()); });
   await page.goto(`/orders/${id}`);
-  await page.getByRole("button", { name: "Amend order", exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByLabel("Search products to add")).toHaveCount(0);
-  await dialog.getByLabel("Quantity 1", { exact: true }).fill("4");
-  await dialog.getByRole("button", { name: "Submit amendment" }).click();
-  await expect(dialog.getByText("Stock unavailable")).toBeVisible();
-  await expect(dialog.getByLabel("Quantity 1", { exact: true })).toHaveValue("4");
-  await dialog.getByRole("button", { name: "Submit amendment" }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(writes[0]).toEqual(writes[1]);
-  expect(writes[0].body).toEqual({ orderId: id, lines: [{ productId: "product-1", quantity: 4 }] });
+  await expect(page.getByText("WMS status could not be verified. Execution remains disabled.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Amend order|Cancel order/ })).toHaveCount(0);
+  failed = false;
+  await page.getByRole("button", { name: "Retry WMS status" }).click();
+  await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Amend order|Cancel order/ })).toHaveCount(0);
+  expect(writes).toEqual([]);
 });
 
-test("cancel requires confirmation and refreshes the order state", async ({ page }) => {
+test("unconfigured WMS does not permit cancellation or alter reserved state", async ({ page }) => {
   await setup(page, [view, "Permissions.Ordering.Orders.Manage"]);
-  let cancelled = false;
-  await page.route(`**/api/v1/ordering/orders/${id}`, route => route.fulfill({ json: { ...order, status: cancelled ? "Cancelled" : "Reserved", cutoffAt: "2099-01-01T00:00:00Z" } }));
-  await page.route(`**/api/v1/ordering/orders/${id}/cancel`, async route => {
-    expect(route.request().headers().tenant).toBe("root");
-    expect(route.request().headers()["idempotency-key"]).toBeTruthy();
-    cancelled = true;
-    await route.fulfill({ json: id });
-  });
+  await page.route(`**/api/v1/ordering/orders/${id}`, route => route.fulfill({ json: { ...order, status: "Reserved", cutoffAt: "2099-01-01T00:00:00Z" } }));
+  const writes: string[] = [];
+  page.on("request", request => { if (request.method() === "POST") writes.push(request.url()); });
   await page.goto(`/orders/${id}`);
-  await page.getByRole("button", { name: "Cancel order", exact: true }).click();
-  expect(cancelled).toBe(false);
-  await page.getByRole("dialog").getByRole("button", { name: "Cancel order", exact: true }).click();
+  await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
+  await expect(page.getByRole("definition").filter({ hasText: /^Reserved$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cancel order|Amend order/ })).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Cancel order", exact: true })).toHaveCount(0);
-  await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
+  expect(writes).toEqual([]);
 });
 
 test("past-cutoff reserved orders have no amend or cancel buttons", async ({ page }) => {
   await setup(page, [view, "Permissions.Ordering.Orders.Manage"]);
   await page.route(`**/api/v1/ordering/orders/${id}`, route => route.fulfill({ json: { ...order, status: "Reserved", cutoffAt: "2000-01-01T00:00:00Z" } }));
   await page.goto(`/orders/${id}`);
-  await expect(page.getByText("Changes and cancellation are available only for reserved orders before cutoff.")).toBeVisible();
+  await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Amend order|Cancel order/ })).toHaveCount(0);
 });
 
@@ -190,22 +181,18 @@ test("missing order does not fetch claims or show write controls", async ({ page
   expect(claims).toBe(0);
 });
 
-test("amend supports product addition and line removal", async ({ page }) => {
+test("product permission cannot bypass unavailable WMS to add or remove order lines", async ({ page }) => {
   await setup(page, [view, "Permissions.Ordering.Orders.Manage", "Permissions.Catalog.Products.View"]);
   await page.route(`**/api/v1/ordering/orders/${id}`, route => route.fulfill({ json: { ...order, status: "Reserved", cutoffAt: "2099-01-01T00:00:00Z" } }));
-  await page.route("**/api/v1/catalog/products?**", route => route.fulfill({ json: paged([{ id: "product-2", sku: "NEW", name: "New product", isActive: true }]) }));
-  let payload: unknown;
-  await page.route(`**/api/v1/ordering/orders/${id}/amend`, async route => { payload = route.request().postDataJSON(); await route.fulfill({ json: id }); });
+  const forbidden: string[] = [];
+  page.on("request", request => {
+    if (request.method() === "POST" || request.url().includes("/api/v1/catalog/products")) forbidden.push(request.url());
+  });
   await page.goto(`/orders/${id}`);
-  await page.getByRole("button", { name: "Amend order", exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "Remove line" }).click();
-  await expect(dialog.getByRole("button", { name: "Submit amendment" })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Add", exact: true }).click();
-  await dialog.getByLabel("Quantity 1", { exact: true }).fill("2");
-  await dialog.getByRole("button", { name: "Submit amendment" }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(payload).toEqual({ orderId: id, lines: [{ productId: "product-2", quantity: 2 }] });
+  await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Amend order|Remove line|Add/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "product-1", exact: true })).toBeVisible();
+  expect(forbidden).toEqual([]);
 });
 
 test("claim server rejection preserves inputs and unchanged retry key", async ({ page }) => {

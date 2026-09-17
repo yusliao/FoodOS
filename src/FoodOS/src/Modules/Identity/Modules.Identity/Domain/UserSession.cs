@@ -45,11 +45,12 @@ public class UserSession : IHasDomainEvents
         string? browser = null,
         string? browserVersion = null,
         string? operatingSystem = null,
-        string? osVersion = null)
+        string? osVersion = null,
+        Guid? sessionId = null)
     {
         return new UserSession
         {
-            Id = Guid.NewGuid(),
+            Id = sessionId ?? Guid.NewGuid(),
             UserId = userId,
             RefreshTokenHash = refreshTokenHash,
             IpAddress = ipAddress,

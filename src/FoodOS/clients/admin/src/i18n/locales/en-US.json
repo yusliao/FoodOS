@@ -1,4 +1,70 @@
 {
+  "tickets": {
+    "uploadAttachment": "Upload private attachment",
+    "retryUpload": "Check and retry upload",
+    "uploadDone": "Attachment uploaded.",
+    "uploadHint": "Images, documents and ZIP files are validated by the server. Keep this page open while uploading. Retries reuse a known file ID in this page; refreshing loses recovery state.",
+    "uploadFailed": "Upload did not complete. Retry checks the known file status before continuing. If the link expired or the file is quarantined, do not keep retrying; review the attachment list and select a file again if appropriate. If no file ID was received, a retry may leave a pending upload for server cleanup.",
+    "attachments": "Private attachments",
+    "attachmentsHint": "Attachments are shared only with authorized ticket participants. Download links expire; request a new link when needed.",
+    "noAttachments": "No available attachments.",
+    "deleteAttachment": "Delete attachment",
+    "prepareDownload": "Get download link",
+    "downloadAttachment": "Download attachment",
+    "downloadInvalid": "The download link is invalid or expired. Request a new link.",
+    "delete": "Delete ticket",
+    "deleteHint": "Move this ticket to trash. Comments are preserved; restoring requires separate permission.",
+    "trash": "Ticket trash",
+    "trashHint": "Restore soft-deleted tickets. Permanent deletion is not available.",
+    "trashEmpty": "No deleted tickets on this page.",
+    "restore": "Restore ticket",
+    "new": "New ticket",
+    "edit": "Edit ticket",
+    "save": "Save ticket",
+    "subject": "Subject",
+    "details": "Description",
+    "rootCreation": "This ticket belongs to root. It is not created on behalf of a customer. Assign an employee after saving if needed.",
+    "actions": {
+      "assign": "Assign ticket",
+      "resolve": "Resolve ticket",
+      "reopen": "Reopen ticket",
+      "close": "Close ticket"
+    },
+    "unassigned": "Unassigned",
+    "searchAssignees": "Search active employees",
+    "assigneePermission": "Employee viewing permission is required to choose another assignee. You may clear the existing assignment.",
+    "confirmState": "Confirm this ticket status change.",
+    "title": "Tickets",
+    "description": "Operator support tickets. Customer ownership is provided by the server.",
+    "search": "Search tickets",
+    "empty": "No tickets match this search.",
+    "customer": "Customer identity domain",
+    "back": "Back to tickets",
+    "invalidId": "Invalid ticket identifier.",
+    "state": "Status",
+    "priorityLabel": "Priority",
+    "reporter": "Reporter ID",
+    "assignee": "Assignee ID",
+    "noDescription": "No description.",
+    "resolution": "Resolution note",
+    "comments": "Comments",
+    "noComments": "No comments yet.",
+    "reply": "Reply",
+    "send": "Send reply",
+    "failed": "Unable to complete the ticket request.",
+    "status": {
+      "Open": "Open",
+      "InProgress": "In progress",
+      "Resolved": "Resolved",
+      "Closed": "Closed"
+    },
+    "priority": {
+      "Low": "Low",
+      "Medium": "Medium",
+      "High": "High",
+      "Critical": "Critical"
+    }
+  },
   "reports": {"title":"Operations reports","description":"Daily indicators from existing FoodOS records.","boundary":"These are FoodOS business records, not live WMS stock or proof of warehouse execution. WMS integration and reconciliation remain pending.","date":"Report date","invalidDate":"Choose a valid date from 2000-01-01 through 2100-12-31.","loading":"Loading report…","failed":"Could not load report.","resultDate":"Returned report date","empty":"No order or inventory activity is recorded for this date; temperature data is unavailable.","unavailable":"Not available","fulfillmentRate":"Fulfillment rate","stockoutRate":"Stockout rate","shrinkageRate":"Shrinkage rate","temperatureComplianceRate":"Temperature compliance","committedOrderCount":"Committed orders","fulfilledOrderCount":"Fulfilled orders","orderedQty":"Ordered quantity","inboundQty":"Received quantity","lossQty":"Loss quantity","definitions":"Metric definitions","orderBasis":"Orders use business date and exclude drafts and cancellations. Received or reconciled orders count as fulfilled. Fulfillment = fulfilled / committed orders; a zero denominator returns 0%.","stockoutBasis":"Stockout = max(ordered − reserved quantity, 0) / ordered quantity; a zero denominator returns 0%. This is not a live WMS availability measure.","inventoryBasis":"Inventory uses UTC-day transactions: Receive is inbound; Isolate + AdjustShrink is loss. Shrinkage is capped at 100%; loss without inbound returns 100%, neither returns 0%. Quantities are source aggregates without unit conversion.","temperatureBasis":"Temperature compliance currently has no data source and is unavailable, not zero. The initial date is today in UTC."},
   "deliveryRoutes": {"title":"Delivery routes","description":"Fixed route records only. Store and vehicle IDs are shown without additional lookups. Editing and deletion are not supported.","create":"New route","warehouse":"Search warehouses","selected":"Selected warehouse","selectWarehouse":"Choose a warehouse to load its routes.","warehousePermission":"Warehouse viewing permission is required to select a warehouse.","storePermission":"Store viewing permission is required to create a route.","vehiclePermission":"No vehicle viewing permission: the route will have no default vehicle.","loading":"Loading route records…","failed":"Could not load or save route records.","empty":"No routes for this warehouse.","noChoices":"No matching records.","vehicle":"Default vehicle","none":"No default vehicle","stops":"Store visit order","code":"Route code","searchStores":"Search stores","up":"Move up","down":"Move down","remove":"Remove stop","save":"Register route","createHint":"Add each store once and arrange visit order. Reusing a code in the same warehouse returns the original route without updating it. This does not dispatch a shipment."},
   "drivers": {"title":"Drivers","description":"Driver identity records. User IDs are shown without fetching employee profiles. Editing and deletion are not supported.","create":"New driver","loading":"Loading drivers…","failed":"Could not load or save drivers.","empty":"No drivers registered.","userId":"Operator user ID","phone":"Driver phone","search":"Search active operator users","selected":"Selected user","noUsers":"No matching active users.","lookupRequired":"User viewing permission is required to select an operator account.","save":"Register driver","createHint":"Select an active operator user. Existing users return the original driver record without changing its phone. Dispatch remains unavailable until WMS integration is ready."},
@@ -374,6 +440,7 @@
       "impersonation": "Impersonation",
       "billing": "Software subscriptions",
       "notifications": "Notifications",
+      "tickets": "Tickets",
       "webhooks": "Webhooks",
       "audits": "Audits",
       "health": "Health"
@@ -468,6 +535,7 @@
     "buildLive": "build · live"
   },
   "settings": {
+    "currentSessionUnknown": "The server has not identified the current session. Signing out other devices is unavailable to avoid revoking this session as well.",
     "languageTitle": "Language",
     "languageDescription": "The console and API follow this culture.",
     "themeTitle": "Theme",
@@ -495,7 +563,14 @@
     "avatar": "Avatar",
     "avatarDesc": "Shown in the topbar and on your activity. Square crops work best — JPG, PNG, or WebP.",
     "identity": "Identity",
-    "identityDesc": "Your account details. These are managed by an administrator — contact one if changes are needed.",
+    "identityDesc": "Update your name and phone number. Username and email are read-only.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "phoneNumber": "Phone",
+    "saveProfile": "Save profile",
+    "profileSaving": "Saving profile…",
+    "profileUpdated": "Profile updated",
+    "profileUpdateFailed": "Could not update profile.",
     "username": "Username",
     "displayName": "Display name",
     "phone": "Phone",
@@ -589,6 +664,13 @@
     "removeImage": "Remove",
     "uploadHint": "JPG/PNG/WebP/GIF · up to {size}",
     "pasteHint": "Direct link to an image you host elsewhere.",
+    "imageUrl": "Image URL",
+    "saveAvatar": "Save avatar",
+    "qrFailed": "QR code unavailable. Retry, or enter the setup key manually in your authenticator app.",
+    "retryQr": "Retry QR code",
+    "copyKeyFailed": "Could not copy the setup key. Select and copy the displayed key manually.",
+    "avatarSaving": "Saving avatar…",
+    "avatarSaveHint": "Choose or upload an image, then save to update your profile.",
     "noPublicUrl": "Server returned no public URL for this file."
   },
   "common": {
@@ -992,6 +1074,7 @@
     "descriptionHint": "Optional. Plain English explaining what this role is for.",
     "createRole": "Create role",
     "cat": {
+      "Tickets": "Tickets",
       "Tenants": "Tenants",
       "Users": "Users",
       "Roles": "Roles",
@@ -1003,6 +1086,7 @@
       "Operations": "Operations"
     },
     "blurb": {
+      "Tickets": "Read support tickets and reply.",
       "Tenants": "Provision and operate tenants. Reserved for the root-tenant operator.",
       "Users": "Manage tenant user accounts and their assigned roles.",
       "Roles": "Manage role definitions and their permission grants.",
@@ -1015,6 +1099,7 @@
     },
     "perm": {
       "Permissions": {
+        "Tickets": { "View": "View tickets", "Comment": "Reply to tickets", "Assign": "Assign ticket", "Resolve": "Resolve ticket", "Reopen": "Reopen ticket", "Close": "Close ticket", "Create": "New ticket", "Update": "Edit ticket", "Delete": "Delete ticket", "Restore": "Restore ticket" },
         "Tenants": {
           "View": "View tenants",
           "Create": "Create tenants",
@@ -1081,6 +1166,8 @@
     }
   },
   "impersonation": {
+    "handoffReady": "The support session is ready. Open the customer portal below. Reopening this link uses the same session; closing this dialog does not revoke it.",
+    "openPortal": "Open customer portal",
     "loadedScope": "Counts and filters apply to the latest 200 loaded grants, not all historical grants.",
     "title": "Impersonation",
     "description": "Every impersonation token issued by the server is tracked here. Active grants can be revoked — the token is rejected by the JWT validation hook within seconds.",
@@ -1480,6 +1567,7 @@
     "kindLiveness": "liveness",
     "kindReadiness": "readiness",
     "livenessFailed": "Liveness probe failed.",
+    "unavailable": "Current probe status is unavailable. Refresh to retry.",
     "readinessFailed": "Readiness probe failed.",
     "livenessDesc": "Process is up and serving requests. No external dependencies are checked.",
     "readinessDesc": "All registered dependency checks must report Healthy for the probe to return 200. A 503 here flips the API out of the load-balancer pool.",

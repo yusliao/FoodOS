@@ -50,6 +50,7 @@ public sealed class SessionService : ISessionService
         string ipAddress,
         string userAgent,
         DateTime expiresAt,
+        Guid? sessionId = null,
         CancellationToken cancellationToken = default)
     {
         EnsureValidTenant();
@@ -66,7 +67,8 @@ public sealed class SessionService : ISessionService
             browser: clientInfo.UA.Family,
             browserVersion: clientInfo.UA.Major,
             operatingSystem: clientInfo.OS.Family,
-            osVersion: clientInfo.OS.Major);
+            osVersion: clientInfo.OS.Major,
+            sessionId: sessionId);
 
         _db.UserSessions.Add(session);
         await _db.SaveChangesAsync(cancellationToken);
@@ -98,7 +100,9 @@ public sealed class SessionService : ISessionService
             .OrderByDescending(s => s.LastActivityAt)
             .ToListAsync(cancellationToken);
 
-        return sessions.Select(s => MapToDto(s, isCurrentSession: false)).ToList();
+        var claimedSession = _currentUser.GetUserClaims()?.FirstOrDefault(c => c.Type == SessionClaimTypes.SessionId)?.Value;
+        var currentSessionId = Guid.TryParse(claimedSession, out var parsedSessionId) ? parsedSessionId : Guid.Empty;
+        return sessions.Select(s => MapToDto(s, isCurrentSession: s.Id == currentSessionId)).ToList();
     }
 
     public async Task<List<UserSessionDto>> GetUserSessionsForAdminAsync(

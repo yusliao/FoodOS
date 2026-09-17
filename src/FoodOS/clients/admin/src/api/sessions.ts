@@ -20,8 +20,8 @@ export type UserSessionDto = {
 
 const ROOT = "/api/v1/identity";
 
-export async function getMySessions(): Promise<UserSessionDto[]> {
-  return apiFetch<UserSessionDto[]>(`${ROOT}/sessions/me`);
+export async function getMySessions(signal?: AbortSignal): Promise<UserSessionDto[]> {
+  return apiFetch<UserSessionDto[]>(`${ROOT}/sessions/me`, { signal });
 }
 
 export async function revokeMySession(sessionId: string): Promise<void> {
@@ -30,10 +30,10 @@ export async function revokeMySession(sessionId: string): Promise<void> {
   });
 }
 
-export async function revokeAllMySessions(): Promise<{ revokedCount: number }> {
+export async function revokeAllMySessions(exceptSessionId: string): Promise<{ revokedCount: number }> {
   return apiFetch<{ revokedCount: number }>(`${ROOT}/sessions/revoke-all`, {
     method: "POST",
-    body: JSON.stringify({}),
+    body: JSON.stringify({ exceptSessionId }),
   });
 }
 

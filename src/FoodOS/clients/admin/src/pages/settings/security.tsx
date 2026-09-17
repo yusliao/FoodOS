@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -44,6 +44,8 @@ import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
 
+const SECURITY_WRITE = ["identity", "security", "write"];
+
 /**
  * SecuritySettings — combines password change + 2FA enrollment/disable
  * into one tab. Profile query fuels both: we read twoFactorEnabled to
@@ -57,13 +59,13 @@ export function SecuritySettings() {
   if (profile.isLoading) return <LoadingRow label={t("settings.loadSecurity")} />;
   if (profile.isError) {
     return (
-      <ErrorBand
+      <div className="space-y-3"><ErrorBand
         message={
           profile.error instanceof ApiRequestError
             ? (profile.error.problem?.detail ?? profile.error.message)
             : t("settings.loadSecurityFailed")
         }
-      />
+      /><Button variant="outline" disabled={profile.isFetching} onClick={() => void profile.refetch()}>{t("workbench.retry")}</Button></div>
     );
   }
 
@@ -132,6 +134,7 @@ RevealInput.displayName = "RevealInput";
 
 function PasswordSection() {
   const t = useT();
+  const busy = useIsMutating({ mutationKey: SECURITY_WRITE }) > 0;
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
@@ -141,11 +144,11 @@ function PasswordSection() {
         icon={KeyRound}
         description={t("settings.passwordDesc")}
       >
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm text-[var(--color-muted-foreground)]">
             {t("settings.passwordHintSessions")}
           </p>
-          <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => { if (!busy) setDialogOpen(true); }}>
             {t("settings.changePassword")}
           </Button>
         </div>
@@ -181,6 +184,7 @@ function ChangePasswordDialog({
   }, [open, reset]);
 
   const mutation = useMutation({
+    mutationKey: SECURITY_WRITE,
     mutationFn: (v: PasswordValues) =>
       changePassword({
         password: v.current,
@@ -192,6 +196,7 @@ function ChangePasswordDialog({
         description: t("settings.passwordChangedBody"),
       });
       onOpenChange(false);
+      reset();
     },
     onError: (err) => {
       const detail =
@@ -202,11 +207,11 @@ function ChangePasswordDialog({
     },
   });
 
-  const onSubmit = handleSubmit((v) => mutation.mutate(v));
+  const onSubmit = handleSubmit((v) => { if (!mutation.isPending) mutation.mutate(v); });
   const submitting = isSubmitting || mutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={next => { if (!submitting) { reset(); onOpenChange(next); } }}>
       <DialogContent>
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -222,6 +227,7 @@ function ChangePasswordDialog({
 
         <form onSubmit={onSubmit} className="contents" noValidate>
           <DialogBody className="space-y-4">
+            <fieldset disabled={submitting} className="min-w-0 space-y-4">
             <Field id="pw-current" label={t("settings.currentPassword")} required error={errors.current?.message}>
               <RevealInput
                 id="pw-current"
@@ -261,6 +267,7 @@ function ChangePasswordDialog({
                 {...register("confirm")}
               />
             </Field>
+            </fieldset>
           </DialogBody>
 
           <DialogFooter>
@@ -292,13 +299,17 @@ function TwoFactorSection({ enabled }: { enabled: boolean }) {
 
 function TwoFactorEnroll() {
   const t = useT();
+  const busy = useIsMutating({ mutationKey: SECURITY_WRITE }) > 0;
   const queryClient = useQueryClient();
   const [enrollment, setEnrollment] = useState<TwoFactorEnrollmentResponse | null>(null);
   const [code, setCode] = useState("");
   const [qrSvg, setQrSvg] = useState<string | null>(null);
+  const [qrFailed, setQrFailed] = useState(false);
+  const [qrAttempt, setQrAttempt] = useState(0);
   const [copiedKey, setCopiedKey] = useState(false);
 
   const beginMutation = useMutation({
+    mutationKey: SECURITY_WRITE,
     mutationFn: enrollTwoFactor,
     onSuccess: (data) => setEnrollment(data),
     onError: (err: unknown) => {
@@ -311,16 +322,17 @@ function TwoFactorEnroll() {
   });
 
   const verifyMutation = useMutation({
+    mutationKey: SECURITY_WRITE,
     mutationFn: (otp: string) => verifyEnrollTwoFactor(otp),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.success) {
         toast.success(t("settings.twoFaEnabledToast"), {
           description: t("settings.twoFaEnabledBody"),
         });
+        await queryClient.invalidateQueries({ queryKey: ["identity", "profile"] });
         setEnrollment(null);
         setCode("");
         setQrSvg(null);
-        void queryClient.invalidateQueries({ queryKey: ["identity", "profile"] });
       } else {
         toast.error(t("settings.verifyFailed"), { description: t("settings.codeMismatch") });
       }
@@ -337,8 +349,9 @@ function TwoFactorEnroll() {
   // Render the QR as inline SVG when the otpauth URI changes — keeps the
   // image source-of-truth in JS without an extra <canvas>.
   useEffect(() => {
+    setQrSvg(null);
+    setQrFailed(false);
     if (!enrollment) {
-      setQrSvg(null);
       return;
     }
     let cancelled = false;
@@ -362,11 +375,11 @@ function TwoFactorEnroll() {
           .replace(/fill="#000"/gi, 'fill="currentColor"');
         setQrSvg(themed);
       })
-      .catch(() => setQrSvg(null));
+      .catch(() => { if (!cancelled) setQrFailed(true); });
     return () => {
       cancelled = true;
     };
-  }, [enrollment]);
+  }, [enrollment, qrAttempt]);
 
   const copyKey = async () => {
     if (!enrollment) return;
@@ -375,7 +388,8 @@ function TwoFactorEnroll() {
       setCopiedKey(true);
       window.setTimeout(() => setCopiedKey(false), 1500);
     } catch {
-      /* clipboard unavailable — silently noop */
+      setCopiedKey(false);
+      toast.error(t("settings.copyKeyFailed"));
     }
   };
 
@@ -395,8 +409,8 @@ function TwoFactorEnroll() {
       {!enrollment ? (
         <div className="flex flex-wrap items-center gap-3">
           <Button
-            onClick={() => beginMutation.mutate()}
-            disabled={beginMutation.isPending}
+            onClick={() => { if (!busy) beginMutation.mutate(); }}
+            disabled={busy}
           >
             <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
             {beginMutation.isPending ? t("settings.generating") : t("settings.enableTwoFa")}
@@ -418,18 +432,25 @@ function TwoFactorEnroll() {
                   // authenticator URI (not server/user HTML) — safe to inline.
                   dangerouslySetInnerHTML={{ __html: qrSvg }}
                 />
+              ) : qrFailed ? (
+                <div className="space-y-3 text-center">
+                  <p role="alert" className="text-xs">{t("settings.qrFailed")}</p>
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => {
+                    if (!busy) { setQrFailed(false); setQrAttempt(attempt => attempt + 1); }
+                  }}>{t("settings.retryQr")}</Button>
+                </div>
               ) : (
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
                   {t("settings.rendering")}
                 </span>
               )}
             </div>
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
                   {t("settings.cantScan")}
                 </div>
-                <div className="mt-1 flex items-center gap-2">
+                <div className="mt-1 flex flex-wrap items-center gap-2">
                   <code className="break-all rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-2 py-1 font-mono text-[11px]">
                     {enrollment.sharedKey}
                   </code>
@@ -455,6 +476,7 @@ function TwoFactorEnroll() {
                 <Label htmlFor="totp-code">{t("settings.totpLabel")}</Label>
                 <Input
                   id="totp-code"
+                  disabled={busy}
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   placeholder="123 456"
@@ -470,8 +492,8 @@ function TwoFactorEnroll() {
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Button
-                  onClick={() => verifyMutation.mutate(code)}
-                  disabled={code.length < 6 || verifyMutation.isPending}
+                  onClick={() => { if (code.length >= 6 && !busy) verifyMutation.mutate(code); }}
+                  disabled={code.length < 6 || busy}
                   variant="signal"
                 >
                   {verifyMutation.isPending ? t("settings.verifying") : t("settings.confirmEnable")}
@@ -482,7 +504,7 @@ function TwoFactorEnroll() {
                     setEnrollment(null);
                     setCode("");
                   }}
-                  disabled={verifyMutation.isPending}
+                  disabled={busy}
                 >
                   {t("chrome.cancel")}
                 </Button>
@@ -497,16 +519,18 @@ function TwoFactorEnroll() {
 
 function TwoFactorDisable() {
   const t = useT();
+  const busy = useIsMutating({ mutationKey: SECURITY_WRITE }) > 0;
   const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
 
   const mutation = useMutation({
+    mutationKey: SECURITY_WRITE,
     mutationFn: (pw: string) => disableTwoFactor(pw),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.success) {
         toast.success(t("settings.twoFaDisabled"));
         setPassword("");
-        void queryClient.invalidateQueries({ queryKey: ["identity", "profile"] });
+        await queryClient.invalidateQueries({ queryKey: ["identity", "profile"] });
       } else {
         toast.error(t("settings.disableFailed"), { description: t("settings.passwordVerifyFailed") });
       }
@@ -537,8 +561,8 @@ function TwoFactorDisable() {
           <Button
             type="button"
             variant="destructive"
-            onClick={() => mutation.mutate(password)}
-            disabled={password.length === 0 || mutation.isPending}
+            onClick={() => { if (password && !busy) mutation.mutate(password); }}
+            disabled={password.length === 0 || busy}
           >
             <ShieldOff className="mr-1 h-3.5 w-3.5" />
             {mutation.isPending ? t("settings.disabling") : t("settings.disableTwoFa")}
@@ -551,6 +575,7 @@ function TwoFactorDisable() {
           <Label htmlFor="disable-pw">{t("settings.currentPassword")}</Label>
           <Input
             id="disable-pw"
+            disabled={busy}
             type="password"
             autoComplete="current-password"
             value={password}
@@ -565,8 +590,8 @@ function TwoFactorDisable() {
           <Button
             type="button"
             variant="destructive"
-            onClick={() => mutation.mutate(password)}
-            disabled={password.length === 0 || mutation.isPending}
+            onClick={() => { if (password && !busy) mutation.mutate(password); }}
+            disabled={password.length === 0 || busy}
           >
             <ShieldOff className="mr-1 h-3.5 w-3.5" />
             {mutation.isPending ? t("settings.disabling") : t("settings.disable")}

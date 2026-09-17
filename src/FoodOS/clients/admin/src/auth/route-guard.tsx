@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useAuth } from "@/auth/use-auth";
 import { ForbiddenView } from "@/components/forbidden-view";
+import { useT } from "@/i18n/locale-provider";
 
 type RouteGuardProps = {
   /**
@@ -24,6 +25,7 @@ type RouteGuardProps = {
  * of 403 to avoid a flash of "access denied" on first paint.
  */
 export function RouteGuard({ perms, children }: RouteGuardProps) {
+  const t = useT();
   const { user, permissionsHydrated } = useAuth();
 
   if (!permissionsHydrated) {
@@ -32,7 +34,7 @@ export function RouteGuard({ perms, children }: RouteGuardProps) {
         className="flex min-h-[60vh] items-center justify-center text-sm font-mono uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]"
         aria-busy
       >
-        Resolving permissions
+        {t("workbench.resolving")}
         <span className="caret text-[var(--color-accent-signal)]" aria-hidden />
       </div>
     );

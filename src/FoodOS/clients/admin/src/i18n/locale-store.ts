@@ -80,6 +80,7 @@ export function subscribeCulture(listener: () => void): () => void {
 }
 
 export function messageKeyForNavItem(to: string): string {
+  if (to === "/tickets/trash") return "tickets.trash";
   if (to === "/") return "nav.items.home";
   return `nav.items.${to.replace(/^\//, "").replaceAll("/", ".")}`;
 }

@@ -19,6 +19,7 @@ import {
   ProcurementPermissions,
   LogisticsPermissions,
   WebhooksPermissions,
+  TicketsPermissions,
 } from "@/lib/permissions";
 
 // Lazy-loaded pages — each `import()` becomes its own bundle chunk so the
@@ -35,6 +36,9 @@ const lazyNamed = <T extends string>(
 
 const TenantsListPage = lazyNamed(() => import("@/pages/tenants/list"), "TenantsListPage");
 const ReportsPage = lazyNamed(() => import("@/pages/reports"), "ReportsPage");
+const TicketsPage = lazyNamed(() => import("@/pages/tickets/page"), "TicketsPage");
+const TicketDetailPage = lazyNamed(() => import("@/pages/tickets/page"), "TicketDetailPage");
+const TicketTrashPage = lazyNamed(() => import("@/pages/tickets/trash"), "TicketTrashPage");
 const CustomersPage = lazyNamed(() => import("@/pages/customers/list"), "CustomersPage");
 const StoresPage = lazyNamed(() => import("@/pages/customers/stores"), "StoresPage");
 const BrandsPage = lazyNamed(() => import("@/pages/catalog/brands"), "BrandsPage");
@@ -98,6 +102,9 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         errorElement: <RouteError />,
         children: [
+          { path: "tickets", element: <RouteGuard perms={[TicketsPermissions.View]}><TicketsPage /></RouteGuard> },
+          { path: "tickets/trash", element: <RouteGuard perms={[TicketsPermissions.Restore]}><TicketTrashPage /></RouteGuard> },
+          { path: "tickets/:ticketId", element: <RouteGuard perms={[TicketsPermissions.View]}><TicketDetailPage /></RouteGuard> },
           { index: true, element: <DashboardPage /> },
           { path: "procurement/purchase-orders", element: <RouteGuard perms={[ProcurementPermissions.Purchase.View]}><PurchaseOrdersPage /></RouteGuard> },
           { path: "procurement/suppliers", element: <RouteGuard perms={[ProcurementPermissions.Suppliers.View]}><SuppliersPage /></RouteGuard> },
@@ -253,7 +260,7 @@ export const router = createBrowserRouter([
           // Public probes remain server-public; their admin UI lives under system administration.
           { path: "health", element: <RouteGuard perms={[MultitenancyPermissions.Tenants.View]}><HealthPage /></RouteGuard> },
 
-          // Settings — account-scoped; any signed-in user can manage their own profile + sessions + 2FA
+          // Account-scoped settings; session management also requires the server's Sessions permissions.
           {
             path: "settings",
             element: <SettingsLayout />,
@@ -261,7 +268,7 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="/settings/profile" replace /> },
               { path: "profile", element: <ProfileSettings /> },
               { path: "security", element: <SecuritySettings /> },
-              { path: "sessions", element: <SessionsSettings /> },
+              { path: "sessions", element: <RouteGuard perms={[IdentityPermissions.Sessions.View]}><SessionsSettings /></RouteGuard> },
               { path: "appearance", element: <AppearanceSettings /> },
             ],
           },

@@ -21,18 +21,26 @@ import { ErrorBand, LoadingRow, SettingsSection } from "@/components/list";
 import { useT } from "@/i18n/locale-provider";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/auth/use-auth";
+import { IdentityPermissions } from "@/lib/permissions";
 
 export function SessionsSettings() {
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(IdentityPermissions.Sessions.View);
+  const canRevoke = !!user?.permissions.includes(IdentityPermissions.Sessions.Revoke);
   const t = useT();
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["identity", "sessions", "me"],
-    queryFn: getMySessions,
+    queryFn: ({ signal }) => getMySessions(signal),
+    enabled: canView,
     staleTime: 15_000,
   });
 
   const sorted = useMemo(() => sortSessions(query.data ?? []), [query.data]);
   const activeOtherCount = sorted.filter((s) => s.isActive && !s.isCurrentSession).length;
+  const currentSessions = sorted.filter(s => s.isActive && s.isCurrentSession);
+  const currentSessionId = currentSessions.length === 1 ? currentSessions[0].id : null;
   // A Set (not a single id) so concurrent revokes track independently and the
   // first to resolve doesn't clear a still-pending row's busy state.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -40,9 +48,9 @@ export function SessionsSettings() {
   const revokeOne = useMutation({
     mutationFn: (sessionId: string) => revokeMySession(sessionId),
     onMutate: (sessionId) => setBusyIds((prev) => new Set(prev).add(sessionId)),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t("settings.sessionRevoked"));
-      void queryClient.invalidateQueries({ queryKey: ["identity", "sessions", "me"] });
+      await queryClient.invalidateQueries({ queryKey: ["identity", "sessions", "me"] });
     },
     onError: (err) => toast.error(t("settings.revokeFailed"), { description: describe(err) }),
     onSettled: (_d, _e, sessionId) =>
@@ -55,14 +63,14 @@ export function SessionsSettings() {
 
   const revokeAll = useMutation({
     mutationFn: revokeAllMySessions,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success(
         t(data.revokedCount === 1 ? "settings.revokedCountOne" : "settings.revokedCountMany").replace(
           "{n}",
           String(data.revokedCount),
         ),
       );
-      void queryClient.invalidateQueries({ queryKey: ["identity", "sessions", "me"] });
+      await queryClient.invalidateQueries({ queryKey: ["identity", "sessions", "me"] });
     },
     onError: (err) => toast.error(t("settings.revokeAllFailed"), { description: describe(err) }),
   });
@@ -70,13 +78,13 @@ export function SessionsSettings() {
   if (query.isLoading) return <LoadingRow label={t("settings.loadSessions")} />;
   if (query.isError) {
     return (
-      <ErrorBand
+      <div className="space-y-3"><ErrorBand
         message={
           query.error instanceof ApiRequestError
             ? (query.error.problem?.detail ?? query.error.message)
             : t("settings.loadSessionsFailed")
         }
-      />
+      /><Button variant="outline" disabled={query.isFetching} onClick={() => { if (canView) void query.refetch(); }}>{t("workbench.retry")}</Button></div>
     );
   }
 
@@ -87,7 +95,7 @@ export function SessionsSettings() {
         icon={MonitorSmartphone}
         description={t("settings.activeSessionsDesc")}
         footer={
-          activeOtherCount > 0 ? (
+          canRevoke && activeOtherCount > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-2 text-xs">
                 <AlertTriangle
@@ -104,12 +112,13 @@ export function SessionsSettings() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => revokeAll.mutate()}
-                disabled={revokeAll.isPending}
+                onClick={() => { if (canRevoke && currentSessionId && !revokeAll.isPending && busyIds.size === 0) revokeAll.mutate(currentSessionId); }}
+                disabled={!currentSessionId || revokeAll.isPending || busyIds.size > 0}
               >
                 <LogOut className="mr-1.5 h-3.5 w-3.5" />
                 {revokeAll.isPending ? t("settings.signingOut") : t("settings.signOutEverywhere")}
               </Button>
+              {!currentSessionId && <p className="w-full text-xs text-[var(--color-muted-foreground)]">{t("settings.currentSessionUnknown")}</p>}
             </div>
           ) : undefined
         }
@@ -124,8 +133,9 @@ export function SessionsSettings() {
               <SessionRow
                 key={s.id}
                 session={s}
-                busy={busyIds.has(s.id)}
-                onRevoke={() => revokeOne.mutate(s.id)}
+                canRevoke={canRevoke}
+                busy={busyIds.has(s.id) || revokeAll.isPending}
+                onRevoke={() => { if (canRevoke && !busyIds.has(s.id) && !revokeAll.isPending && s.isActive && !s.isCurrentSession) revokeOne.mutate(s.id); }}
               />
             ))}
           </ul>
@@ -137,10 +147,12 @@ export function SessionsSettings() {
 
 function SessionRow({
   session,
+  canRevoke,
   busy,
   onRevoke,
 }: {
   session: UserSessionDto;
+  canRevoke: boolean;
   busy: boolean;
   onRevoke: () => void;
 }) {
@@ -189,7 +201,7 @@ function SessionRow({
         <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]/60 flex items-center gap-1">
           <MoreHorizontal className="h-3.5 w-3.5" aria-hidden /> {t("settings.useSignOut")}
         </span>
-      ) : session.isActive ? (
+      ) : session.isActive && canRevoke ? (
         <Button variant="outline" size="sm" onClick={onRevoke} disabled={busy}>
           <LogOut className="mr-1.5 h-3.5 w-3.5" />
           {busy ? t("settings.revoking") : t("settings.revoke")}

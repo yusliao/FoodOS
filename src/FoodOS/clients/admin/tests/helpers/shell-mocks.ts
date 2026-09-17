@@ -79,6 +79,12 @@ export const ADMIN_PROFILE = {
   imageUrl: null,
 } as const;
 
+/** Current authenticated Host contract; this is not a simulated ready WMS. */
+export const WMS_NOT_CONFIGURED = {
+  mode: "externalWms", readiness: "notConfigured", acceptsOrders: false,
+  acceptsOrderChanges: false, localWarehouseExecution: false,
+} as const;
+
 /**
  * Mock every API call the authenticated admin AppShell fires on load so any
  * protected page renders cleanly. CRITICAL: /identity/permissions must echo
@@ -93,12 +99,14 @@ export async function installAdminShellMocks(
 ): Promise<void> {
   await page.route("**/negotiate**", (r: Route) => r.abort());
   await page.route("**/api/v1/realtime/**", (r: Route) => r.abort());
+  await mockJsonResponse(page, "**/api/v1/files/owners/Ticket/**", paged([]));
 
   await mockJsonResponse(page, "**/api/v1/notifications**", []);
   await mockJsonResponse(page, "**/api/v1/notifications/unread-count**", 0);
 
   await mockJsonResponse(page, "**/api/v1/identity/profile", ADMIN_PROFILE);
   await mockJsonResponse(page, "**/api/v1/identity/permissions", [...perms]);
+  await mockJsonResponse(page, "**/api/v1/fulfillment/capabilities", WMS_NOT_CONFIGURED);
 }
 
 /** Build a Playwright-shaped paged response body. */

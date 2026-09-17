@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import {
   finalizeUpload,
+  getFileMetadata,
+  type PresignedUploadResponse,
   requestUploadUrl,
   type FileAssetDto,
   type RequestUploadUrlInput,
@@ -26,6 +28,8 @@ export type UploadOptions = {
   allowedExtensions?: string[];
   /** Optional client-side max bytes for an early reject. Server enforces too. */
   maxBytes?: number;
+  /** Reuse a known pending asset when retrying the same File and owner in this mounted hook. */
+  resumeOnRetry?: boolean;
 };
 
 export type UploadProgress = {
@@ -78,10 +82,12 @@ export function useFileUpload(options: UploadOptions): UseFileUploadResult {
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
   const cancelledRef = useRef(false);
+  const attemptRef = useRef<{ file: File; input: string; presigned: PresignedUploadResponse; uploaded: boolean } | null>(null);
 
   const reset = useCallback(() => {
     cancelledRef.current = false;
     xhrRef.current = null;
+    attemptRef.current = null;
     setProgress(null);
   }, []);
 
@@ -146,9 +152,24 @@ export function useFileUpload(options: UploadOptions): UseFileUploadResult {
         category: resolvedCategory,
       };
 
-      let presigned;
+      const inputKey = JSON.stringify(requestInput);
+      const previous = opts.resumeOnRetry && attemptRef.current?.file === file && attemptRef.current.input === inputKey ? attemptRef.current : null;
+      let presigned: PresignedUploadResponse;
       try {
-        presigned = await requestUploadUrl(requestInput);
+        if (previous) {
+          const current = await getFileMetadata(previous.presigned.fileAssetId);
+          if (cancelledRef.current) throw new Error("Upload cancelled.");
+          if (current.status === "Available") {
+            setProgress({ fileName: file.name, totalBytes: file.size, loaded: file.size, percent: 100, status: "done", fileAssetId: current.id, fileAsset: current });
+            return current;
+          }
+          if (current.status !== "PendingUpload") throw new Error("File is not available for upload recovery.");
+          if (!previous.uploaded && !(Date.parse(previous.presigned.expiresAt) > Date.now())) throw new Error("Upload URL expired. Select the file again to start a new upload.");
+          presigned = previous.presigned;
+        } else {
+          presigned = await requestUploadUrl(requestInput);
+          if (opts.resumeOnRetry) attemptRef.current = { file, input: inputKey, presigned, uploaded: false };
+        }
       } catch (e) {
         const message = describeError(e);
         setProgress((p) =>
@@ -164,7 +185,7 @@ export function useFileUpload(options: UploadOptions): UseFileUploadResult {
 
       // ── Step 2 — PUT bytes via XHR for progress events ──────────
       try {
-        await xhrPut(presigned.uploadUrl, file, presigned.requiredHeaders, (loaded, total) => {
+        if (!previous?.uploaded) await xhrPut(presigned.uploadUrl, file, presigned.requiredHeaders, (loaded, total) => {
           const t = total || file.size;
           setProgress((p) =>
             p
@@ -179,6 +200,7 @@ export function useFileUpload(options: UploadOptions): UseFileUploadResult {
         }, (xhr) => {
           xhrRef.current = xhr;
         });
+        if (opts.resumeOnRetry && attemptRef.current) attemptRef.current.uploaded = true;
       } catch (e) {
         const message = describeError(e);
         setProgress((p) => (p ? { ...p, status: "error", error: message } : null));

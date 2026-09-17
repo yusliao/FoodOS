@@ -1,4 +1,20 @@
 {
+  "impersonationSession": {
+    "bannerLabel": "模拟登录会话",
+    "crossTenant": "跨客户模拟登录",
+    "impersonating": "正在模拟登录",
+    "operator": "操作人员",
+    "unknown": "未知用户",
+    "end": "结束模拟登录",
+    "ending": "正在结束…",
+    "signedOut": "已退出本门户会话",
+    "remoteNotice": "尚未确认远端授权已撤销。必要时请在运营工作台管理授权，否则授权将按原定时间过期。",
+    "returned": "已返回原会话",
+    "endFailed": "无法确认模拟登录已结束",
+    "endFailedBody": "继续操作前请核对当前账号，必要时重新登录。",
+    "endedTitle": "模拟登录已结束",
+    "endedBody": "操作人员对此会话的访问权限已被撤销或已过期。请使用您自己的账号登录后继续。"
+  },
   "wms": {"title":"仓储系统对接","loading":"正在核对 WMS 就绪状态…","failed":"无法确认 WMS 状态，执行操作继续禁用。","unavailable":"WMS 对接尚未就绪，暂不能确认库存及配送承诺。","boundary":"可继续浏览、保存购物车和维护档案。仓内执行由 WMS 负责，禁止本地重复执行。","retry":"重试 WMS 状态"},
   "chrome": {
     "skipToMain": "跳到主要内容",

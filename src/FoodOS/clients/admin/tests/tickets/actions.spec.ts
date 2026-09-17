@@ -1,0 +1,92 @@
+import { expect, test } from "@playwright/test";
+import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
+import { installAdminShellMocks, paged } from "../helpers/shell-mocks";
+import en from "../../src/i18n/locales/en-US.json" with { type: "json" };
+import zh from "../../src/i18n/locales/zh-CN.json" with { type: "json" };
+const id = "33333333-3333-3333-3333-333333333333";
+const ticket = { id, number: "TK-1", title: "Delivery question", status: "Open", priority: "High", customerTenantId: "acme", reporterUserId: "customer-user", assignedToUserId: null, createdAtUtc: "2026-09-17T00:00:00Z", commentCount: 0 };
+const permission = { assign: "Assign", resolve: "Resolve", reopen: "Reopen", close: "Close" };
+for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) {
+  for (const action of ["assign", "resolve", "reopen", "close"] as const) test(`${culture} ${action} has independent permission, root payload and failure retry`, async ({ page }) => {
+    const permissions = ["Permissions.Tickets.View", "Permissions.Tickets.Comment", `Permissions.Tickets.${permission[action]}`, ...(action === "assign" ? ["Permissions.Users.View"] : [])];
+    await seedAuthedSession(page, { ...TEST_USER, permissions });
+    await installAdminShellMocks(page, permissions);
+    await page.addInitScript(value => localStorage.setItem("foodos.culture", value), culture);
+    await page.setViewportSize({ width: 390, height: 844 });
+    let state = action === "close" ? "Resolved" : action === "reopen" ? "Closed" : "Open";
+    let assignee: string | null = null;
+    await page.route(`**/api/v1/tickets/${id}`, route => route.fulfill({ json: { ...ticket, status: state, assignedToUserId: assignee } }));
+    await page.route(`**/api/v1/tickets/${id}/comments`, route => route.fulfill({ json: [] }));
+    let userReads = 0;
+    await page.route("**/api/v1/identity/users/search?**", route => {
+      userReads++;
+      const url = new URL(route.request().url());
+      expect(route.request().headers().tenant).toBe("root");
+      expect(url.searchParams.get("IsActive")).toBe("true");
+      const pageNumber = Number(url.searchParams.get("PageNumber"));
+      return route.fulfill({ json: paged([{ id: `user-${pageNumber}`, userName: `Employee ${pageNumber}`, isActive: true }, { id: "disabled-user", userName: "Disabled", isActive: false }], { pageNumber, totalPages: 2, totalCount: 21 }) });
+    });
+    const writes: { body: Record<string, unknown>; key: string }[] = [];
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route(`**/api/v1/tickets/${id}/${action}`, async route => {
+      expect(route.request().headers().tenant).toBe("root");
+      expect(route.request().method()).toBe("POST");
+      writes.push({ body: route.request().postDataJSON(), key: route.request().headers()["idempotency-key"] });
+      if (writes.length === 1) return route.fulfill({ status: 409, json: { detail: "Ticket changed" } });
+      await held;
+      if (action === "assign") assignee = "user-2";
+      state = action === "resolve" ? "Resolved" : action === "close" ? "Closed" : action === "assign" ? "InProgress" : "Open";
+      return route.fulfill({ json: id });
+    });
+    await page.goto(`/tickets/${id}`);
+    await expect(page.getByRole("heading", { name: ticket.title })).toBeVisible();
+    expect(userReads).toBe(0);
+    for (const other of ["assign", "resolve", "reopen", "close"] as const) if (other !== action) await expect(page.getByRole("button", { name: m.tickets.actions[other], exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: m.tickets.actions[action], exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    if (action === "assign") {
+      await dialog.getByRole("button", { name: m.common.next, exact: true }).click();
+      await dialog.getByRole("combobox").selectOption("user-2");
+      await expect(dialog.getByRole("option", { name: "Disabled", exact: true })).toHaveCount(0);
+    }
+    if (action === "resolve") await dialog.getByRole("textbox", { name: m.tickets.resolution, exact: true }).fill(" Checked ");
+    await dialog.getByRole("button", { name: m.common.confirm, exact: true }).click();
+    await expect(dialog.getByRole("alert")).toHaveText("Ticket changed");
+    await dialog.getByRole("button", { name: m.common.confirm, exact: true }).click();
+    await expect(dialog.getByRole("button", { name: m.common.working, exact: true })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: m.chrome.cancel, exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    release();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("definition").filter({ hasText: new RegExp(`^${m.tickets.status[state as keyof typeof m.tickets.status]}$`) })).toBeVisible();
+    expect(writes).toHaveLength(2);
+    expect(writes[0].key).toBeTruthy();
+    expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0].body).toEqual(action === "assign" ? { assigneeUserId: "user-2" } : action === "resolve" ? { resolutionNote: "Checked" } : {});
+    if (action !== "assign") expect(userReads).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+test("Assign without employee view only clears an existing assignment without lookup", async ({ page }) => {
+  const permissions = ["Permissions.Tickets.View", "Permissions.Tickets.Assign"];
+  await seedAuthedSession(page, { ...TEST_USER, permissions });
+  await installAdminShellMocks(page, permissions);
+  await page.route(`**/api/v1/tickets/${id}`, route => route.fulfill({ json: { ...ticket, status: "InProgress", assignedToUserId: "old-user" } }));
+  await page.route(`**/api/v1/tickets/${id}/comments`, route => route.fulfill({ json: [] }));
+  const reads: string[] = [];
+  await page.route("**/api/v1/identity/users/search?**", route => { reads.push(route.request().url()); return route.abort(); });
+  let body: unknown;
+  await page.route(`**/api/v1/tickets/${id}/assign`, route => { body = route.request().postDataJSON(); return route.fulfill({ json: id }); });
+  await page.goto(`/tickets/${id}`);
+  await page.getByRole("button", { name: "Assign ticket" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("combobox")).toHaveValue("old-user");
+  await expect(dialog.getByText(en.tickets.assigneePermission)).toBeVisible();
+  await dialog.getByRole("combobox").selectOption("");
+  await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(body).toEqual({ assigneeUserId: null });
+  expect(reads).toEqual([]);
+});

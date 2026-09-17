@@ -14,17 +14,17 @@ export type NotificationDto = {
 
 const ROOT = "/api/v1/notifications";
 
-export function listNotifications(params: { unreadOnly?: boolean; page?: number; pageSize?: number } = {}): Promise<NotificationDto[]> {
+export function listNotifications(params: { unreadOnly?: boolean; page?: number; pageSize?: number } = {}, signal?: AbortSignal): Promise<NotificationDto[]> {
   const qs = new URLSearchParams();
   if (params.unreadOnly) qs.set("unreadOnly", "true");
   if (params.page) qs.set("page", String(params.page));
   if (params.pageSize) qs.set("pageSize", String(params.pageSize));
   const q = qs.toString();
-  return apiFetch<NotificationDto[]>(`${ROOT}/${q ? `?${q}` : ""}`);
+  return apiFetch<NotificationDto[]>(`${ROOT}/${q ? `?${q}` : ""}`, { signal });
 }
 
-export function getUnreadCount(): Promise<number> {
-  return apiFetch<number>(`${ROOT}/unread-count`);
+export function getUnreadCount(signal?: AbortSignal): Promise<number> {
+  return apiFetch<number>(`${ROOT}/unread-count`, { signal });
 }
 
 export function markNotificationRead(notificationId: string): Promise<void> {

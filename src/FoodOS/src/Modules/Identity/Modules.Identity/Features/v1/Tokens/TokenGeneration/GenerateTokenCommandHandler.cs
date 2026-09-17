@@ -10,6 +10,7 @@ using FSH.Modules.Identity.Contracts.v1.Tokens.TokenGeneration;
 using Mediator;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
+using FSH.Modules.Identity.Services;
 
 namespace FSH.Modules.Identity.Features.v1.Tokens.TokenGeneration;
 
@@ -85,6 +86,10 @@ public sealed class GenerateTokenCommandHandler
             userAgent: ua,
             ct: cancellationToken);
 
+        // Bind the signed access token to the session row created below.
+        var sessionId = Guid.NewGuid();
+        claims = claims.Where(c => c.Type != SessionClaimTypes.SessionId)
+            .Append(new Claim(SessionClaimTypes.SessionId, sessionId.ToString())).ToList();
         // Issue token
         var token = await _tokenService.IssueAsync(subject, claims, /*extra*/ null, cancellationToken);
 
@@ -101,6 +106,7 @@ public sealed class GenerateTokenCommandHandler
                 ip,
                 ua,
                 token.RefreshTokenExpiresAt,
+                sessionId,
                 cancellationToken);
         }
         catch (Exception ex)

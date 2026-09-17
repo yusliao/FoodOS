@@ -46,14 +46,6 @@ const READY_UNHEALTHY = {
 test.beforeEach(async ({ page }) => {
   await seedAuthedSession(page, { ...TEST_USER, permissions: [...ADMIN_PERMS] });
   await installAdminShellMocks(page);
-  // The Vite dev server proxies /health -> API (so probes reach the backend in
-  // real dev), which shadows the SPA's /health route on a hard navigation.
-  // Serve the SPA shell for the document request so client-side routing renders
-  // the page; the probe fetches below are still intercepted by their own mocks.
-  await page.route("http://localhost:5173/health", async (route) => {
-    const res = await page.request.get("http://localhost:5173/");
-    await route.fulfill({ status: 200, contentType: "text/html", body: await res.text() });
-  });
 });
 
 test.describe("health probes", () => {

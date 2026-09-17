@@ -76,12 +76,26 @@ export async function setProfileImage(imageUrl: string | null): Promise<void> {
   });
 }
 
+/** Text fields actually persisted by the self-profile endpoint. */
+export type UpdateMyProfileInput = {
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+};
+
+export async function updateMyProfile(input: UpdateMyProfileInput): Promise<void> {
+  await apiFetch<void>(`${IDENTITY}/profile`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function changePassword(input: {
   password: string;
   newPassword: string;
   confirmNewPassword: string;
 }): Promise<string> {
-  return apiFetch<string>(`${BASE}/change-password`, {
+  return apiFetch<string>(`${IDENTITY}/change-password`, {
     method: "POST",
     body: JSON.stringify(input),
   });

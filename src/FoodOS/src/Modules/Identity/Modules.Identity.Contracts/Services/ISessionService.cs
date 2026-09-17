@@ -10,6 +10,7 @@ public interface ISessionService
         string ipAddress,
         string userAgent,
         DateTime expiresAt,
+        Guid? sessionId = null,
         CancellationToken cancellationToken = default);
 
     Task<List<UserSessionDto>> GetUserSessionsAsync(

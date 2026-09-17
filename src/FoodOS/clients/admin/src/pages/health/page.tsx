@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { EntityPageHeader, ErrorBand, SettingsSection, StatStrip, Stat } from "@/components/list";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
+import { MultitenancyPermissions } from "@/lib/permissions";
 
 const REFRESH_INTERVAL_MS = 10_000;
 
@@ -14,34 +16,39 @@ type Translate = (key: string, fallback?: string) => string;
 
 export function HealthPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canView = !!user?.permissions.includes(MultitenancyPermissions.Tenants.View);
   const live = useQuery({
     queryKey: ["health", "live"],
-    queryFn: getLiveness,
+    queryFn: ({ signal }) => getLiveness(signal),
+    enabled: canView,
     refetchInterval: REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
-    retry: 1,
   });
 
   const ready = useQuery({
     queryKey: ["health", "ready"],
-    queryFn: getReadiness,
+    queryFn: ({ signal }) => getReadiness(signal),
+    enabled: canView,
     refetchInterval: REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: false,
-    retry: 1,
   });
 
   const isLoading = live.isLoading || ready.isLoading;
   const isFetching = live.isFetching || ready.isFetching;
 
-  const liveStatus = (live.data?.status as HealthStatus | undefined) ?? "Unknown";
-  const readyStatus = (ready.data?.status as HealthStatus | undefined) ?? "Unknown";
+  const liveResult = live.isError ? undefined : live.data;
+  const readyResult = ready.isError ? undefined : ready.data;
+  const liveStatus = liveResult?.status ?? "Unknown";
+  const readyStatus = readyResult?.status ?? "Unknown";
 
-  const readyEntries = ready.data?.results ?? [];
+  const readyEntries = readyResult?.results ?? [];
   const checksHealthy = readyEntries.filter((e) => e.status === "Healthy").length;
   const checksDegraded = readyEntries.filter((e) => e.status === "Degraded").length;
   const checksFailing = readyEntries.filter((e) => e.status !== "Healthy" && e.status !== "Degraded").length;
 
   const refetchAll = () => {
+    if (!canView || isFetching) return;
     void live.refetch();
     void ready.refetch();
   };
@@ -83,15 +90,15 @@ export function HealthPage() {
         />
         <Stat
           label={t("health.checksHealthy")}
-          value={isLoading ? "—" : checksHealthy.toString()}
-          hint={t("health.ofRegistered").replace("{n}", String(readyEntries.length || "—"))}
+          value={isLoading || !readyResult ? "—" : checksHealthy.toString()}
+          hint={t("health.ofRegistered").replace("{n}", String(readyResult ? readyEntries.length : "—"))}
           tone={checksHealthy > 0 ? "success" : "default"}
         />
         <Stat
           label={t("health.checksFailing")}
-          value={isLoading ? "—" : (checksFailing + checksDegraded).toString()}
+          value={isLoading || !readyResult ? "—" : (checksFailing + checksDegraded).toString()}
           hint={
-            checksDegraded > 0
+            !readyResult ? t("health.unavailable") : checksDegraded > 0
               ? t("health.failingHintDegraded")
                   .replace("{d}", String(checksDegraded))
                   .replace("{f}", String(checksFailing))
@@ -104,20 +111,20 @@ export function HealthPage() {
       {live.isError && (
         <ErrorBand
           kind={t("health.kindLiveness")}
-          message={live.error instanceof Error ? live.error.message : t("health.livenessFailed")}
+          message={t("health.livenessFailed")}
         />
       )}
       {ready.isError && (
         <ErrorBand
           kind={t("health.kindReadiness")}
-          message={ready.error instanceof Error ? ready.error.message : t("health.readinessFailed")}
+          message={t("health.readinessFailed")}
         />
       )}
 
       <ProbeSection
         title={t("health.liveness")}
         path="/health/live"
-        result={live.data}
+        result={liveResult}
         loading={live.isLoading}
         description={t("health.livenessDesc")}
         t={t}
@@ -126,7 +133,7 @@ export function HealthPage() {
       <ProbeSection
         title={t("health.readiness")}
         path="/health/ready"
-        result={ready.data}
+        result={readyResult}
         loading={ready.isLoading}
         description={t("health.readinessDesc")}
         t={t}
@@ -165,13 +172,13 @@ function ProbeSection({
     >
       {loading ? (
         <div className="py-6 text-sm text-[var(--color-muted-foreground)]">{t("health.probing")}</div>
-      ) : !result || result.results.length === 0 ? (
+      ) : !result ? <p className="py-5 text-sm">{t("health.unavailable")}</p> : result.results.length === 0 ? (
         <div className="flex items-center gap-3 py-5">
           <Activity className="h-4 w-4 text-[var(--color-muted-foreground)]" />
           <div>
             <div className="text-sm font-medium">{t("health.noChecks")}</div>
             <div className="text-xs text-[var(--color-muted-foreground)]">
-              {t("health.probeStatus")} <code className="code-chip">{result?.status ?? "—"}</code>.
+              {t("health.probeStatus")} <code className="code-chip">{healthStatusLabel(result.status, t)}</code>.
             </div>
           </div>
         </div>

@@ -26,6 +26,8 @@ type Props = {
   /** Visual treatment for the preview tile — "square" for general images, "circle" for avatars. */
   shape?: "square" | "circle";
   className?: string;
+  canUpload?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
@@ -45,6 +47,8 @@ export function ImageInput({
   maxBytes = 10 * 1024 * 1024,
   shape = "square",
   className,
+  canUpload = true,
+  onBusyChange,
 }: Props) {
   const t = useT();
   const [mode, setMode] = useState<"upload" | "url">("upload");
@@ -69,12 +73,14 @@ export function ImageInput({
   });
 
   const handlePick = () => {
+    if (!canUpload || isWorking) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
     input.onchange = async () => {
       const file = input.files?.[0];
-      if (!file) return;
+      if (!file || !canUpload) return;
+      onBusyChange?.(true);
       try {
         const asset = await upload(file);
         const url = await resolveUrl.mutateAsync(asset.id);
@@ -90,6 +96,8 @@ export function ImageInput({
               ? e.message
               : t("settings.uploadFailed");
         toast.error(message);
+      } finally {
+        onBusyChange?.(false);
       }
     };
     input.click();
@@ -97,16 +105,17 @@ export function ImageInput({
 
   const hasImage = value.length > 0;
   const isWorking = isUploading || resolveUrl.isPending;
+  const activeMode = canUpload ? mode : "url";
   const tileClass = shape === "circle" ? "rounded-full" : "rounded-xl";
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <fieldset disabled={isWorking} className={cn("min-w-0 space-y-3", className)}>
       {/* Mode toggle */}
       <div className="flex gap-1">
-        <ModeChip active={mode === "upload"} onClick={() => setMode("upload")} icon={<Upload className="h-3.5 w-3.5" />}>
+        {canUpload && <ModeChip active={activeMode === "upload"} onClick={() => setMode("upload")} icon={<Upload className="h-3.5 w-3.5" />}>
           {t("settings.uploadMode")}
-        </ModeChip>
-        <ModeChip active={mode === "url"} onClick={() => setMode("url")} icon={<LinkIcon className="h-3.5 w-3.5" />}>
+        </ModeChip>}
+        <ModeChip active={activeMode === "url"} onClick={() => setMode("url")} icon={<LinkIcon className="h-3.5 w-3.5" />}>
           {t("settings.pasteUrl")}
         </ModeChip>
       </div>
@@ -115,7 +124,7 @@ export function ImageInput({
       <div className="flex items-start gap-4">
         <div
           className={cn(
-            "relative grid place-items-center overflow-hidden bg-[var(--color-muted)] ring-1 ring-inset ring-border",
+            "relative grid shrink-0 place-items-center overflow-hidden bg-[var(--color-muted)] ring-1 ring-inset ring-border",
             shape === "circle" ? "h-20 w-20 rounded-full" : "h-24 w-24 rounded-xl",
           )}
         >
@@ -128,8 +137,8 @@ export function ImageInput({
           )}
         </div>
 
-        <div className="flex-1 space-y-2">
-          {mode === "upload" ? (
+        <div className="min-w-0 flex-1 space-y-2">
+          {activeMode === "upload" ? (
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" onClick={handlePick} disabled={isWorking}>
                 {isWorking
@@ -152,21 +161,22 @@ export function ImageInput({
           ) : (
             <Input
               type="url"
+              aria-label={t("settings.imageUrl")}
               value={value}
               onChange={(e) => onChange(e.target.value)}
               placeholder="https://…"
-              maxLength={512}
+              maxLength={2048}
             />
           )}
 
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            {mode === "upload"
+            {activeMode === "upload"
               ? t("settings.uploadHint").replace("{size}", formatBytes(maxBytes))
               : t("settings.pasteHint")}
           </p>
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }
 

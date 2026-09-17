@@ -87,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   });
   const lastHydratedSubject = useRef<string | null>(null);
+  const sessionGeneration = useRef(0);
   const [permissionsError, setPermissionsError] = useState(false);
 
   useEffect(() => {
@@ -170,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       queryClient.clear();
+      sessionGeneration.current += 1;
       lastHydratedSubject.current = null;
       setPermissionsHydrated(false);
       setPermissionsError(false);
@@ -182,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (input: { email: string; password: string; tenant: string }) => {
       if (input.tenant !== "root") throw new Error(t("workbench.operatorOnly"));
+      sessionGeneration.current += 1;
       queryClient.clear();
       tokenStore.setTenant(input.tenant);
       // Stale permissions from a previous user must not leak into the new
@@ -202,16 +205,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    sessionGeneration.current += 1;
     tokenStore.clear();
     queryClient.clear();
   }, [queryClient]);
 
   const refreshPermissions = useCallback(async () => {
+    const generation = sessionGeneration.current;
+    const subject = decodeJwt(tokenStore.getAccessToken())?.sub;
+    if (!subject) return;
+    const isCurrent = () => generation === sessionGeneration.current && decodeJwt(tokenStore.getAccessToken())?.sub === subject;
     try {
       const perms = await getMyPermissions();
+      if (!isCurrent()) return;
       setPermissionsError(false);
       tokenStore.setPermissions(perms);
     } catch {
+      if (!isCurrent()) return;
       setPermissionsError(true);
       tokenStore.setPermissions([]);
     }

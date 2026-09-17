@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, Search, ShieldAlert, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import type { UserDto } from "@/api/users";
-import { searchImpersonationUsers, startImpersonation, type ImpersonationResponse } from "@/api/impersonation";
+import { searchImpersonationUsers, startImpersonation, type ImpersonationResponse, type StartImpersonationInput } from "@/api/impersonation";
 import { useAuth } from "@/auth/use-auth";
 import { IdentityPermissions } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ const DURATION_MINUTES = [10, 15, 30] as const;
  *   1. Pick a user inside the target tenant (skipped if `prefillUser` is set)
  *   2. Enter reason + pick session duration → start
  *
- * On success, opens the dashboard origin in a NEW TAB with the impersonation
+ * On success, offers an explicit dashboard link in a NEW TAB with the impersonation
  * token in the URL hash. The dashboard's bootstrap reads the hash, installs
  * the token, and strips it from the URL before any render. Hash params are
  * never sent to the server and don't leak via referrer/HTTP logs.
@@ -55,6 +55,7 @@ export function ImpersonateDialog({
   const t = useT();
   const { user } = useAuth();
   const canImpersonate = !!user?.permissions.includes(IdentityPermissions.Users.Impersonate);
+  const [issuing, setIssuing] = useState(false);
   const [step, setStep] = useState<"pick" | "configure">(prefillUser ? "configure" : "pick");
   const [selected, setSelected] = useState<UserDto | null>(prefillUser ?? null);
 
@@ -67,7 +68,7 @@ export function ImpersonateDialog({
   }, [open, prefillUser]);
 
   return (
-    <Dialog open={open && canImpersonate} onOpenChange={onOpenChange}>
+    <Dialog open={open && canImpersonate} onOpenChange={(next) => { if (!issuing) onOpenChange(next); }}>
       <DialogContent size="lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -99,6 +100,7 @@ export function ImpersonateDialog({
         ) : (
           selected && (
             <ConfigureStep
+              onIssuingChange={setIssuing}
               tenantId={tenantId}
               tenantName={tenantName}
               user={selected}
@@ -246,34 +248,32 @@ function ConfigureStep({
   user,
   onBack,
   onDone,
+  onIssuingChange,
 }: {
   tenantId: string;
   tenantName?: string;
   user: UserDto;
   onBack?: () => void;
   onDone: () => void;
+  onIssuingChange: (pending: boolean) => void;
 }) {
   const t = useT();
+  const { user: actor } = useAuth();
+  const canImpersonate = !!actor?.permissions.includes(IdentityPermissions.Users.Impersonate);
+  const [issued, setIssued] = useState<ImpersonationResponse | null>(null);
   const [reason, setReason] = useState("");
   const [minutes, setMinutes] = useState<number>(15);
 
   const trimmedReason = reason.trim();
-  const reasonValid = trimmedReason.length >= 4;
+  const reasonValid = trimmedReason.length >= 4 && trimmedReason.length <= 500;
 
-  const mutation = useMutation<ImpersonationResponse, Error, void>({
-    mutationFn: () =>
-      startImpersonation({
-        targetUserId: user.id,
-        targetTenantId: tenantId,
-        reason: trimmedReason,
-        durationMinutes: minutes,
-      }),
-    onSuccess: (response) => {
-      handoffToDashboard(response, tenantId);
-      toast.success(t("impersonation.started").replace("{n}", String(minutes)), {
+  const mutation = useMutation<ImpersonationResponse, Error, StartImpersonationInput>({
+    mutationFn: startImpersonation,
+    onSuccess: (response, input) => {
+      setIssued(response);
+      toast.success(t("impersonation.started").replace("{n}", String(input.durationMinutes)), {
         description: t("impersonation.startedBody").replace("{name}", labelFor(user, t)),
       });
-      onDone();
     },
     onError: (err) => {
       const detail =
@@ -283,13 +283,25 @@ function ConfigureStep({
       toast.error(t("impersonation.failed"), { description: detail });
     },
   });
+  useEffect(() => {
+    onIssuingChange(mutation.isPending);
+    return () => onIssuingChange(false);
+  }, [mutation.isPending, onIssuingChange]);
+
+  if (issued) return <>
+    <DialogBody><p>{t("impersonation.handoffReady")}</p></DialogBody>
+    <DialogFooter>
+      <Button variant="outline" onClick={onDone}>{t("common.close")}</Button>
+      <Button asChild><a href={dashboardHandoffUrl(issued, tenantId)} target="_blank" rel="noopener noreferrer">{t("impersonation.openPortal")}</a></Button>
+    </DialogFooter>
+  </>;
 
   return (
     <>
       <DialogBody className="space-y-5">
         <SelectedUserCard user={user} tenantId={tenantId} tenantName={tenantName} />
 
-        <fieldset className="space-y-2">
+        <fieldset className="space-y-2" disabled={mutation.isPending}>
           <legend className="meta text-[var(--color-muted-foreground)]">{t("impersonation.duration")}</legend>
           <div className="grid grid-cols-3 gap-2">
             {DURATION_MINUTES.map((opt) => {
@@ -330,6 +342,7 @@ function ConfigureStep({
           <textarea
             id="impersonation-reason"
             value={reason}
+            disabled={mutation.isPending}
             onChange={(e) => setReason(e.target.value)}
             placeholder={t("impersonation.reasonPlaceholder")}
             rows={3}
@@ -372,8 +385,11 @@ function ConfigureStep({
         )}
         <Button
           variant="signal"
-          disabled={!reasonValid || mutation.isPending}
-          onClick={() => mutation.mutate()}
+          disabled={!canImpersonate || !reasonValid || mutation.isPending}
+          onClick={() => {
+            if (canImpersonate && reasonValid && !mutation.isPending)
+              mutation.mutate({ targetUserId: user.id, targetTenantId: tenantId, reason: trimmedReason, durationMinutes: minutes });
+          }}
         >
           {mutation.isPending ? (
             t("impersonation.issuing")
@@ -431,7 +447,7 @@ function SelectedUserCard({
 // ─── Handoff helper ─────────────────────────────────────────────────────
 
 /**
- * Open the dashboard in a new tab with the impersonation token in the URL
+ * Build a dashboard link for a user-initiated tab with the impersonation token in the URL
  * hash. Hash params don't get sent to servers and aren't logged in HTTP
  * referrers, so this is safer than a query-string handoff. The dashboard's
  * bootstrap reads the hash, calls tokenStore.beginImpersonation, then
@@ -439,7 +455,7 @@ function SelectedUserCard({
  *
  * `expiresAt` is included so the dashboard can show a countdown.
  */
-function handoffToDashboard(response: ImpersonationResponse, tenantId: string) {
+function dashboardHandoffUrl(response: ImpersonationResponse, tenantId: string) {
   const params = new URLSearchParams();
   params.set("token", response.accessToken);
   params.set("tenant", tenantId);
@@ -448,7 +464,7 @@ function handoffToDashboard(response: ImpersonationResponse, tenantId: string) {
   // noopener+noreferrer so the opened tab can't navigate this one and the
   // referrer header is suppressed entirely (defense in depth — the hash
   // wouldn't be in the referrer anyway, but the rest of this URL would be).
-  window.open(url, "_blank", "noopener,noreferrer");
+  return url;
 }
 
 function labelFor(user: UserDto, t: (key: string, fallback?: string) => string): string {

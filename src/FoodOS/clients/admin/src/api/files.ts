@@ -95,6 +95,10 @@ export function listMyFiles(page = 1, pageSize = 20): Promise<FileAssetDto[]> {
   );
 }
 
+export function listOwnerFiles(ownerType: string, ownerId: string, page: number, signal?: AbortSignal): Promise<PagedResponse<FileAssetDto>> {
+  return apiFetch(`/api/v1/files/owners/${encodeURIComponent(ownerType)}/${encodeURIComponent(ownerId)}?pageNumber=${page}&pageSize=20`, { signal });
+}
+
 export function listSharedFiles(page = 1, pageSize = 20): Promise<FileAssetDto[]> {
   return apiFetch<FileAssetDto[]>(
     `/api/v1/files/shared?page=${page}&pageSize=${pageSize}`,

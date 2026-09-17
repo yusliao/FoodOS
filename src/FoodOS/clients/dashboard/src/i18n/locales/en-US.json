@@ -1,4 +1,20 @@
 {
+  "impersonationSession": {
+    "bannerLabel": "Impersonation session",
+    "crossTenant": "Cross-tenant impersonation",
+    "impersonating": "Impersonating",
+    "operator": "operator",
+    "unknown": "Unknown",
+    "end": "End impersonation",
+    "ending": "Ending…",
+    "signedOut": "Signed out of this portal session",
+    "remoteNotice": "Remote revocation is not confirmed. Manage the grant in admin if needed; otherwise it expires at its scheduled time.",
+    "returned": "Returned to your session",
+    "endFailed": "Could not confirm the end of impersonation",
+    "endFailedBody": "Check your current account before continuing. You may need to sign in again.",
+    "endedTitle": "Impersonation ended",
+    "endedBody": "The operator's access to this session was revoked or has expired. Sign in with your own account to continue."
+  },
   "wms": {"title":"Warehouse integration","loading":"Checking WMS readiness…","failed":"WMS status could not be verified. Execution remains disabled.","unavailable":"WMS integration is not ready. Stock and delivery cannot be confirmed.","boundary":"Browsing, carts and records remain available. Warehouse execution belongs to WMS; local execution is disabled.","retry":"Retry WMS status"},
   "chrome": {
     "skipToMain": "Skip to main content",

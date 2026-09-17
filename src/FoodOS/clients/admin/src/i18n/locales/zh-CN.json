@@ -1,4 +1,70 @@
 {
+  "tickets": {
+    "uploadAttachment": "上传私有附件",
+    "retryUpload": "检查并重试上传",
+    "uploadDone": "附件上传成功。",
+    "uploadHint": "图片、文档和 ZIP 文件由服务端校验。上传时请保持页面打开。本页重试复用已知文件 ID，刷新页面会丢失恢复状态。",
+    "uploadFailed": "上传未完成。重试会先检查已知文件状态再继续。若链接过期或文件被隔离，请勿反复重试；核对附件列表，必要时重新选择文件。若未收到文件 ID，重试可能留下待服务端清理的未完成上传。",
+    "attachments": "私有附件",
+    "attachmentsHint": "附件仅供有权访问工单的参与者读取。下载链接会过期，需要时请重新获取。",
+    "noAttachments": "暂无可用附件。",
+    "deleteAttachment": "删除附件",
+    "prepareDownload": "获取下载链接",
+    "downloadAttachment": "下载附件",
+    "downloadInvalid": "下载链接无效或已过期，请重新获取。",
+    "delete": "删除工单",
+    "deleteHint": "将工单移入回收站，保留评论。恢复需要独立权限。",
+    "trash": "工单回收站",
+    "trashHint": "恢复已软删除的工单，不提供永久删除。",
+    "trashEmpty": "本页没有已删除工单。",
+    "restore": "恢复工单",
+    "new": "新建工单",
+    "edit": "编辑工单",
+    "save": "保存工单",
+    "subject": "标题",
+    "details": "描述",
+    "rootCreation": "此工单归属 root，不代表客户创建。需要时可在保存后指派员工。",
+    "actions": {
+      "assign": "指派工单",
+      "resolve": "解决工单",
+      "reopen": "重开工单",
+      "close": "关闭工单"
+    },
+    "unassigned": "未指派",
+    "searchAssignees": "搜索活跃员工",
+    "assigneePermission": "选择其他受派人需要员工查看权限；仍可清除现有指派。",
+    "confirmState": "确认更改此工单状态。",
+    "title": "工单",
+    "description": "运营工单协作。客户归属以服务端返回为准。",
+    "search": "搜索工单",
+    "empty": "没有匹配的工单。",
+    "customer": "客户身份域",
+    "back": "返回工单列表",
+    "invalidId": "工单标识无效。",
+    "state": "状态",
+    "priorityLabel": "优先级",
+    "reporter": "报告人标识",
+    "assignee": "受派人标识",
+    "noDescription": "暂无描述。",
+    "resolution": "解决说明",
+    "comments": "回复记录",
+    "noComments": "暂无回复。",
+    "reply": "回复内容",
+    "send": "发送回复",
+    "failed": "工单请求失败。",
+    "status": {
+      "Open": "待处理",
+      "InProgress": "处理中",
+      "Resolved": "已解决",
+      "Closed": "已关闭"
+    },
+    "priority": {
+      "Low": "低",
+      "Medium": "中",
+      "High": "高",
+      "Critical": "紧急"
+    }
+  },
   "reports": {"title":"经营报表","description":"基于 FoodOS 已有记录的每日经营指标。","boundary":"本页是 FoodOS 业务记录，不是 WMS 实时库存，也不证明仓内作业已执行。WMS 对接与对账仍待完成。","date":"报表日期","invalidDate":"请选择 2000-01-01 至 2100-12-31 之间的有效日期。","loading":"正在加载报表…","failed":"无法加载报表。","resultDate":"返回报表日期","empty":"该日期没有记录订单或库存活动；温控数据尚不可用。","unavailable":"暂无数据","fulfillmentRate":"履约率","stockoutRate":"缺货率","shrinkageRate":"损耗率","temperatureComplianceRate":"温控合规率","committedOrderCount":"已提交订单数","fulfilledOrderCount":"已履约订单数","orderedQty":"订购数量","inboundQty":"入库数量","lossQty":"损耗数量","definitions":"指标口径","orderBasis":"订单按业务日期统计，排除草稿与已取消订单；已签收或已对账计为履约。履约率＝履约订单数／提交订单数，分母为零时返回 0%。","stockoutBasis":"缺货率＝max（订购数量－预占数量，0）／订购数量；分母为零时返回 0%。这不是 WMS 实时可售库存指标。","inventoryBasis":"库存按 UTC 日流水统计：Receive 为入库，Isolate＋AdjustShrink 为损耗。损耗率最高 100%；有损耗无入库为 100%，两者均无为 0%。数量为原始汇总，未做单位换算。","temperatureBasis":"温控合规率当前没有数据源，显示暂无数据而非零。初始日期采用 UTC 当天。"},
   "deliveryRoutes": {"title":"配送路线","description":"仅维护固定路线档案。显示门店和车辆标识，不额外查询详情。当前不支持编辑或删除。","create":"新增路线","warehouse":"搜索仓库","selected":"已选仓库","selectWarehouse":"请选择仓库以查询路线。","warehousePermission":"需要仓库查看权限才能选择仓库。","storePermission":"需要门店查看权限才能新建路线。","vehiclePermission":"没有车辆查看权限：路线将不设置默认车辆。","loading":"正在加载路线档案…","failed":"无法加载或保存路线档案。","empty":"该仓库暂无路线。","noChoices":"没有匹配的档案。","vehicle":"默认车辆","none":"不设置默认车辆","stops":"门店访问顺序","code":"路线编码","searchStores":"搜索门店","up":"上移","down":"下移","remove":"移除站点","save":"登记路线","createHint":"每个门店仅添加一次并排列访问顺序。同仓库重复编码返回原路线，不修改原档案。登记不会创建发运单。"},
   "drivers": {"title":"司机档案","description":"司机身份档案。直接显示用户标识，不额外查询员工资料。当前不支持编辑或删除。","create":"新增司机","loading":"正在加载司机…","failed":"无法加载或保存司机。","empty":"暂无司机档案。","userId":"运营用户标识","phone":"司机电话","search":"搜索活跃运营用户","selected":"已选用户","noUsers":"没有匹配的活跃用户。","lookupRequired":"需要用户查看权限才能选择运营账号。","save":"登记司机","createHint":"请选择活跃运营用户。已登记用户返回原司机档案，不修改电话。WMS 对接就绪前不开放发运。"},
@@ -374,6 +440,7 @@
       "impersonation": "身份模拟",
       "billing": "软件订阅管理",
       "notifications": "通知",
+      "tickets": "工单",
       "webhooks": "Webhooks",
       "audits": "审计",
       "health": "健康检查"
@@ -468,6 +535,7 @@
     "buildLive": "构建 · 运行中"
   },
   "settings": {
+    "currentSessionUnknown": "服务端尚未标识当前会话。为避免同时撤销本会话，暂不能批量退出其他设备。",
     "languageTitle": "语言",
     "languageDescription": "控制台和 API 跟随此语言。",
     "themeTitle": "主题",
@@ -495,7 +563,14 @@
     "avatar": "头像",
     "avatarDesc": "显示在顶栏和动态中。建议使用正方形裁剪，支持 JPG、PNG 或 WebP。",
     "identity": "身份信息",
-    "identityDesc": "账号资料由管理员维护。如需修改，请联系管理员。",
+    "identityDesc": "可修改姓名和电话，用户名与邮箱为只读。",
+    "firstName": "名",
+    "lastName": "姓",
+    "phoneNumber": "电话",
+    "saveProfile": "保存资料",
+    "profileSaving": "正在保存资料…",
+    "profileUpdated": "个人资料已更新",
+    "profileUpdateFailed": "个人资料更新失败。",
     "username": "用户名",
     "displayName": "显示名称",
     "phone": "电话",
@@ -589,6 +664,13 @@
     "removeImage": "移除",
     "uploadHint": "JPG/PNG/WebP/GIF · 最大 {size}",
     "pasteHint": "使用您自行托管图片的直链。",
+    "imageUrl": "图片链接",
+    "saveAvatar": "保存头像",
+    "qrFailed": "二维码生成失败。可重试，或在验证器应用中手动输入设置密钥。",
+    "retryQr": "重试二维码",
+    "copyKeyFailed": "无法复制设置密钥，请选中页面显示的密钥后手动复制。",
+    "avatarSaving": "正在保存头像…",
+    "avatarSaveHint": "选择或上传图片后，请保存以更新个人资料。",
     "noPublicUrl": "服务器未返回该文件的公开地址。"
   },
   "common": {
@@ -992,6 +1074,7 @@
     "descriptionHint": "可选。用白话说明这个角色的用途。",
     "createRole": "创建角色",
     "cat": {
+      "Tickets": "工单",
       "Tenants": "租户",
       "Users": "用户",
       "Roles": "角色",
@@ -1003,6 +1086,7 @@
       "Operations": "运营"
     },
     "blurb": {
+      "Tickets": "查看工单并回复。",
       "Tenants": "开通并运营租户。仅限根租户运营使用。",
       "Users": "管理租户用户账号及其分配的角色。",
       "Roles": "管理角色定义及其权限授予。",
@@ -1015,6 +1099,7 @@
     },
     "perm": {
       "Permissions": {
+        "Tickets": { "View": "查看工单", "Comment": "回复工单", "Assign": "指派工单", "Resolve": "解决工单", "Reopen": "重开工单", "Close": "关闭工单", "Create": "新建工单", "Update": "编辑工单", "Delete": "删除工单", "Restore": "恢复工单" },
         "Tenants": {
           "View": "查看租户",
           "Create": "创建租户",
@@ -1081,6 +1166,8 @@
     }
   },
   "impersonation": {
+    "handoffReady": "支持会话已签发，请点击下方链接打开客户门户。再次打开此链接使用同一会话；关闭此窗口不会撤销会话。",
+    "openPortal": "打开客户门户",
     "loadedScope": "统计与筛选仅针对最近加载的 200 条授权记录，并非全部历史记录。",
     "title": "身份模拟",
     "description": "服务器签发的每枚身份模拟令牌都会记录在此。可以撤销进行中的授权 — JWT 校验会在数秒内拒绝该令牌。",
@@ -1480,6 +1567,7 @@
     "kindLiveness": "存活",
     "kindReadiness": "就绪",
     "livenessFailed": "存活探测失败。",
+    "unavailable": "当前探测状态未知，请刷新重试。",
     "readinessFailed": "就绪探测失败。",
     "livenessDesc": "进程已启动并正在处理请求。不检查外部依赖。",
     "readinessDesc": "所有已注册的依赖检查必须报告 Healthy，探测才会返回 200。此处返回 503 会把 API 移出负载均衡池。",

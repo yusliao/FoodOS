@@ -101,8 +101,8 @@ test("product creation and base-price update use only existing catalog endpoints
   const create = page.getByRole("dialog");
   await create.getByLabel("SKU").fill("VEG-02");
   await create.getByLabel("Name").fill("Kale");
-  await create.getByLabel("Brand ID").selectOption(brand.id);
-  await create.getByLabel("Category ID").selectOption(category.id);
+  await create.getByRole("combobox", { name: "Brand ID" }).selectOption(brand.id);
+  await create.getByRole("combobox", { name: "Category ID" }).selectOption(category.id);
   await create.getByLabel("Base price (USD)").fill("4.25");
   await create.getByRole("button", { name: "Save" }).click();
   await expect(create).toHaveCount(0);

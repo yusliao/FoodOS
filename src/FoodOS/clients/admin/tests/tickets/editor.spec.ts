@@ -1,0 +1,81 @@
+import { expect, test } from "@playwright/test";
+import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
+import { installAdminShellMocks, paged } from "../helpers/shell-mocks";
+import en from "../../src/i18n/locales/en-US.json" with { type: "json" };
+import zh from "../../src/i18n/locales/zh-CN.json" with { type: "json" };
+const id = "33333333-3333-3333-3333-333333333333";
+const ticket = { id, number: "TK-1", title: "Delivery question", description: "Original", status: "Open", priority: "High", customerTenantId: "acme", reporterUserId: "reporter", createdAtUtc: "2026-09-17T00:00:00Z", commentCount: 0 };
+for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) {
+  for (const mode of ["new", "edit"] as const) test(`${culture} ${mode} ticket preserves failure, keys and exact ownership payload`, async ({ page }) => {
+    const permissions = ["Permissions.Tickets.View", `Permissions.Tickets.${mode === "new" ? "Create" : "Update"}`];
+    await seedAuthedSession(page, { ...TEST_USER, permissions });
+    await installAdminShellMocks(page, permissions);
+    await page.addInitScript(value => localStorage.setItem("foodos.culture", value), culture);
+    await page.setViewportSize({ width: 390, height: 844 });
+    let saved = false;
+    await page.route("**/api/v1/tickets?**", route => route.fulfill({ json: paged([ticket]) }));
+    await page.route(`**/api/v1/tickets/${id}`, route => route.fulfill({ json: { ...ticket, title: saved ? "Updated ticket" : ticket.title, customerTenantId: mode === "new" ? "root" : "acme" } }));
+    await page.route(`**/api/v1/tickets/${id}/comments`, route => route.fulfill({ json: [] }));
+    const writes: { key: string; body: Record<string, unknown> }[] = [];
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route(mode === "new" ? "**/api/v1/tickets" : `**/api/v1/tickets/${id}`, async route => {
+      if (route.request().method() === "GET") return route.fallback();
+      expect(route.request().method()).toBe(mode === "new" ? "POST" : "PUT");
+      expect(route.request().headers().tenant).toBe("root");
+      writes.push({ key: route.request().headers()["idempotency-key"], body: route.request().postDataJSON() });
+      if (writes.length < 3) return route.fulfill({ status: 403, json: { detail: `Ticket write denied ${writes.length}` } });
+      await held;
+      saved = true;
+      return route.fulfill({ json: id });
+    });
+    await page.goto(mode === "new" ? "/tickets" : `/tickets/${id}`);
+    await page.getByRole("button", { name: m.tickets[mode], exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    if (mode === "new") await expect(dialog.getByText(m.tickets.rootCreation)).toBeVisible();
+    const title = dialog.getByRole("textbox", { name: m.tickets.subject, exact: true });
+    const description = dialog.getByRole("textbox", { name: m.tickets.details, exact: true });
+    const priority = dialog.getByRole("combobox");
+    const save = dialog.getByRole("button", { name: m.tickets.save, exact: true });
+    await expect(title).toHaveAttribute("maxlength", "160");
+    await expect(description).toHaveAttribute("maxlength", "4096");
+    await title.fill(" ");
+    await expect(save).toBeDisabled();
+    await title.fill(" Updated ticket ");
+    await description.fill(" Updated details ");
+    await priority.selectOption("Critical");
+    for (let count = 1; count <= 2; count++) {
+      await save.click();
+      await expect.poll(() => writes.length).toBe(count);
+      await expect(dialog.getByRole("alert")).toHaveText(`Ticket write denied ${count}`);
+      await expect(title).toHaveValue(" Updated ticket ");
+    }
+    expect(writes[0].key).toBeTruthy();
+    expect(writes[1]).toEqual(writes[0]);
+    await description.fill("");
+    await expect(description).toHaveValue("");
+    await save.click();
+    for (const control of [title, description, priority]) await expect(control).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: m.chrome.cancel, exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    release();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/tickets/${id}$`));
+    await expect(page.getByRole("heading", { name: "Updated ticket" })).toBeVisible();
+    expect(writes).toHaveLength(3);
+    expect(writes[2].key).not.toBe(writes[0].key);
+    expect(writes[2].body).toEqual({ title: "Updated ticket", description: null, priority: "Critical", ...(mode === "new" ? { assignedToUserId: null } : {}) });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+for (const scenario of ["reader", "creator", "closed"]) test(`${scenario} cannot edit ticket`, async ({ page }) => {
+  const permissions = ["Permissions.Tickets.View", ...(scenario === "creator" ? ["Permissions.Tickets.Create"] : scenario === "closed" ? ["Permissions.Tickets.Update"] : [])];
+  await seedAuthedSession(page, { ...TEST_USER, permissions });
+  await installAdminShellMocks(page, permissions);
+  await page.route(`**/api/v1/tickets/${id}`, route => route.fulfill({ json: { ...ticket, status: scenario === "closed" ? "Closed" : "Open" } }));
+  await page.route(`**/api/v1/tickets/${id}/comments`, route => route.fulfill({ json: [] }));
+  await page.goto(`/tickets/${id}`);
+  await expect(page.getByRole("heading", { name: ticket.title })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit ticket" })).toHaveCount(0);
+});

@@ -76,6 +76,9 @@ test.describe("settings · profile", () => {
   test("uploads a new avatar and PUTs the durable URL to /identity/profile/image", async ({
     page,
   }) => {
+    const permissions = [...ADMIN_PERMS, "Permissions.Files.Upload"];
+    await seedAuthedSession(page, { ...TEST_USER, permissions });
+    await installAdminShellMocks(page, permissions);
     await mockJsonResponse(page, "**/api/v1/identity/profile", PROFILE);
 
     // The avatar editor (ImageInput) now uses the presigned-upload protocol
@@ -146,6 +149,8 @@ test.describe("settings · profile", () => {
       mimeType: "image/png",
       buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     });
+
+    await page.getByRole("button", { name: "Save avatar", exact: true }).click();
 
     const req = await reqPromise;
     const body = JSON.parse(req.postData() ?? "{}");

@@ -88,7 +88,7 @@ test("tier upsert uses product choice, USD and the price-list update permission"
   await expect(page.getByRole("cell", { name: "Baby spinach" })).toBeVisible();
   await page.getByRole("button", { name: "Add or replace tier" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Product").selectOption(product.id);
+  await dialog.getByRole("combobox", { name: "Product", exact: true }).selectOption(product.id);
   await dialog.getByLabel("Minimum quantity").fill("10");
   await dialog.getByLabel("Unit price (USD)").fill("2.25");
   await dialog.getByRole("button", { name: "Save tier" }).click();
@@ -109,7 +109,7 @@ test("customer price lock is an explicit write-only upsert", async ({ page }) =>
   await page.getByRole("button", { name: "Set price lock" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Partner customer").selectOption(customer.id);
-  await dialog.getByLabel("Product").selectOption(product.id);
+  await dialog.getByRole("combobox", { name: "Product", exact: true }).selectOption(product.id);
   await dialog.getByLabel("Unit price (USD)").fill("1.99");
   await dialog.getByLabel("Locked until").fill("2026-10-01T12:00");
   await dialog.getByRole("button", { name: "Save price lock" }).click();
@@ -129,7 +129,7 @@ test("resolved-price check shows the server source and keeps root identity", asy
   await page.goto("/catalog/pricing");
   const section = page.getByRole("heading", { name: "Resolved-price check" }).locator("..").locator("..");
   await section.getByLabel("Partner customer").selectOption(customer.id);
-  await section.getByLabel("Product").selectOption(product.id);
+  await section.getByRole("combobox", { name: "Product", exact: true }).selectOption(product.id);
   await section.getByLabel("Quantity").fill("8");
   await section.getByRole("button", { name: "Resolve quote" }).click();
   await expect(section.getByRole("status")).toContainText("$1.99");

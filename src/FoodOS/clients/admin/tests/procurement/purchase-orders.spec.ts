@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
-import { installAdminShellMocks } from "../helpers/shell-mocks";
+import { installAdminShellMocks, WMS_NOT_CONFIGURED } from "../helpers/shell-mocks";
 
 const view = "Permissions.Procurement.Purchase.View";
 const create = "Permissions.Procurement.Purchase.Create";
@@ -97,29 +97,18 @@ test("Chinese purchase cards fit a narrow screen", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
-for (const [result, label, permission] of [["pass", "Pass quality check", "Permissions.Procurement.Quality.Pass"], ["fail", "Fail quality check", "Permissions.Procurement.Quality.Fail"]]) {
-  test(`${result} quality check uses its own permission and keeps root identity`, async ({ page }) => {
+for (const [result, permission] of [["pass", "Permissions.Procurement.Quality.Pass"], ["fail", "Permissions.Procurement.Quality.Fail"]]) {
+  test(`${result} permission never enables local QC in external WMS mode`, async ({ page }) => {
     await setup(page, [view, permission]);
     await page.route("**/api/v1/procurement/purchase-orders?**", route => route.fulfill({ json: [{ ...order, status: "Receiving" }] }));
-    let body: unknown;
-    await page.route(`**/api/v1/procurement/purchase-orders/po-1/lines/line-1/qc/${result}`, async route => {
-      body = route.request().postDataJSON();
-      expect(route.request().headers().tenant).toBe("root");
-      expect(route.request().headers()["idempotency-key"]).toBeTruthy();
-      await route.fulfill({ json: "check-1" });
-    });
+    const writes: string[] = [];
+    page.on("request", request => { if (request.method() === "POST") writes.push(request.url()); });
     await page.goto("/procurement/purchase-orders");
-    await expect(page.getByRole("button", { name: result === "pass" ? "Fail quality check" : "Pass quality check" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: order.number })).toBeVisible();
+    await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Pass quality check|Fail quality check/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Mark as sent|Book inbound appointment/ })).toHaveCount(0);
-    await page.getByRole("button", { name: label }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("Received quantity").fill("5");
-    await dialog.getByLabel("Sample quantity").fill("1");
-    await dialog.getByLabel("Lot number").fill("LOT-1");
-    await dialog.getByLabel("Expiry date").fill("2027-01-01");
-    await dialog.getByRole("button", { name: label }).click();
-    await expect(dialog).toHaveCount(0);
-    expect(body).toEqual({ purchaseOrderId: "po-1", lineId: "line-1", quantity: 5, sampleQty: 1, lotNo: "LOT-1", expiryDate: "2027-01-01", manufacturedOn: null, note: null });
+    expect(writes).toEqual([]);
   });
 }
 
@@ -132,33 +121,28 @@ test("purchase creator cannot perform QC while receiving", async ({ page }) => {
 });
 
 for (const result of ["pass", "fail"]) {
-  test(result + " QC failure keeps input and retry key", async ({ page }) => {
+  test(result + " QC remains disabled through capability loading, failure and retry", async ({ page }) => {
     await setup(page, [view, "Permissions.Procurement.Quality." + (result === "pass" ? "Pass" : "Fail")]);
     await page.route("**/api/v1/procurement/purchase-orders?**", route => route.fulfill({ json: [{ ...order, status: "Receiving" }] }));
-    const keys: string[] = [];
-    await page.route("**/api/v1/procurement/purchase-orders/po-1/lines/line-1/qc/" + result, async route => {
-      keys.push(route.request().headers()["idempotency-key"]);
-      await route.fulfill(keys.length < 3 ? { status: 403, json: { detail: "Quality access denied" } } : { json: "check-1" });
+    let failed = true;
+    let release: (() => void) | undefined;
+    await page.route("**/api/v1/fulfillment/capabilities", async route => {
+      expect(route.request().headers().tenant).toBe("root");
+      if (failed) await new Promise<void>(resolve => { release = resolve; });
+      await route.fulfill(failed ? { status: 403, json: {} } : { json: WMS_NOT_CONFIGURED });
     });
+    const writes: string[] = [];
+    page.on("request", request => { if (request.method() === "POST") writes.push(request.url()); });
     await page.goto("/procurement/purchase-orders");
-    const label = result === "pass" ? "Pass quality check" : "Fail quality check";
-    await page.getByRole("button", { name: label }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("Received quantity").fill("5");
-    await dialog.getByLabel("Lot number").fill("LOT-1");
-    await dialog.getByLabel("Expiry date").fill("2027-01-01");
-    const save = dialog.getByRole("button", { name: label });
-    await save.click();
-    await expect(dialog.getByText("Quality access denied")).toBeVisible();
-    await expect(dialog.getByLabel("Lot number")).toHaveValue("LOT-1");
-    await save.click();
-    await expect.poll(() => keys.length).toBe(2);
-    await expect(save).toBeEnabled();
-    await dialog.getByLabel("Inspection note").fill("Inspected again");
-    await save.click();
-    await expect(dialog).toHaveCount(0);
-    expect(keys[0]).toBeTruthy();
-    expect(keys[0]).toBe(keys[1]);
-    expect(keys[2]).not.toBe(keys[1]);
+    await expect.poll(() => !!release).toBe(true);
+    await expect(page.getByRole("heading", { name: order.number })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Pass quality check|Fail quality check/ })).toHaveCount(0);
+    release?.();
+    await expect(page.getByText("WMS status could not be verified. Execution remains disabled.")).toBeVisible();
+    failed = false;
+    await page.getByRole("button", { name: "Retry WMS status" }).click();
+    await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Pass quality check|Fail quality check/ })).toHaveCount(0);
+    expect(writes).toEqual([]);
   });
 }

@@ -13,7 +13,7 @@ import { OpsPermissions } from "@/lib/permissions";
 
 export function DashboardPage() {
   const t = useT();
-  const { user, permissionsHydrated, permissionsError, refreshPermissions } = useAuth();
+  const { user, permissionsHydrated } = useAuth();
   const granted = permissionsHydrated ? user?.permissions ?? [] : [];
   const canViewOps = granted.includes(OpsPermissions.Kpis.View);
   const kpis = useQuery({
@@ -32,12 +32,6 @@ export function DashboardPage() {
       <p className="text-sm text-[var(--color-muted-foreground)]">
         {user?.name} · {t("workbench.identity")}
       </p>
-      {permissionsError && (
-        <div role="alert" className="space-y-2">
-          <p>{t("workbench.permissionsFailed")}</p>
-          <Button variant="outline" onClick={() => void refreshPermissions()}>{t("workbench.retry")}</Button>
-        </div>
-      )}
       {canViewOps && (
         <section className="space-y-3" aria-label={t("dashboard.operations")}>
           <h2 className="font-semibold">{t("dashboard.operations")}</h2>
@@ -63,7 +57,7 @@ export function DashboardPage() {
         </section>
       )}
       {!canViewOps && <p className="text-sm text-[var(--color-muted-foreground)]">{t("workbench.noReports")}</p>}
-      {!permissionsError && available.length === 0 && <p role="status">{t("workbench.noModules")}</p>}
+      {available.length === 0 && <p role="status">{t("workbench.noModules")}</p>}
       {available.map(section => (
         <section key={section.id} className="space-y-3">
           <h2 className="font-semibold">{t("nav.sections." + section.id, section.caption)}</h2>

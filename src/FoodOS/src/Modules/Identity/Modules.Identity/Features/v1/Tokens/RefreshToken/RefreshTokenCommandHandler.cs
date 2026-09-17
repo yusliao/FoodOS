@@ -7,6 +7,7 @@ using Mediator;
 using Microsoft.Extensions.Logging;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using FSH.Modules.Identity.Services;
 
 namespace FSH.Modules.Identity.Features.v1.Tokens.RefreshToken;
 
@@ -93,6 +94,12 @@ public sealed class RefreshTokenCommandHandler
 
         // Audit previous token revocation by rotation (no raw tokens)
         await _securityAudit.TokenRevokedAsync(subject, clientId!, "RefreshTokenRotated", cancellationToken);
+
+        // Resolve from the validated refresh token, never from the unverified access token input.
+        var sessionId = await _sessionService.GetSessionIdByRefreshTokenAsync(refreshTokenHash, cancellationToken).ConfigureAwait(false);
+        if (sessionId.HasValue)
+            claims = claims.Where(c => c.Type != SessionClaimTypes.SessionId)
+                .Append(new Claim(SessionClaimTypes.SessionId, sessionId.Value.ToString())).ToList();
 
         // Issue new tokens
         var newToken = await _tokenService.IssueAsync(subject, claims, null, cancellationToken);

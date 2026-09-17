@@ -52,7 +52,7 @@ export function AppShell() {
                     role="status"
                     className="flex min-h-[40vh] items-center justify-center text-sm text-[var(--color-muted-foreground)]"
                   >
-                    Loading&hellip;
+                    {t("common.loading")}
                   </div>
                 }
               >

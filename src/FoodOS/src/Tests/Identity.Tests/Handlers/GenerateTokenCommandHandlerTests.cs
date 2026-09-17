@@ -82,7 +82,7 @@ public sealed class GenerateTokenCommandHandlerTests
         _identityService.ValidateCredentialsAsync(command.Email, command.Password, Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns((userId, claims));
 
-        _tokenService.IssueAsync(userId, claims, null, Arg.Any<CancellationToken>())
+        _tokenService.IssueAsync(userId, Arg.Is<IEnumerable<Claim>>(value => claims.All(value.Contains)), null, Arg.Any<CancellationToken>())
             .Returns(expectedToken);
 
         // Act
@@ -116,7 +116,7 @@ public sealed class GenerateTokenCommandHandlerTests
         _identityService.ValidateCredentialsAsync(command.Email, command.Password, Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns((userId, claims));
 
-        _tokenService.IssueAsync(userId, claims, null, Arg.Any<CancellationToken>())
+        _tokenService.IssueAsync(userId, Arg.Is<IEnumerable<Claim>>(value => claims.All(value.Contains)), null, Arg.Any<CancellationToken>())
             .Returns(token);
 
         // Act
@@ -124,7 +124,7 @@ public sealed class GenerateTokenCommandHandlerTests
 
         // Assert
         await _identityService.Received(1).ValidateCredentialsAsync(command.Email, command.Password, Arg.Any<string?>(), Arg.Any<CancellationToken>());
-        await _tokenService.Received(1).IssueAsync(userId, claims, null, Arg.Any<CancellationToken>());
+        await _tokenService.Received(1).IssueAsync(userId, Arg.Is<IEnumerable<Claim>>(value => claims.All(value.Contains)), null, Arg.Any<CancellationToken>());
         await _identityService.Received(1).StoreRefreshTokenAsync(userId, token.RefreshToken, token.RefreshTokenExpiresAt, Arg.Any<CancellationToken>());
         await _securityAudit.Received(1).LoginSucceededAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         await _securityAudit.Received(1).TokenIssuedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
@@ -213,7 +213,7 @@ public sealed class GenerateTokenCommandHandlerTests
         _identityService.ValidateCredentialsAsync(command.Email, command.Password, null, cancellationToken)
             .Returns((userId, claims));
 
-        _tokenService.IssueAsync(userId, claims, null, cancellationToken)
+        _tokenService.IssueAsync(userId, Arg.Is<IEnumerable<Claim>>(value => claims.All(value.Contains)), null, cancellationToken)
             .Returns(token);
 
         // Act
@@ -221,7 +221,7 @@ public sealed class GenerateTokenCommandHandlerTests
 
         // Assert
         await _identityService.Received(1).ValidateCredentialsAsync(command.Email, command.Password, null, cancellationToken);
-        await _tokenService.Received(1).IssueAsync(userId, claims, null, cancellationToken);
+        await _tokenService.Received(1).IssueAsync(userId, Arg.Is<IEnumerable<Claim>>(value => claims.All(value.Contains)), null, cancellationToken);
         await _identityService.Received(1).StoreRefreshTokenAsync(userId, token.RefreshToken, token.RefreshTokenExpiresAt, cancellationToken);
         await _outboxStore.Received(1).AddAsync(Arg.Any<FSH.Framework.Eventing.Abstractions.IIntegrationEvent>(), cancellationToken);
     }
@@ -246,10 +246,10 @@ public sealed class GenerateTokenCommandHandlerTests
         _identityService.ValidateCredentialsAsync(command.Email, command.Password, Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns((userId, claims));
 
-        _tokenService.IssueAsync(userId, claims, null, Arg.Any<CancellationToken>())
+        _tokenService.IssueAsync(userId, Arg.Is<IEnumerable<Claim>>(value => claims.All(value.Contains)), null, Arg.Any<CancellationToken>())
             .Returns(token);
 
-        _sessionService.CreateSessionAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+        _sessionService.CreateSessionAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Database not available"));
 
         // Act
@@ -281,7 +281,7 @@ public sealed class GenerateTokenCommandHandlerTests
         _identityService.ValidateCredentialsAsync(command.Email, command.Password, Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns((userId, claims));
 
-        _tokenService.IssueAsync(userId, claims, null, Arg.Any<CancellationToken>())
+        _tokenService.IssueAsync(userId, Arg.Is<IEnumerable<Claim>>(value => claims.All(value.Contains)), null, Arg.Any<CancellationToken>())
             .Returns(token);
 
         // Act

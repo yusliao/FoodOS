@@ -58,8 +58,7 @@ export function BrandsPage() {
       </article>)}</div>}
     {query.isSuccess && <Pagination page={page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} shown={query.data.items.length} hasPrev={query.data.hasPrevious} hasNext={query.data.hasNext} fetching={query.isFetching} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />}
     {editing !== undefined && ((editing && canUpdate) || (!editing && canCreate)) && <BrandDialog brand={editing} onClose={() => setEditing(undefined)} />}
-    <ConfirmDialog open={!!deleting} onOpenChange={open => !open && setDeleting(null)} title={t("catalog.brands.deleteTitle")} description={t("catalog.deleteConfirm").replace("{name}", deleting?.name ?? "")} confirmLabel={t("catalog.delete")} destructive pending={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
-    {remove.isError && <ErrorBand message={describe(remove.error, t("catalog.requestFailed"))} />}
+    <ConfirmDialog open={!!deleting && canDelete} onOpenChange={open => { if (!open && !remove.isPending) { setDeleting(null); remove.reset(); } }} title={t("catalog.brands.deleteTitle")} description={<>{t("catalog.deleteConfirm").replace("{name}", deleting?.name ?? "")}{remove.isError && <span role="alert" className="mt-3 block text-[var(--color-destructive)]">{describe(remove.error, t("catalog.requestFailed"))}</span>}</>} confirmLabel={t("catalog.delete")} destructive pending={remove.isPending} onConfirm={() => { if (deleting && canDelete && !remove.isPending) remove.mutate(deleting.id); }} />
   </div>;
 }
 
@@ -70,9 +69,9 @@ function BrandDialog({ brand, onClose }: { brand: BrandDto | null; onClose: () =
   const [description, setDescription] = useState(brand?.description ?? "");
   const [logoUrl, setLogoUrl] = useState(brand?.logoUrl ?? "");
   const mutation = useMutation({
-    mutationFn: () => brand ? updateBrand({ brandId: brand.id, name: name.trim(), description: description.trim(), logoUrl: logoUrl.trim() }) : createBrand({ name: name.trim(), description: description.trim(), logoUrl: logoUrl.trim() }),
+    mutationFn: (input: Parameters<typeof createBrand>[0]) => brand ? updateBrand({ ...input, brandId: brand.id }) : createBrand(input),
     onSuccess: async () => { await cache.invalidateQueries({ queryKey: ["catalog", "brands"] }); toast.success(t(brand ? "catalog.updated" : "catalog.created")); onClose(); },
   });
-  function submit(event: FormEvent) { event.preventDefault(); if (name.trim() && !mutation.isPending) mutation.mutate(); }
+  function submit(event: FormEvent) { event.preventDefault(); if (name.trim() && !mutation.isPending) mutation.mutate({ name: name.trim(), description: description.trim(), logoUrl: logoUrl.trim() }); }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent><DialogHeader><DialogTitle>{t(brand ? "catalog.brands.editTitle" : "catalog.brands.new")}</DialogTitle><DialogDescription>{t("catalog.brands.formHint")}</DialogDescription></DialogHeader><form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="space-y-4"><Field id="brand-name" label={t("catalog.name")} required><Input id="brand-name" required maxLength={128} value={name} onChange={event => setName(event.target.value)} /></Field><Field id="brand-description" label={t("catalog.description")}><textarea id="brand-description" className="min-h-24 w-full rounded-lg border border-[var(--color-border)] bg-transparent p-3" value={description} onChange={event => setDescription(event.target.value)} /></Field><Field id="brand-logo" label={t("catalog.logoUrl")}><Input id="brand-logo" type="url" value={logoUrl} onChange={event => setLogoUrl(event.target.value)} /></Field></fieldset>{mutation.isError && <p role="alert" className="text-sm text-[var(--color-destructive)]">{describe(mutation.error, t("catalog.requestFailed"))}</p>}</DialogBody><DialogFooter><Button type="button" variant="outline" disabled={mutation.isPending} onClick={onClose}>{t("chrome.cancel")}</Button><Button type="submit" disabled={!name.trim() || mutation.isPending}>{t(mutation.isPending ? "catalog.saving" : "catalog.save")}</Button></DialogFooter></form></DialogContent></Dialog>;
 }
