@@ -29,6 +29,7 @@ import {
   MultitenancyPermissions,
   WebhooksPermissions,
   TicketsPermissions,
+  ChatPermissions,
 } from "@/lib/permissions";
 
 /** A single nav destination — label, route, icon, optional perm guard. */
@@ -96,6 +97,7 @@ export const sections: NavSection[] = [
       { to: "/orders", label: "Orders", icon: Receipt, perms: [OrderingPermissions.Orders.View] },
       { to: "/notifications", label: "Notifications", icon: Bell, perms: [NotificationPermissions.Inbox.View] },
       { to: "/tickets", label: "Tickets", icon: ScrollText, perms: [TicketsPermissions.View] },
+      { to: "/chat", label: "Chat", icon: ScrollText, perms: [ChatPermissions.View] },
       { to: "/tickets/trash", label: "Ticket trash", icon: ScrollText, perms: [TicketsPermissions.Restore] },
       { to: "/audits", label: "Audits", icon: ScrollText, perms: [AuditingPermissions.AuditTrails.View] },
     ],

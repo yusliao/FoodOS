@@ -41,17 +41,21 @@ export function TicketAttachments({ ticketId }: { ticketId: string }) {
   </section>;
 }
 
+class InvalidDownloadLink extends Error {}
+
 function AttachmentDownload({ fileId, allowed }: { fileId: string; allowed: boolean }) {
   const t = useT();
   const mutation = useMutation({ mutationFn: async (id: string) => {
     const result = await getFileDownloadUrl(id);
-    const url = new URL(result.url);
-    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || !(Date.parse(result.expiresAt) > Date.now())) throw new Error(t("tickets.downloadInvalid"));
+    try {
+      const url = new URL(result.url);
+      if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || !(Date.parse(result.expiresAt) > Date.now())) throw new InvalidDownloadLink();
+    } catch { throw new InvalidDownloadLink(); }
     return result;
   } });
   return <div className="space-y-2">
     <Button variant="outline" disabled={!allowed || mutation.isPending} onClick={() => { if (allowed && !mutation.isPending) mutation.mutate(fileId); }}>{t(mutation.isPending ? "common.working" : "tickets.prepareDownload")}</Button>
-    {mutation.isError && <ErrorBand message={describe(mutation.error, t("tickets.failed"))} />}
+    {mutation.isError && <ErrorBand message={mutation.error instanceof InvalidDownloadLink ? t("tickets.downloadInvalid") : describe(mutation.error, t("tickets.failed"))} />}
     {allowed && mutation.isSuccess && <a className="block underline" href={mutation.data.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={event => { if (Date.parse(mutation.data.expiresAt) <= Date.now()) { event.preventDefault(); mutation.reset(); } }}>{t("tickets.downloadAttachment")}</a>}
   </div>;
 }

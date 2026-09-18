@@ -42,7 +42,7 @@ function UploadForm({ ticketId }: { ticketId: string }) {
     mutation.mutate(file);
   }
   return <form onSubmit={submit} className="space-y-3 rounded-xl border p-4">
-    <Field id="ticket-attachment-upload" label={t("tickets.uploadAttachment")}><Input ref={input} id="ticket-attachment-upload" type="file" disabled={busy} onChange={event => { setFile(event.target.files?.[0] ?? null); setDone(false); mutation.reset(); reset(); }} /></Field>
+    <Field id="ticket-attachment-upload" label={t("tickets.chooseAttachment")}><Input ref={input} id="ticket-attachment-upload" type="file" disabled={busy} onChange={event => { setFile(event.target.files?.[0] ?? null); setDone(false); mutation.reset(); reset(); }} /></Field>
     <p className="text-sm">{t("tickets.uploadHint")}</p>
     {mutation.isError && <ErrorBand message={t("tickets.uploadFailed")} />}
     {busy && <p role="status">{t("common.working")} {progress?.percent ?? 0}%</p>}

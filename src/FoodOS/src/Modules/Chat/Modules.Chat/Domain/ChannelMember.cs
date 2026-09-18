@@ -26,7 +26,11 @@ public sealed class ChannelMember : BaseEntity<Guid>
         };
     }
 
-    internal void MarkRead(Guid messageId) => LastReadMessageId = messageId;
+    internal void MarkRead(Guid messageId)
+    {
+        if (LastReadMessageId is null || messageId.CompareTo(LastReadMessageId.Value) > 0)
+            LastReadMessageId = messageId;
+    }
 
     internal void Promote(ChannelMemberRole role) => Role = role;
 }

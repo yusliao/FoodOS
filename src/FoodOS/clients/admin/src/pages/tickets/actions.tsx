@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/list";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { describe } from "@/pages/customers/request-error";
+import { ApiRequestError } from "@/lib/api-client";
 
 const grants = { assign: TicketsPermissions.Assign, resolve: TicketsPermissions.Resolve, reopen: TicketsPermissions.Reopen, close: TicketsPermissions.Close };
 function stateAllows(ticket: Ticket, action: TicketAction) {
@@ -37,9 +38,11 @@ function ActionDialog({ ticket, action, onClose }: { ticket: Ticket; action: Tic
   const canWrite = user?.tenant === "root" && user.permissions.includes(TicketsPermissions.View) && user.permissions.includes(grants[action]) && stateAllows(ticket, action);
   const canSearch = !!canWrite && action === "assign" && !!user?.permissions.includes(IdentityPermissions.Users.View);
   const attempt = useRef<{ body: string; key: string } | null>(null);
-  const mutation = useMutation({ mutationKey: ["tickets", "write", ticket.id], mutationFn: actOnTicket, onSuccess: async () => { await cache.invalidateQueries({ queryKey: ["tickets"] }); onClose(); } });
+  const mutation = useMutation({ mutationKey: ["tickets", "write", ticket.id], mutationFn: actOnTicket, onSuccess: async () => { await cache.invalidateQueries({ queryKey: ["tickets"] }); onClose(); }, onError: async error => {
+    if (error instanceof ApiRequestError && error.status === 409) await cache.invalidateQueries({ queryKey: ["tickets", "detail", ticket.id], exact: true });
+  } });
   const busy = useIsMutating({ mutationKey: ["tickets", "write", ticket.id] }) > 0;
-  const users = useQuery({ queryKey: ["tickets", "assignees", search.trim(), page], queryFn: () => searchUsers({ search, pageNumber: page, pageSize: 20, isActive: true }), enabled: canSearch && !busy });
+  const users = useQuery({ queryKey: ["tickets", "assignees", search.trim(), page], queryFn: ({ signal }) => searchUsers({ search, pageNumber: page, pageSize: 20, isActive: true }, signal), enabled: canSearch && !busy });
   const choices = users.isSuccess ? users.data.items.filter(item => item.isActive) : [];
   function submit(event: FormEvent) {
     event.preventDefault();

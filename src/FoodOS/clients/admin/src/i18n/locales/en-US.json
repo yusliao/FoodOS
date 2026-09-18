@@ -1,5 +1,11 @@
 {
+  "chatActions": {"edit":"Edit message","delete":"Delete message","save":"Save message","body":"Message text","editHint":"Only the author may edit. A deleted message cannot be edited.","deleteHint":"Remove this message's text. A deleted-message marker remains; replies are preserved.","failed":"Message action failed."},
+  "chatCompose": {"message":"Channel message","reply":"Thread reply","send":"Send message","hint":"Text only, up to 32,768 characters. A retry of unchanged text on this page reuses its request key; leaving or reloading loses that recovery state.","failed":"Message could not be sent.","browsingHint":"Messages are shown newest first. Reading does not automatically mark messages as read."},
+  "chatRead": {"action":"Mark read through this message","success":"Read position updated.","failed":"Read position could not be updated."},
+  "chatManage": {"create":"Create channel","edit":"Edit channel","save":"Save channel","archive":"Archive channel","archiveHint":"Archive this channel and remove it from member channel lists.","channelHint":"Named channels can be public or private. The creator becomes a channel administrator.","name":"Channel name","description":"Description","private":"Private channel","members":"Channel members","add":"Add members","addHint":"Select active users from the current operator identity domain.","search":"Search users","selected":"Selected","noUsers":"No eligible users on this page.","lookupRequired":"User directory permission is required to select new members.","remove":"Remove member","leave":"Leave channel","removeHint":"This changes channel membership immediately. Direct-message membership cannot be changed.","you":"You","failed":"Channel action failed.","roles":{"Member":"Member","Admin":"Administrator"}},
+  "chat": {"title":"Chat","description":"Channels you have joined in the operator identity domain.","noChannels":"No joined channels on this page.","private":"Private","public":"Public","unread":"Unread","back":"Back to channels","invalidId":"Invalid channel or message identifier.","notMember":"You are not a member of this channel. Messages are unavailable.","browsingHint":"Messages are shown newest first. This browsing view does not send messages or mark them as read.","target":"Selected message","closeTarget":"Close selected message","parent":"Thread parent","replies":"Thread replies","messages":"Channel messages","noMessages":"No messages on this page.","newer":"Newer messages","older":"Older messages","deleted":"This message was deleted.","edited":"Edited","pinned":"Pinned","attachmentHint":"Attached files (download is not yet available in this view):","openThread":"View thread","failed":"Could not load chat.","types":{"DirectMessage":"Direct message","GroupMessage":"Group message","Channel":"Channel"}},
   "tickets": {
+    "chooseAttachment": "Choose attachment",
     "uploadAttachment": "Upload private attachment",
     "retryUpload": "Check and retry upload",
     "uploadDone": "Attachment uploaded.",
@@ -441,6 +447,7 @@
       "billing": "Software subscriptions",
       "notifications": "Notifications",
       "tickets": "Tickets",
+      "chat": "Chat",
       "webhooks": "Webhooks",
       "audits": "Audits",
       "health": "Health"
@@ -1074,6 +1081,8 @@
     "descriptionHint": "Optional. Plain English explaining what this role is for.",
     "createRole": "Create role",
     "cat": {
+      "Chat": "Chat",
+      "Files": "Files",
       "Tickets": "Tickets",
       "Tenants": "Tenants",
       "Users": "Users",
@@ -1086,6 +1095,8 @@
       "Operations": "Operations"
     },
     "blurb": {
+      "Chat": "Read channels you have joined in your identity domain.",
+      "Files": "Upload files and delete own files; resource permissions still apply.",
       "Tickets": "Read support tickets and reply.",
       "Tenants": "Provision and operate tenants. Reserved for the root-tenant operator.",
       "Users": "Manage tenant user accounts and their assigned roles.",
@@ -1099,6 +1110,8 @@
     },
     "perm": {
       "Permissions": {
+        "Chat": { "Channels": { "View": "View chat channels", "Create": "Create and administer owned chat channels", "ManageAll": "Restore archived chat channels" }, "Messages": {"Send":"Send chat messages","EditOwn":"Edit own chat messages","DeleteOwn":"Delete own chat messages","DeleteAny":"Delete others' chat messages (also requires DeleteOwn)"} },
+        "Files": { "Upload": "Upload files", "DeleteOwn": "Delete own files" },
         "Tickets": { "View": "View tickets", "Comment": "Reply to tickets", "Assign": "Assign ticket", "Resolve": "Resolve ticket", "Reopen": "Reopen ticket", "Close": "Close ticket", "Create": "New ticket", "Update": "Edit ticket", "Delete": "Delete ticket", "Restore": "Restore ticket" },
         "Tenants": {
           "View": "View tenants",

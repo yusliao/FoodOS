@@ -1,3 +1,4 @@
+using System.Net;
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
 using FSH.Framework.Web.Realtime;
@@ -23,6 +24,13 @@ public sealed class EditMessageCommandHandler(
         if (userId == Guid.Empty) throw new UnauthorizedException("no current user");
         var currentUserId = userId.ToString();
 
+        var channelId = await db.Messages.AsNoTracking()
+            .Where(m => m.Id == cmd.MessageId).Select(m => (Guid?)m.ChannelId)
+            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new NotFoundException("Message not found.");
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await ChatMessageWriteLock.AcquireAsync(db, currentUser.GetTenant(), channelId, cancellationToken).ConfigureAwait(false);
+
         var message = await db.Messages.FirstOrDefaultAsync(m => m.Id == cmd.MessageId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException("Message not found.");
@@ -33,8 +41,14 @@ public sealed class EditMessageCommandHandler(
             ?? throw new NotFoundException("Message not found.");
         channel.RequireMember(currentUserId);
 
+        if (!string.Equals(message.AuthorUserId, currentUserId, StringComparison.Ordinal))
+            throw new ForbiddenException("Only the author can edit a message.");
+        if (message.DeletedAtUtc.HasValue)
+            throw new CustomException("Cannot edit a deleted message.", (IEnumerable<string>?)null, HttpStatusCode.Conflict);
+
         message.Edit(cmd.Body, currentUserId); // domain enforces author-only
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessageEdited", message.ToDto(), cancellationToken)

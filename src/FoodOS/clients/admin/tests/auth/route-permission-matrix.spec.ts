@@ -6,6 +6,7 @@ import messages from "../../src/i18n/locales/en-US.json" with { type: "json" };
 // Explicit expectations, independent of RouteGuard implementation. Include
 // redirect aliases and inherited billing guards, not just leaf pages.
 const restricted = [
+  "/chat", "/chat/:channelId",
   "/tickets", "/tickets/:ticketId",
   "/tickets/trash",
   "/procurement/purchase-orders", "/procurement/suppliers",

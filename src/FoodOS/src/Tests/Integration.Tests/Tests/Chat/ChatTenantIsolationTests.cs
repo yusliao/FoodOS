@@ -61,6 +61,23 @@ public sealed class ChatTenantIsolationTests
     // ─── list ────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task GetChannelMessage_Should_Return404_Across_Tenants_In_Both_Directions()
+    {
+        using var root = await _auth.CreateRootAdminClientAsync();
+        using var customer = await CreateProvisionedTenantAdminClientAsync();
+        var rootChannel = await CreateChannelAsync(root, $"root-lookup-{Unique()}");
+        var customerChannel = await CreateChannelAsync(customer, $"customer-lookup-{Unique()}");
+        var rootMessage = await SendMessageAsync(root, rootChannel, "operator secret content");
+        var customerMessage = await SendMessageAsync(customer, customerChannel, "customer secret content");
+        using var crossCustomer = await customer.GetAsync($"{ChatBasePath}/channels/{rootChannel}/messages/{rootMessage}");
+        using var crossRoot = await root.GetAsync($"{ChatBasePath}/channels/{customerChannel}/messages/{customerMessage}");
+        crossCustomer.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        crossRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await crossCustomer.Content.ReadAsStringAsync()).ShouldNotContain("operator secret content");
+        (await crossRoot.Content.ReadAsStringAsync()).ShouldNotContain("customer secret content");
+    }
+
+    [Fact]
     public async Task ListMyChannels_Should_Not_Include_Channels_From_Different_Tenant()
     {
         #region Arrange
@@ -218,6 +235,97 @@ public sealed class ChatTenantIsolationTests
         using var detail = await client.GetAsync($"{ChatBasePath}/channels/{channelId}");
         detail.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await detail.DeserializeAsync<ChannelDto>()).Members.ShouldHaveSingleItem().UserId.ShouldBe(ownUserId);
+    }
+
+    [Fact]
+    public async Task DeleteReplyRecovery_Should_Reject_CrossTenant_Deletes_In_Both_Directions()
+    {
+        using var root = await _auth.CreateRootAdminClientAsync();
+        using var customer = await CreateProvisionedTenantAdminClientAsync();
+        var rootChannel = await CreateChannelAsync(root, $"root-delete-{Unique()}");
+        var customerChannel = await CreateChannelAsync(customer, $"customer-delete-{Unique()}");
+        var rootMessage = await SendMessageAsync(root, rootChannel, "operator message");
+        var customerMessage = await SendMessageAsync(customer, customerChannel, "customer message");
+
+        using var crossRoot = await root.DeleteAsync($"{ChatBasePath}/messages/{customerMessage}");
+        using var crossCustomer = await customer.DeleteAsync($"{ChatBasePath}/messages/{rootMessage}");
+        crossRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        crossCustomer.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var ownRoot = await root.GetAsync($"{ChatBasePath}/channels/{rootChannel}/messages/{rootMessage}");
+        using var ownCustomer = await customer.GetAsync($"{ChatBasePath}/channels/{customerChannel}/messages/{customerMessage}");
+        ownRoot.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ownCustomer.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ownRoot.DeserializeAsync<MessageDto>()).Body.ShouldBe("operator message");
+        (await ownCustomer.DeserializeAsync<MessageDto>()).Body.ShouldBe("customer message");
+    }
+
+    [Fact]
+    public async Task EditMessageRecovery_Should_Reject_CrossTenant_Edits_In_Both_Directions()
+    {
+        using var root = await _auth.CreateRootAdminClientAsync();
+        using var customer = await CreateProvisionedTenantAdminClientAsync();
+        var rootChannel = await CreateChannelAsync(root, $"root-edit-{Unique()}");
+        var customerChannel = await CreateChannelAsync(customer, $"customer-edit-{Unique()}");
+        var rootMessage = await SendMessageAsync(root, rootChannel, "operator original");
+        var customerMessage = await SendMessageAsync(customer, customerChannel, "customer original");
+        using var crossRoot = await root.PutAsJsonAsync($"{ChatBasePath}/messages/{customerMessage}", new { body = "intrusion" });
+        using var crossCustomer = await customer.PutAsJsonAsync($"{ChatBasePath}/messages/{rootMessage}", new { body = "intrusion" });
+        crossRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        crossCustomer.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var ownRoot = await root.GetAsync($"{ChatBasePath}/channels/{rootChannel}/messages/{rootMessage}");
+        using var ownCustomer = await customer.GetAsync($"{ChatBasePath}/channels/{customerChannel}/messages/{customerMessage}");
+        (await ownRoot.DeserializeAsync<MessageDto>()).Body.ShouldBe("operator original");
+        (await ownCustomer.DeserializeAsync<MessageDto>()).Body.ShouldBe("customer original");
+    }
+
+    [Fact]
+    public async Task ReadMarker_Should_Reject_CrossTenant_Channels_In_Both_Directions()
+    {
+        using var root = await _auth.CreateRootAdminClientAsync();
+        using var customer = await CreateProvisionedTenantAdminClientAsync();
+        var rootChannel = await CreateChannelAsync(root, $"root-read-{Unique()}");
+        var customerChannel = await CreateChannelAsync(customer, $"customer-read-{Unique()}");
+        var rootMessage = await SendMessageAsync(root, rootChannel, "operator unread");
+        var customerMessage = await SendMessageAsync(customer, customerChannel, "customer unread");
+
+        using var crossRoot = await root.PostAsJsonAsync(
+            $"{ChatBasePath}/channels/{customerChannel}/read", new { messageId = customerMessage });
+        using var crossCustomer = await customer.PostAsJsonAsync(
+            $"{ChatBasePath}/channels/{rootChannel}/read", new { messageId = rootMessage });
+        crossRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        crossCustomer.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        using var ownRoot = await root.GetAsync($"{ChatBasePath}/channels/{rootChannel}");
+        using var ownCustomer = await customer.GetAsync($"{ChatBasePath}/channels/{customerChannel}");
+        var rootDetail = await ownRoot.DeserializeAsync<ChannelDto>();
+        var customerDetail = await ownCustomer.DeserializeAsync<ChannelDto>();
+        rootDetail.Members.ShouldHaveSingleItem().LastReadMessageId.ShouldBeNull();
+        customerDetail.Members.ShouldHaveSingleItem().LastReadMessageId.ShouldBeNull();
+        rootDetail.UnreadCount.ShouldBe(1);
+        customerDetail.UnreadCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task RestoreChannel_Should_Reject_CrossTenant_Channels_In_Both_Directions()
+    {
+        using var root = await _auth.CreateRootAdminClientAsync();
+        using var customer = await CreateProvisionedTenantAdminClientAsync();
+        var rootChannel = await CreateChannelAsync(root, $"root-restore-{Unique()}");
+        var customerChannel = await CreateChannelAsync(customer, $"customer-restore-{Unique()}");
+        using var archiveRoot = await root.DeleteAsync($"{ChatBasePath}/channels/{rootChannel}");
+        using var archiveCustomer = await customer.DeleteAsync($"{ChatBasePath}/channels/{customerChannel}");
+        archiveRoot.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        archiveCustomer.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        using var crossRoot = await root.PostAsync($"{ChatBasePath}/channels/{customerChannel}/restore", null);
+        using var crossCustomer = await customer.PostAsync($"{ChatBasePath}/channels/{rootChannel}/restore", null);
+        crossRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        crossCustomer.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        using var ownRoot = await root.PostAsync($"{ChatBasePath}/channels/{rootChannel}/restore", null);
+        using var ownCustomer = await customer.PostAsync($"{ChatBasePath}/channels/{customerChannel}/restore", null);
+        ownRoot.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        ownCustomer.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────

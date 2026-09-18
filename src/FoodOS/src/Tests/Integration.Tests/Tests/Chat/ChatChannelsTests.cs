@@ -5,7 +5,7 @@ using Integration.Tests.Infrastructure.Extensions;
 namespace Integration.Tests.Tests.Chat;
 
 [Collection(FshCollectionDefinition.Name)]
-public sealed class ChatChannelsTests
+public sealed partial class ChatChannelsTests
 {
     private const string ChatBasePath = "/api/v1/chat";
     private readonly FshWebApplicationFactory _factory;

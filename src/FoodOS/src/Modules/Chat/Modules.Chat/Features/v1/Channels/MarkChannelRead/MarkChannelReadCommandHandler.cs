@@ -23,10 +23,13 @@ public sealed class MarkChannelReadCommandHandler(
         if (userId == Guid.Empty) throw new UnauthorizedException("no current user");
         var currentUserId = userId.ToString();
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await ChatMessageWriteLock.AcquireAsync(db, currentUser.GetTenant(), cmd.ChannelId, cancellationToken).ConfigureAwait(false);
+
         var channel = await db.Channels.FirstOrDefaultAsync(c => c.Id == cmd.ChannelId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException("Channel not found.");
-        channel.RequireMember(currentUserId);
+        var member = channel.RequireMember(currentUserId);
 
         // Verify the marker message actually exists in this channel.
         var exists = await db.Messages
@@ -34,8 +37,14 @@ public sealed class MarkChannelReadCommandHandler(
             .ConfigureAwait(false);
         if (!exists) throw new NotFoundException("Message not found in this channel.");
 
+        // Validate scope even for a stale marker, but never move backwards or
+        // broadcast a stale position to the caller's other tabs.
+        if (member.LastReadMessageId is { } lastRead && cmd.MessageId.CompareTo(lastRead) <= 0)
+            return Unit.Value;
+
         channel.MarkRead(currentUserId, cmd.MessageId);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         // Push to the user's other tabs so the badge clears everywhere at once.
         await hub.Clients.Group($"user:{currentUserId}")

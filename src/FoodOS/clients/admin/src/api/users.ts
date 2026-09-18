@@ -101,7 +101,7 @@ export async function changePassword(input: {
   });
 }
 
-export async function searchUsers(params: SearchUsersParams = {}): Promise<PagedResponse<UserDto>> {
+export async function searchUsers(params: SearchUsersParams = {}, signal?: AbortSignal): Promise<PagedResponse<UserDto>> {
   const q = new URLSearchParams();
   q.set("PageNumber", String(params.pageNumber ?? 1));
   q.set("PageSize", String(params.pageSize ?? 10));
@@ -111,6 +111,7 @@ export async function searchUsers(params: SearchUsersParams = {}): Promise<Paged
   if (params.emailConfirmed !== undefined) q.set("EmailConfirmed", String(params.emailConfirmed));
   if (params.roleId) q.set("RoleId", params.roleId);
   return apiFetch<PagedResponse<UserDto>>(`${BASE}/search?${q.toString()}`, {
+    signal,
     headers: params.tenantId ? { tenant: params.tenantId } : undefined,
   });
 }

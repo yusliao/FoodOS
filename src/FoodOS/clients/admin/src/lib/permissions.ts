@@ -11,6 +11,7 @@
  */
 
 export const FilesPermissions = Object.freeze({ Upload: "Permissions.Files.Upload", DeleteOwn: "Permissions.Files.DeleteOwn" });
+export const ChatPermissions = Object.freeze({ View: "Permissions.Chat.Channels.View", Create: "Permissions.Chat.Channels.Create", ManageAll: "Permissions.Chat.Channels.ManageAll", Send: "Permissions.Chat.Messages.Send", EditOwn: "Permissions.Chat.Messages.EditOwn", DeleteOwn: "Permissions.Chat.Messages.DeleteOwn", DeleteAny: "Permissions.Chat.Messages.DeleteAny" });
 export const TicketsPermissions = Object.freeze({ Delete: "Permissions.Tickets.Delete", Restore: "Permissions.Tickets.Restore", Create: "Permissions.Tickets.Create", Update: "Permissions.Tickets.Update", View: "Permissions.Tickets.View", Comment: "Permissions.Tickets.Comment", Assign: "Permissions.Tickets.Assign", Resolve: "Permissions.Tickets.Resolve", Reopen: "Permissions.Tickets.Reopen", Close: "Permissions.Tickets.Close" });
 
 export const OrderingPermissions = Object.freeze({
@@ -172,6 +173,19 @@ export type PermissionGroup = {
 };
 
 export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
+  { category: "Chat", blurb: "Read channels you have joined in your identity domain.", entries: [
+    { name: ChatPermissions.View, description: "View chat channels", basic: true },
+    { name: ChatPermissions.Create, description: "Create and administer owned chat channels", basic: true },
+    { name: ChatPermissions.ManageAll, description: "Restore archived chat channels" },
+    { name: ChatPermissions.Send, description: "Send chat messages", basic: true },
+    { name: ChatPermissions.EditOwn, description: "Edit own chat messages", basic: true },
+    { name: ChatPermissions.DeleteOwn, description: "Delete own chat messages", basic: true },
+    { name: ChatPermissions.DeleteAny, description: "Delete others' chat messages (also requires DeleteOwn)" },
+  ] },
+  { category: "Files", blurb: "Upload files and delete own files; resource permissions still apply.", entries: [
+    { name: FilesPermissions.Upload, description: "Upload files" },
+    { name: FilesPermissions.DeleteOwn, description: "Delete own files" },
+  ] },
   { category: "Tickets", blurb: "Read support tickets and reply.", entries: [
     { name: TicketsPermissions.View, description: "View tickets", basic: true },
     { name: TicketsPermissions.Comment, description: "Reply to tickets" },

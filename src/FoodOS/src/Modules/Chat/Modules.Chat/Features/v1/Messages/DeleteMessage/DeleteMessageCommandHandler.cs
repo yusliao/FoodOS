@@ -26,6 +26,15 @@ public sealed class DeleteMessageCommandHandler(
         if (userId == Guid.Empty) throw new UnauthorizedException("no current user");
         var currentUserId = userId.ToString();
 
+        // Resolve only the lock scope first; do not retain stale tracked state
+        // while waiting for another sender/deleter to commit.
+        var channelId = await db.Messages.AsNoTracking()
+            .Where(m => m.Id == cmd.MessageId).Select(m => (Guid?)m.ChannelId)
+            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new NotFoundException("Message not found.");
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await ChatMessageWriteLock.AcquireAsync(db, currentUser.GetTenant(), channelId, cancellationToken).ConfigureAwait(false);
+
         var message = await db.Messages.FirstOrDefaultAsync(m => m.Id == cmd.MessageId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException("Message not found.");
@@ -39,6 +48,11 @@ public sealed class DeleteMessageCommandHandler(
             .HasPermissionAsync(currentUserId, ChatPermissions.Messages.DeleteAny, cancellationToken)
             .ConfigureAwait(false);
 
+        // Repeated deletes remain authorized operations, not an ownership bypass.
+        if (!isModerator && !string.Equals(message.AuthorUserId, currentUserId, StringComparison.Ordinal))
+            throw new ForbiddenException("Only the author or a moderator can delete.");
+        if (message.DeletedAtUtc.HasValue) return Unit.Value;
+
         message.SoftDelete(currentUserId, isModerator);
 
         // If this was a thread reply, decrement the parent's ReplyCount.
@@ -50,6 +64,7 @@ public sealed class DeleteMessageCommandHandler(
         }
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessageDeleted", new { channelId = channel.Id, messageId = message.Id }, cancellationToken)

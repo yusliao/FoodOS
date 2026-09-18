@@ -19,6 +19,7 @@ using FSH.Modules.Chat.Features.v1.Channels.RestoreChannel;
 using FSH.Modules.Chat.Features.v1.Channels.UpdateChannel;
 using FSH.Modules.Chat.Features.v1.Messages.DeleteMessage;
 using FSH.Modules.Chat.Features.v1.Messages.EditMessage;
+using FSH.Modules.Chat.Features.v1.Messages.GetChannelMessage;
 using FSH.Modules.Chat.Features.v1.Messages.GetPinnedMessages;
 using FSH.Modules.Chat.Features.v1.Messages.ListChannelMessages;
 using FSH.Modules.Chat.Features.v1.Messages.ListMessageReplies;
@@ -104,6 +105,7 @@ public sealed class ChatModule : IModule
 
         // Messages
         group.MapListChannelMessagesEndpoint();      // GET /channels/{id}/messages
+        group.MapGetChannelMessageEndpoint();        // GET /channels/{channelId}/messages/{messageId}
         group.MapListMessageRepliesEndpoint();       // GET /messages/{id}/replies
         group.MapGetPinnedMessagesEndpoint();        // GET /channels/{id}/pinned
         group.MapSendMessageEndpoint();              // POST /channels/{id}/messages

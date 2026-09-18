@@ -159,6 +159,18 @@ public class ChatChannelTests
     #region Edge Cases
 
     [Fact]
+    public void MarkRead_Should_Never_Move_Backwards()
+    {
+        var channel = ChatChannel.CreateChannel("eng", null, false, "u1");
+        var older = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var newer = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        channel.MarkRead("u1", newer);
+        channel.MarkRead("u1", older);
+        channel.MarkRead("u1", newer);
+        channel.Members.Single().LastReadMessageId.ShouldBe(newer);
+    }
+
+    [Fact]
     public void Slugify_Should_Collapse_NonAlphanumerics_And_Repeats()
     {
         var c = ChatChannel.CreateChannel("  Hello  -- World!! ", null, false, "u1");

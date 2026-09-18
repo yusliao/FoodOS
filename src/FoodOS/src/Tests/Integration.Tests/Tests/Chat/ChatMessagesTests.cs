@@ -5,13 +5,15 @@ using Integration.Tests.Infrastructure.Extensions;
 namespace Integration.Tests.Tests.Chat;
 
 [Collection(FshCollectionDefinition.Name)]
-public sealed class ChatMessagesTests
+public sealed partial class ChatMessagesTests
 {
     private const string ChatBasePath = "/api/v1/chat";
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public ChatMessagesTests(FshWebApplicationFactory factory)
     {
+        _factory = factory;
         _auth = new AuthHelper(factory);
     }
 

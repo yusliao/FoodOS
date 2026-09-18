@@ -20,6 +20,7 @@ import {
   LogisticsPermissions,
   WebhooksPermissions,
   TicketsPermissions,
+  ChatPermissions,
 } from "@/lib/permissions";
 
 // Lazy-loaded pages — each `import()` becomes its own bundle chunk so the
@@ -37,6 +38,8 @@ const lazyNamed = <T extends string>(
 const TenantsListPage = lazyNamed(() => import("@/pages/tenants/list"), "TenantsListPage");
 const ReportsPage = lazyNamed(() => import("@/pages/reports"), "ReportsPage");
 const TicketsPage = lazyNamed(() => import("@/pages/tickets/page"), "TicketsPage");
+const ChatPage = lazyNamed(() => import("@/pages/chat/page"), "ChatPage");
+const ChatChannelPage = lazyNamed(() => import("@/pages/chat/page"), "ChatChannelPage");
 const TicketDetailPage = lazyNamed(() => import("@/pages/tickets/page"), "TicketDetailPage");
 const TicketTrashPage = lazyNamed(() => import("@/pages/tickets/trash"), "TicketTrashPage");
 const CustomersPage = lazyNamed(() => import("@/pages/customers/list"), "CustomersPage");
@@ -103,6 +106,8 @@ export const router = createBrowserRouter([
         errorElement: <RouteError />,
         children: [
           { path: "tickets", element: <RouteGuard perms={[TicketsPermissions.View]}><TicketsPage /></RouteGuard> },
+          { path: "chat", element: <RouteGuard perms={[ChatPermissions.View]}><ChatPage /></RouteGuard> },
+          { path: "chat/:channelId", element: <RouteGuard perms={[ChatPermissions.View]}><ChatChannelPage /></RouteGuard> },
           { path: "tickets/trash", element: <RouteGuard perms={[TicketsPermissions.Restore]}><TicketTrashPage /></RouteGuard> },
           { path: "tickets/:ticketId", element: <RouteGuard perms={[TicketsPermissions.View]}><TicketDetailPage /></RouteGuard> },
           { index: true, element: <DashboardPage /> },

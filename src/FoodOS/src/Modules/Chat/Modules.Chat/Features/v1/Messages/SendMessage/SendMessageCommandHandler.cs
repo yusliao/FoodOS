@@ -32,6 +32,9 @@ public sealed class SendMessageCommandHandler(
         if (userId == Guid.Empty) throw new UnauthorizedException("no current user");
         var currentUserId = userId.ToString();
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await ChatMessageWriteLock.AcquireAsync(db, currentUser.GetTenant(), cmd.ChannelId, cancellationToken).ConfigureAwait(false);
+
         var channel = await db.Channels.FirstOrDefaultAsync(c => c.Id == cmd.ChannelId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException("Channel not found.");
@@ -94,6 +97,7 @@ public sealed class SendMessageCommandHandler(
         channel.TouchLastMessage(DateTime.UtcNow);
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         var dto = message.ToDto();
         await hub.Clients.CurrentMembers(channel)
