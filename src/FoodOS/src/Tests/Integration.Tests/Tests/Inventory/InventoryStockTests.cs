@@ -1,12 +1,15 @@
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Inventory.Contracts.Dtos;
+using FSH.Modules.Inventory.Data;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
 namespace Integration.Tests.Tests.Inventory;
 
 /// <summary>
-/// Warehouse create + receive + ATP for the Inventory skeleton.
-/// Lot quantity lives in inventory schema (warehouse × zone × lot), not Catalog.Product.Stock.
+/// External-WMS mode keeps warehouse and stock projections readable, but every legacy physical-stock write fails closed.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
 public sealed class InventoryStockTests
@@ -30,149 +33,70 @@ public sealed class InventoryStockTests
         warehouse.Clock.TimeZoneId.ShouldBe("America/New_York");
         warehouse.Clock.CutoffLocal.ShouldBe("16:00");
         warehouse.Zones.Count.ShouldBe(3);
-        warehouse.Zones.Select(z => z.Kind).ShouldBe(["Ambient", "Chilled", "Frozen"], ignoreOrder: true);
+        warehouse.Zones.Select(zone => zone.Kind)
+            .ShouldBe(["Ambient", "Chilled", "Frozen"], ignoreOrder: true);
     }
 
     [Fact]
-    public async Task ReceiveStock_Should_IncreaseAvailableQty_And_HonorIdempotencyKey()
+    public async Task ReceiveStock_Should_BeBlockedAcrossRetries_WithoutInventoryWrites()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
         var productId = Guid.CreateVersion7();
-        var expiry = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
-        var idempotencyKey = $"recv-{Guid.NewGuid():N}";
+        var body = ReceiveBody(warehouse.Id, productId, "LOT-A1", $"recv-{Guid.NewGuid():N}");
 
-        var receiveBody = new
-        {
-            warehouseId = warehouse.Id,
-            zone = "Ambient",
-            productId,
-            lotNo = "LOT-A1",
-            expiryDate = expiry,
-            quantity = 10m,
-            idempotencyKey,
-            manufacturedOn = (DateOnly?)null,
-            origin = "Boston",
-        };
-
-        using var first = await client.PostAsJsonAsync(
+        using var first = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/receive", body);
+        await AssertBlockedAsync(first);
+        using var replay = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/receive", body);
+        await AssertBlockedAsync(replay);
+        using var changedKey = await client.PostAsJsonAsync(
             $"{TestConstants.InventoryBasePath}/stock/receive",
-            receiveBody);
-        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
-        var lotId = await first.DeserializeAsync<Guid>();
-        lotId.ShouldNotBe(Guid.Empty);
+            ReceiveBody(warehouse.Id, productId, "LOT-A1", $"recv-{Guid.NewGuid():N}"));
+        await AssertBlockedAsync(changedKey);
 
-        using var replay = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/receive",
-            receiveBody);
-        replay.StatusCode.ShouldBe(HttpStatusCode.OK, await replay.Content.ReadAsStringAsync());
-        (await replay.DeserializeAsync<Guid>()).ShouldBe(lotId);
-
-        var available = await GetAvailableAsync(client, warehouse.Id, productId, "Ambient");
-        available.Available.ShouldBe(10m);
-        available.ZoneKind.ShouldBe("Ambient");
-
-        using var second = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/receive",
-            new
-            {
-                warehouseId = warehouse.Id,
-                zone = "Ambient",
-                productId,
-                lotNo = "LOT-A1",
-                expiryDate = expiry,
-                quantity = 5m,
-                idempotencyKey = $"recv-{Guid.NewGuid():N}",
-                manufacturedOn = (DateOnly?)null,
-                origin = "Boston",
-            });
-        second.StatusCode.ShouldBe(HttpStatusCode.OK, await second.Content.ReadAsStringAsync());
-
-        var afterSecond = await GetAvailableAsync(client, warehouse.Id, productId, "Ambient");
-        afterSecond.Available.ShouldBe(15m);
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(0m);
+        await AssertNoStockWritesAsync(productId);
     }
 
     [Fact]
-    public async Task ReserveStock_Should_DecreaseAvailableQty_And_HonorIdempotency_And_Unreserve()
+    public async Task ReserveAndUnreserve_Should_BeBlockedWithoutReservationOrAtpChange()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
         var productId = Guid.CreateVersion7();
-        var lotId = await ReceiveAsync(client, warehouse.Id, productId, "LOT-R1", 10m);
-
-        var orderId = Guid.CreateVersion7();
-        var reserveKey = $"rsv-{Guid.NewGuid():N}";
         var reserveBody = new
         {
             warehouseId = warehouse.Id,
             zone = "Ambient",
             productId,
             quantity = 6m,
-            orderId,
-            idempotencyKey = reserveKey,
+            orderId = Guid.CreateVersion7(),
+            idempotencyKey = $"rsv-{Guid.NewGuid():N}",
             orderLineId = Guid.CreateVersion7(),
         };
 
-        using var first = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/reserve",
-            reserveBody);
-        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
-        var reservationId = await first.DeserializeAsync<Guid>();
-        reservationId.ShouldNotBe(Guid.Empty);
-
+        using var reserve = await client.PostAsJsonAsync(
+            $"{TestConstants.InventoryBasePath}/stock/reserve", reserveBody);
+        await AssertBlockedAsync(reserve);
         using var replay = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/reserve",
-            reserveBody);
-        replay.StatusCode.ShouldBe(HttpStatusCode.OK, await replay.Content.ReadAsStringAsync());
-        (await replay.DeserializeAsync<Guid>()).ShouldBe(reservationId);
-
-        var afterReserve = await GetAvailableAsync(client, warehouse.Id, productId, "Ambient");
-        afterReserve.Available.ShouldBe(4m);
-
-        using var oversell = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/reserve",
-            new
-            {
-                warehouseId = warehouse.Id,
-                zone = "Ambient",
-                productId,
-                quantity = 5m,
-                orderId = Guid.CreateVersion7(),
-                idempotencyKey = $"rsv-{Guid.NewGuid():N}",
-                orderLineId = (Guid?)null,
-            });
-        oversell.StatusCode.ShouldBe(HttpStatusCode.Conflict, await oversell.Content.ReadAsStringAsync());
-
+            $"{TestConstants.InventoryBasePath}/stock/reserve", reserveBody);
+        await AssertBlockedAsync(replay);
         using var unreserve = await client.PostAsJsonAsync(
             $"{TestConstants.InventoryBasePath}/stock/unreserve",
-            new { reservationId, idempotencyKey = $"unr-{Guid.NewGuid():N}" });
-        unreserve.StatusCode.ShouldBe(HttpStatusCode.OK, await unreserve.Content.ReadAsStringAsync());
-        (await unreserve.DeserializeAsync<Guid>()).ShouldBe(reservationId);
+            new { reservationId = Guid.NewGuid(), idempotencyKey = $"unr-{Guid.NewGuid():N}" });
+        await AssertBlockedAsync(unreserve);
 
-        var afterUnreserve = await GetAvailableAsync(client, warehouse.Id, productId, "Ambient");
-        afterUnreserve.Available.ShouldBe(10m);
-        lotId.ShouldNotBe(Guid.Empty);
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(0m);
+        await AssertNoStockWritesAsync(productId);
     }
 
     [Fact]
-    public async Task ConcurrentReserve_Should_NotOversellOnHand()
+    public async Task ConcurrentReserve_Should_AllFailClosedWithoutReservations()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
         var productId = Guid.CreateVersion7();
-        await ReceiveAsync(client, warehouse.Id, productId, "LOT-R2", 10m);
-
-        var bodyA = new
-        {
-            warehouseId = warehouse.Id,
-            zone = "Ambient",
-            productId,
-            quantity = 8m,
-            orderId = Guid.CreateVersion7(),
-            idempotencyKey = $"rsv-{Guid.NewGuid():N}",
-            orderLineId = (Guid?)null,
-        };
-        var bodyB = new
+        object ReserveBody() => new
         {
             warehouseId = warehouse.Id,
             zone = "Ambient",
@@ -183,39 +107,28 @@ public sealed class InventoryStockTests
             orderLineId = (Guid?)null,
         };
 
-        var taskA = client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/reserve",
-            bodyA);
-        var taskB = client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/reserve",
-            bodyB);
-
-        HttpResponseMessage[] responses = await Task.WhenAll(taskA, taskB);
+        var responses = await Task.WhenAll(
+            client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/reserve", ReserveBody()),
+            client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/reserve", ReserveBody()));
         try
         {
-            var statuses = responses.Select(r => r.StatusCode).ToArray();
-            statuses.ShouldContain(HttpStatusCode.OK);
-            statuses.ShouldContain(HttpStatusCode.Conflict);
-
-            var available = await GetAvailableAsync(client, warehouse.Id, productId, "Ambient");
-            available.Available.ShouldBe(2m);
+            responses.ShouldAllBe(response => response.StatusCode == HttpStatusCode.Conflict);
         }
         finally
         {
-            foreach (var response in responses)
-            {
-                response.Dispose();
-            }
+            foreach (var response in responses) response.Dispose();
         }
+
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(0m);
+        await AssertNoStockWritesAsync(productId);
     }
 
     [Fact]
-    public async Task IsolateStock_Should_ExcludeLotFromAvailableQty()
+    public async Task IsolateStock_Should_BeBlockedWithoutCreatingLotOrBalance()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
         var productId = Guid.CreateVersion7();
-        var lotId = await ReceiveAsync(client, warehouse.Id, productId, "LOT-ISO", 8m);
 
         using var isolate = await client.PostAsJsonAsync(
             $"{TestConstants.InventoryBasePath}/stock/isolate",
@@ -223,29 +136,15 @@ public sealed class InventoryStockTests
             {
                 warehouseId = warehouse.Id,
                 zone = "Ambient",
-                lotId,
+                lotId = Guid.NewGuid(),
                 quantity = 8m,
                 idempotencyKey = $"iso-{Guid.NewGuid():N}",
                 reason = "qc-fail",
             });
-        isolate.StatusCode.ShouldBe(HttpStatusCode.OK, await isolate.Content.ReadAsStringAsync());
+        await AssertBlockedAsync(isolate);
 
-        var available = await GetAvailableAsync(client, warehouse.Id, productId, "Ambient");
-        available.Available.ShouldBe(0m);
-
-        using var reserve = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/reserve",
-            new
-            {
-                warehouseId = warehouse.Id,
-                zone = "Ambient",
-                productId,
-                quantity = 1m,
-                orderId = Guid.CreateVersion7(),
-                idempotencyKey = $"rsv-{Guid.NewGuid():N}",
-                orderLineId = (Guid?)null,
-            });
-        reserve.StatusCode.ShouldBe(HttpStatusCode.Conflict, await reserve.Content.ReadAsStringAsync());
+        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(0m);
+        await AssertNoStockWritesAsync(productId);
     }
 
     [Fact]
@@ -253,80 +152,43 @@ public sealed class InventoryStockTests
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(rootClient);
-
-        var uniqueId = Guid.NewGuid().ToString("N")[..8];
-        using var otherClient = await ProvisionTenantClientAsync(rootClient, $"inv-{uniqueId}");
+        using var otherClient = await ProvisionTenantClientAsync(
+            rootClient, $"inv-{Guid.NewGuid().ToString("N")[..8]}");
 
         using var crossGet = await otherClient.GetAsync(
             $"{TestConstants.InventoryBasePath}/warehouses/{warehouse.Id}");
-        // Warehouses belong to the operator; customers have no internal warehouse read permission.
         crossGet.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
         using var ownGet = await rootClient.GetAsync(
             $"{TestConstants.InventoryBasePath}/warehouses/{warehouse.Id}");
         ownGet.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
-    public async Task LotArchiveBalancesLedgerAndCount_Should_RoundTrip()
+    public async Task CountAdjustment_Should_BeBlockedWithoutLotBalanceOrLedger()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
         var productId = Guid.CreateVersion7();
-        var lotId = await ReceiveAsync(client, warehouse.Id, productId, "LOT-ARCH", 10m);
-
-        using var getLot = await client.GetAsync($"{TestConstants.InventoryBasePath}/lots/{lotId}");
-        getLot.StatusCode.ShouldBe(HttpStatusCode.OK, await getLot.Content.ReadAsStringAsync());
-        var detail = await getLot.DeserializeAsync<LotDetailDto>();
-        detail.Lot.LotNo.ShouldBe("LOT-ARCH");
-        detail.Lot.ProductId.ShouldBe(productId);
-        var lotBalance = detail.Balances.ShouldHaveSingleItem();
-        lotBalance.Available.ShouldBe(10m);
-        lotBalance.ZoneKind.ShouldBe("Ambient");
-
-        using var searchLots = await client.GetAsync(
-            $"{TestConstants.InventoryBasePath}/lots?warehouseId={warehouse.Id}&productId={productId}&lotNo=ARCH");
-        searchLots.StatusCode.ShouldBe(HttpStatusCode.OK, await searchLots.Content.ReadAsStringAsync());
-        var lotsPage = await searchLots.DeserializeAsync<PagedResponse<LotDto>>();
-        lotsPage.Items.ShouldContain(l => l.Id == lotId);
-
-        using var balances = await client.GetAsync(
-            $"{TestConstants.InventoryBasePath}/stock/balances?warehouseId={warehouse.Id}&zone=Ambient&lotId={lotId}");
-        balances.StatusCode.ShouldBe(HttpStatusCode.OK, await balances.Content.ReadAsStringAsync());
-        var balancePage = await balances.DeserializeAsync<PagedResponse<LotBalanceDto>>();
-        balancePage.Items.ShouldHaveSingleItem().OnHand.ShouldBe(10m);
-
-        using var txns = await client.GetAsync(
-            $"{TestConstants.InventoryBasePath}/stock/transactions?warehouseId={warehouse.Id}&lotId={lotId}");
-        txns.StatusCode.ShouldBe(HttpStatusCode.OK, await txns.Content.ReadAsStringAsync());
-        var txnPage = await txns.DeserializeAsync<PagedResponse<InventoryTransactionDto>>();
-        txnPage.Items.ShouldContain(t => t.Type == "Receive" && t.Quantity == 10m);
-
-        var countKey = $"cnt-{Guid.NewGuid():N}";
-        var countBody = new
+        var body = new
         {
             warehouseId = warehouse.Id,
             zone = "Ambient",
             productId,
-            lotId,
+            lotId = Guid.NewGuid(),
             countedAvailable = 7m,
-            idempotencyKey = countKey,
+            idempotencyKey = $"cnt-{Guid.NewGuid():N}",
         };
-        using var count = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/count", countBody);
-        count.StatusCode.ShouldBe(HttpStatusCode.OK, await count.Content.ReadAsStringAsync());
-        (await count.DeserializeAsync<Guid>()).ShouldBe(lotId);
 
-        using var replay = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/count", countBody);
-        replay.StatusCode.ShouldBe(HttpStatusCode.OK, await replay.Content.ReadAsStringAsync());
-        (await replay.DeserializeAsync<Guid>()).ShouldBe(lotId);
+        using var count = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/count", body);
+        await AssertBlockedAsync(count);
+        using var replay = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/count", body);
+        await AssertBlockedAsync(replay);
 
-        (await GetAvailableAsync(client, warehouse.Id, productId, "Ambient")).Available.ShouldBe(7m);
-
-        using var afterCount = await client.GetAsync(
-            $"{TestConstants.InventoryBasePath}/stock/transactions?warehouseId={warehouse.Id}&lotId={lotId}");
-        var afterPage = await afterCount.DeserializeAsync<PagedResponse<InventoryTransactionDto>>();
-        afterPage.Items.Count(t => t.Type == "AdjustCount").ShouldBe(1);
-        afterPage.Items.ShouldContain(t => t.Type == "AdjustCount" && t.Quantity == 3m);
+        using var lots = await client.GetAsync(
+            $"{TestConstants.InventoryBasePath}/lots?warehouseId={warehouse.Id}&productId={productId}");
+        lots.StatusCode.ShouldBe(HttpStatusCode.OK, await lots.Content.ReadAsStringAsync());
+        (await lots.DeserializeAsync<PagedResponse<LotDto>>()).Items.ShouldBeEmpty();
+        await AssertNoStockWritesAsync(productId);
     }
 
     [Fact]
@@ -337,6 +199,39 @@ public sealed class InventoryStockTests
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    private async Task AssertNoStockWritesAsync(Guid productId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+        (await db.Lots.AnyAsync(lot => lot.ProductId == productId)).ShouldBeFalse();
+        (await db.LotBalances.AnyAsync(balance => balance.ProductId == productId)).ShouldBeFalse();
+        (await db.Reservations.AnyAsync(reservation => reservation.ProductId == productId)).ShouldBeFalse();
+        (await db.InventoryTransactions.AnyAsync(transaction => transaction.ProductId == productId)).ShouldBeFalse();
+    }
+
+    private static async Task AssertBlockedAsync(HttpResponseMessage response)
+    {
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict, await response.Content.ReadAsStringAsync());
+        (await response.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
+    }
+
+    private static object ReceiveBody(Guid warehouseId, Guid productId, string lotNo, string idempotencyKey) => new
+    {
+        warehouseId,
+        zone = "Ambient",
+        productId,
+        lotNo,
+        expiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)),
+        quantity = 10m,
+        idempotencyKey,
+        manufacturedOn = (DateOnly?)null,
+        origin = "Boston",
+    };
+
     private static async Task<WarehouseDto> CreateWarehouseAsync(HttpClient client)
     {
         var code = $"DC{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
@@ -345,42 +240,12 @@ public sealed class InventoryStockTests
             new { code, name = $"Pilot {code}", city = "Boston", timeZoneId = (string?)null });
         create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
         var id = await create.DeserializeAsync<Guid>();
-
         using var get = await client.GetAsync($"{TestConstants.InventoryBasePath}/warehouses/{id}");
         return await get.DeserializeAsync<WarehouseDto>();
     }
 
-    private static async Task<Guid> ReceiveAsync(
-        HttpClient client,
-        Guid warehouseId,
-        Guid productId,
-        string lotNo,
-        decimal quantity)
-    {
-        var expiry = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
-        using var receive = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/receive",
-            new
-            {
-                warehouseId,
-                zone = "Ambient",
-                productId,
-                lotNo,
-                expiryDate = expiry,
-                quantity,
-                idempotencyKey = $"recv-{Guid.NewGuid():N}",
-                manufacturedOn = (DateOnly?)null,
-                origin = "Boston",
-            });
-        receive.StatusCode.ShouldBe(HttpStatusCode.OK, await receive.Content.ReadAsStringAsync());
-        return await receive.DeserializeAsync<Guid>();
-    }
-
     private static async Task<AvailableQtyDto> GetAvailableAsync(
-        HttpClient client,
-        Guid warehouseId,
-        Guid productId,
-        string zone)
+        HttpClient client, Guid warehouseId, Guid productId, string zone)
     {
         using var response = await client.GetAsync(
             $"{TestConstants.InventoryBasePath}/stock/available?warehouseId={warehouseId}&productId={productId}&zone={zone}");
@@ -402,7 +267,7 @@ public sealed class InventoryStockTests
         });
         createTenant.StatusCode.ShouldBe(HttpStatusCode.Created, await createTenant.Content.ReadAsStringAsync());
 
-        for (int i = 0; i < 60; i++)
+        for (int attempt = 0; attempt < 60; attempt++)
         {
             using var statusResponse = await rootClient.GetAsync(
                 $"{TestConstants.TenantsBasePath}/{tenantId}/provisioning");
@@ -426,18 +291,11 @@ public sealed class InventoryStockTests
                         }
                     }
 
-                    if (lastAuthError is not null)
-                    {
-                        throw lastAuthError;
-                    }
-
-                    throw new InvalidOperationException($"Tenant {tenantId} completed but admin login failed.");
+                    if (lastAuthError is not null) throw lastAuthError;
                 }
 
                 if (content.Contains("Failed", StringComparison.OrdinalIgnoreCase))
-                {
                     throw new InvalidOperationException($"Tenant {tenantId} provisioning failed: {content}");
-                }
             }
 
             await Task.Delay(1000);

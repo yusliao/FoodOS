@@ -52,7 +52,8 @@ public sealed class ExternalWmsBoundaryTests(FshWebApplicationFactory factory)
         };
         return contractAssemblies.SelectMany(assembly => assembly.GetTypes()).Distinct()
             .Where(type => !allowedFoodOsCommands.Contains(type) && !type.IsAbstract && type.GetInterfaces()
-            .Any(contract => contract.IsGenericType && contract.GetGenericTypeDefinition() == typeof(ICommand<>)))
+            .Any(contract => contract == typeof(ICommand)
+                || (contract.IsGenericType && contract.GetGenericTypeDefinition() == typeof(ICommand<>))))
             .Distinct().Select(type => new object[] { type });
     }
 

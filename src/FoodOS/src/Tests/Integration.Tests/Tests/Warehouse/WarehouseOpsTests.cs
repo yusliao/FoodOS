@@ -1,20 +1,15 @@
-using Hangfire;
-using Hangfire.Storage;
 using FSH.Modules.Inventory.Contracts.Dtos;
-using FSH.Modules.Logistics.Contracts.Dtos;
-using FSH.Modules.Ops.Contracts.Dtos;
-using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Procurement.Contracts.Dtos;
 using FSH.Modules.Warehouse.Contracts.Dtos;
-using FSH.Modules.Warehouse.Contracts.Authorization;
-using FSH.Modules.Logistics.Contracts.Authorization;
+using Hangfire;
+using Hangfire.Storage;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
 namespace Integration.Tests.Tests.Warehouse;
 
 /// <summary>
-/// 上架 / 装托 / 损耗 / Hangfire 截单注册。剧本 A 步 7 扫托、A 步 10 storing、D 步 3 报损。
+/// External-WMS mode retires local QC, putaway, shrinkage, packing and shipment execution while keeping their reads safe.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
 public sealed class WarehouseOpsTests
@@ -33,17 +28,14 @@ public sealed class WarehouseOpsTests
     {
         _ = _factory.Server;
         using var connection = JobStorage.Current.GetConnection();
-        var job = connection.GetRecurringJobs()
-            .FirstOrDefault(j => j.Id == "warehouse-cutoff");
-        job.ShouldBeNull();
+        connection.GetRecurringJobs().ShouldNotContain(job => job.Id == "warehouse-cutoff");
     }
 
     [Fact]
-    public async Task QcPass_Should_CreatePutaway_And_ConfirmWritesStoringTrace()
+    public async Task QcPass_Should_BeBlocked_WithoutCreatingPutawayOrTrace()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
-        var chilled = warehouse.Zones.First(z => z.Kind == "Chilled");
         var productId = await CreateChilledProductAsync(client);
         var supplierId = await CreateSupplierAsync(client);
         var po = await CreateAppointedPoAsync(client, supplierId, warehouse.Id, productId, 8m);
@@ -51,23 +43,7 @@ public sealed class WarehouseOpsTests
         using var qc = await client.PostAsJsonAsync(
             $"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}/lines/{po.Lines[0].Id}/qc/pass",
             QcBody("LOT-PUT", 8m));
-        qc.StatusCode.ShouldBe(HttpStatusCode.OK, await qc.Content.ReadAsStringAsync());
-        Guid qualityCheckId = await qc.DeserializeAsync<Guid>();
-        Guid lotId = (await (await client.GetAsync(
-            $"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}")).DeserializeAsync<PurchaseOrderDto>())
-            .QualityChecks[0].LotId!.Value;
-
-        using var createLocation = await client.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/locations",
-            new { warehouseId = warehouse.Id, zoneId = chilled.Id, code = "C-ST-01", type = "Storage" });
-        createLocation.StatusCode.ShouldBe(HttpStatusCode.OK, await createLocation.Content.ReadAsStringAsync());
-        var locationId = await createLocation.DeserializeAsync<Guid>();
-
-        using var listLocations = await client.GetAsync(
-            $"{TestConstants.WarehouseBasePath}/locations?warehouseId={warehouse.Id}&zoneId={chilled.Id}");
-        listLocations.StatusCode.ShouldBe(HttpStatusCode.OK, await listLocations.Content.ReadAsStringAsync());
-        (await listLocations.DeserializeAsync<List<LocationDto>>())
-            .ShouldContain(l => l.Id == locationId && l.Code == "C-ST-01");
+        await AssertBlockedAsync(qc);
 
         using var createTask = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/putaway-tasks",
@@ -76,76 +52,36 @@ public sealed class WarehouseOpsTests
                 warehouseId = warehouse.Id,
                 zone = "Chilled",
                 productId,
-                lotId,
+                lotId = Guid.NewGuid(),
                 quantity = 8m,
                 source = "QcPass"
             });
-        createTask.StatusCode.ShouldBe(HttpStatusCode.OK, await createTask.Content.ReadAsStringAsync());
-        var task = await createTask.DeserializeAsync<PutawayTaskDto>();
-        task.Status.ShouldBe("Pending");
+        await AssertBlockedAsync(createTask);
 
         using var listPutaway = await client.GetAsync(
-            $"{TestConstants.WarehouseBasePath}/putaway-tasks?warehouseId={warehouse.Id}&status=Pending");
+            $"{TestConstants.WarehouseBasePath}/putaway-tasks?warehouseId={warehouse.Id}");
         listPutaway.StatusCode.ShouldBe(HttpStatusCode.OK, await listPutaway.Content.ReadAsStringAsync());
-        (await listPutaway.DeserializeAsync<List<PutawayTaskDto>>())
-            .ShouldContain(t => t.Id == task.Id);
-
-        using var reader = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Putaway.View);
-        using var denied = await reader.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/putaway-tasks/{task.Id}/confirm", new { locationId });
-        denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        using var deniedCreate = await reader.PostAsJsonAsync($"{TestConstants.WarehouseBasePath}/putaway-tasks",
-            new { warehouseId = warehouse.Id, zone = "Chilled", productId, lotId, quantity = 8m, source = "QcPass" });
-        deniedCreate.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        using var stillPending = await reader.GetAsync(
-            $"{TestConstants.WarehouseBasePath}/putaway-tasks?warehouseId={warehouse.Id}&status=Pending");
-        (await stillPending.DeserializeAsync<List<PutawayTaskDto>>()).ShouldContain(t => t.Id == task.Id);
-        using var putawayWorker = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Putaway.Confirm);
-        using var confirm = await putawayWorker.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/putaway-tasks/{task.Id}/confirm",
-            new { locationId });
-        confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
-        (await confirm.DeserializeAsync<PutawayTaskDto>()).Status.ShouldBe("Completed");
-
-        using var replay = await client.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/putaway-tasks",
-            new
-            {
-                warehouseId = warehouse.Id,
-                zone = "Chilled",
-                productId,
-                lotId,
-                quantity = 8m,
-                source = "QcPass",
-                refId = qualityCheckId
-            });
-        replay.StatusCode.ShouldBe(HttpStatusCode.OK, await replay.Content.ReadAsStringAsync());
-        var replayedTask = await replay.DeserializeAsync<PutawayTaskDto>();
-        replayedTask.Id.ShouldBe(task.Id);
-        replayedTask.Status.ShouldBe("Completed");
-
-        using var trace = await client.GetAsync($"{TestConstants.OpsBasePath}/lots/{lotId}/trace");
-        var events = (await trace.DeserializeAsync<LotTraceDto>()).Events;
-        events.Select(e => e.BizStep).ShouldContain("receiving");
-        events.Select(e => e.BizStep).ShouldContain("storing");
+        (await listPutaway.DeserializeAsync<List<PutawayTaskDto>>()).ShouldBeEmpty();
+        using var getPo = await client.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}");
+        var unchanged = await getPo.DeserializeAsync<PurchaseOrderDto>();
+        unchanged.QualityChecks.ShouldBeEmpty();
+        unchanged.Lines[0].ReceivedQty.ShouldBe(0m);
+        (await GetAvailableAsync(client, warehouse.Id, productId)).ShouldBe(0m);
     }
 
     [Fact]
-    public async Task IsolatedLot_Should_RejectPutaway()
+    public async Task QcFail_Should_BeBlocked_WithoutCreatingIsolatedLotOrPutaway()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
         var productId = await CreateChilledProductAsync(client);
         var supplierId = await CreateSupplierAsync(client);
         var po = await CreateAppointedPoAsync(client, supplierId, warehouse.Id, productId, 5m);
+
         using var fail = await client.PostAsJsonAsync(
             $"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}/lines/{po.Lines[0].Id}/qc/fail",
             QcBody("LOT-BAD", 5m));
-        fail.StatusCode.ShouldBe(HttpStatusCode.OK, await fail.Content.ReadAsStringAsync());
-        Guid lotId = (await (await client.GetAsync(
-            $"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}")).DeserializeAsync<PurchaseOrderDto>())
-            .QualityChecks[0].LotId!.Value;
-
+        await AssertBlockedAsync(fail);
         using var createTask = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/putaway-tasks",
             new
@@ -153,21 +89,26 @@ public sealed class WarehouseOpsTests
                 warehouseId = warehouse.Id,
                 zone = "Chilled",
                 productId,
-                lotId,
+                lotId = Guid.NewGuid(),
                 quantity = 5m,
                 source = "QcPass"
             });
-        createTask.StatusCode.ShouldBe(HttpStatusCode.Conflict, await createTask.Content.ReadAsStringAsync());
+        await AssertBlockedAsync(createTask);
+
+        using var getPo = await client.GetAsync($"{TestConstants.ProcurementBasePath}/purchase-orders/{po.Id}");
+        var unchanged = await getPo.DeserializeAsync<PurchaseOrderDto>();
+        unchanged.QualityChecks.ShouldBeEmpty();
+        unchanged.Lines[0].RejectedQty.ShouldBe(0m);
+        (await GetAvailableAsync(client, warehouse.Id, productId)).ShouldBe(0m);
     }
 
     [Fact]
-    public async Task Shrinkage_Should_ReduceAvailable_And_PostAdjustShrink()
+    public async Task Shrinkage_Should_BeBlockedWithoutChangingAvailable()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouse = await CreateWarehouseAsync(client);
         var productId = await CreateChilledProductAsync(client);
-        var lotId = await ReceiveChilledAsync(client, warehouse.Id, productId, "LOT-SH", 10m);
-        (await GetAvailableAsync(client, warehouse.Id, productId)).ShouldBe(10m);
+        (await GetAvailableAsync(client, warehouse.Id, productId)).ShouldBe(0m);
 
         using var shrink = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/shrinkage",
@@ -176,109 +117,49 @@ public sealed class WarehouseOpsTests
                 warehouseId = warehouse.Id,
                 zone = "Chilled",
                 productId,
-                lotId,
+                lotId = Guid.NewGuid(),
                 quantity = 3m,
                 reason = "damage",
                 photoFileIds = Array.Empty<Guid>()
             });
-        shrink.StatusCode.ShouldBe(HttpStatusCode.OK, await shrink.Content.ReadAsStringAsync());
-        (await GetAvailableAsync(client, warehouse.Id, productId)).ShouldBe(7m);
+        await AssertBlockedAsync(shrink);
+        (await GetAvailableAsync(client, warehouse.Id, productId)).ShouldBe(0m);
     }
 
     [Fact]
-    public async Task PackTote_Should_AllowLoadByToteId()
+    public async Task PackAndShipmentExecution_Should_BeBlockedBeforeCreatingLocalRecords()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
-        var packed = await PackOrderAsync(client, 4m);
+        var warehouse = await CreateWarehouseAsync(client);
 
-        using var picker = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Picks.Confirm);
-        using var deniedPack = await picker.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/waves/{packed.WaveId}/pack",
-            new { orderIds = new[] { packed.OrderId }, sscc = $"SSCC{Guid.NewGuid():N}"[..18] });
-        deniedPack.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        using var packer = await OperatorTestUsers.CreateOperatorAsync(_factory, WarehousePermissions.Pack.Create);
-
-        using var pack = await packer.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/waves/{packed.WaveId}/pack",
-            new { orderIds = new[] { packed.OrderId }, sscc = $"SSCC{Guid.NewGuid():N}"[..18] });
-        pack.StatusCode.ShouldBe(HttpStatusCode.OK, await pack.Content.ReadAsStringAsync());
-        var tote = await pack.DeserializeAsync<PackToteDto>();
-        tote.OrderIds.ShouldContain(packed.OrderId);
-
-        var vehicleId = await CreateVehicleAsync(client);
-        var driverId = await CreateDriverAsync(client);
-        var routeId = await CreateRouteAsync(client, packed.WarehouseId, packed.StoreId);
+        using var pack = await client.PostAsJsonAsync(
+            $"{TestConstants.WarehouseBasePath}/waves/{Guid.NewGuid()}/pack",
+            new { orderIds = new[] { Guid.NewGuid() }, sscc = $"SSCC{Guid.NewGuid():N}"[..18] });
+        await AssertBlockedAsync(pack);
         using var create = await client.PostAsJsonAsync(
             $"{TestConstants.LogisticsBasePath}/shipments",
             new
             {
-                routeId,
-                warehouseId = packed.WarehouseId,
-                vehicleId,
-                driverId,
-                businessDate = packed.BusinessDate
+                routeId = Guid.NewGuid(),
+                warehouseId = warehouse.Id,
+                vehicleId = Guid.NewGuid(),
+                driverId = Guid.NewGuid(),
+                businessDate = DateOnly.FromDateTime(DateTime.UtcNow)
             });
-        create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
-        var shipment = await create.DeserializeAsync<ShipmentDto>();
-        shipment.Lines.ShouldHaveSingleItem().ToteId.ShouldBe(tote.Id);
-
-        using var deniedLoad = await packer.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/load", new { toteIds = new[] { tote.Id } });
-        deniedLoad.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        using var loader = await OperatorTestUsers.CreateOperatorAsync(_factory, LogisticsPermissions.Shipments.Load);
-
-        using var load = await loader.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/load",
-            new { toteIds = new[] { tote.Id } });
-        load.StatusCode.ShouldBe(HttpStatusCode.OK, await load.Content.ReadAsStringAsync());
-        (await load.DeserializeAsync<ShipmentDto>()).Status.ShouldBe("Loading");
-        using var deniedDepart = await loader.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/depart", new { });
-        deniedDepart.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        using var dispatcher = await OperatorTestUsers.CreateOperatorAsync(_factory, LogisticsPermissions.Shipments.Depart);
-        using var depart = await dispatcher.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/depart", new { });
-        depart.StatusCode.ShouldBe(HttpStatusCode.OK, await depart.Content.ReadAsStringAsync());
-        (await depart.DeserializeAsync<ShipmentDto>()).Status.ShouldBe("Departed");
+        await AssertBlockedAsync(create);
+        using var load = await client.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{Guid.NewGuid()}/load",
+            new { toteIds = new[] { Guid.NewGuid() } });
+        await AssertBlockedAsync(load);
+        using var depart = await client.PostAsJsonAsync(
+            $"{TestConstants.LogisticsBasePath}/shipments/{Guid.NewGuid()}/depart", new { });
+        await AssertBlockedAsync(depart);
     }
 
-    private sealed record PackedOrder(
-        Guid WarehouseId,
-        Guid StoreId,
-        Guid ProductId,
-        Guid OrderId,
-        Guid WaveId,
-        DateOnly BusinessDate);
-
-    private static async Task<PackedOrder> PackOrderAsync(HttpClient client, decimal qty)
+    private static async Task AssertBlockedAsync(HttpResponseMessage response)
     {
-        var warehouse = await CreateWarehouseAsync(client);
-        var productId = await CreateChilledProductAsync(client);
-        await ReceiveChilledAsync(client, warehouse.Id, productId, $"LOT-{Guid.NewGuid():N}"[..12], 20m);
-        var orgId = await CreateCustomerOrgAsync(client);
-        var storeId = await CreateStoreAsync(client, orgId, warehouse.Id);
-        await PutCartAsync(client, storeId, productId, qty);
-
-        using var place = await client.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/orders", new { storeId });
-        place.StatusCode.ShouldBe(HttpStatusCode.OK, await place.Content.ReadAsStringAsync());
-        var orderId = await place.DeserializeAsync<Guid>();
-
-        using var cutoff = await client.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/warehouses/{warehouse.Id}/cutoff", new { });
-        var cutoffResult = await cutoff.DeserializeAsync<CutoffResultDto>();
-        using var generate = await client.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/waves",
-            new { warehouseId = warehouse.Id, businessDate = cutoffResult.BusinessDate });
-        var wave = (await generate.DeserializeAsync<List<WaveDto>>()).ShouldHaveSingleItem();
-        await WaveAssignments.AssignToSelfAsync(client, wave.Id);
-        using var release = await client.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release", new { });
-        var task = (await release.DeserializeAsync<WaveDto>()).Tasks.ShouldHaveSingleItem();
-        using var confirm = await client.PostAsJsonAsync(
-            $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm",
-            new { scannedLotId = task.LotId });
-        confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
-        return new PackedOrder(warehouse.Id, storeId, productId, orderId, wave.Id, cutoffResult.BusinessDate);
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict, await response.Content.ReadAsStringAsync());
+        (await response.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
     }
 
     private static object QcBody(string lotNo, decimal quantity) => new
@@ -304,6 +185,7 @@ public sealed class WarehouseOpsTests
                 expectedAt = DateTimeOffset.UtcNow.AddDays(1),
                 lines = new[] { new { productId, zone = "Chilled", quantity } }
             });
+        create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
         var poId = await create.DeserializeAsync<Guid>();
         using var appoint = await client.PostAsJsonAsync(
             $"{TestConstants.ProcurementBasePath}/purchase-orders/{poId}/appointments",
@@ -324,6 +206,7 @@ public sealed class WarehouseOpsTests
                 categories = "dairy",
                 leadDays = 2
             });
+        create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
         return await create.DeserializeAsync<Guid>();
     }
 
@@ -338,6 +221,7 @@ public sealed class WarehouseOpsTests
                 city = "Boston",
                 timeZoneId = (string?)null
             });
+        create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
         var id = await create.DeserializeAsync<Guid>();
         using var get = await client.GetAsync($"{TestConstants.InventoryBasePath}/warehouses/{id}");
         return await get.DeserializeAsync<WarehouseDto>();
@@ -345,117 +229,37 @@ public sealed class WarehouseOpsTests
 
     private static async Task<Guid> CreateChilledProductAsync(HttpClient client)
     {
-        using var brandResp = await client.PostAsJsonAsync(
+        using var brand = await client.PostAsJsonAsync(
             $"{TestConstants.CatalogBasePath}/brands",
             new { name = Unique("Brand"), description = (string?)null, logoUrl = (string?)null });
-        using var categoryResp = await client.PostAsJsonAsync(
+        brand.StatusCode.ShouldBe(HttpStatusCode.OK, await brand.Content.ReadAsStringAsync());
+        using var category = await client.PostAsJsonAsync(
             $"{TestConstants.CatalogBasePath}/categories",
             new { name = Unique("Dairy"), description = (string?)null, parentCategoryId = (Guid?)null });
-        using var productResp = await client.PostAsJsonAsync(
+        category.StatusCode.ShouldBe(HttpStatusCode.OK, await category.Content.ReadAsStringAsync());
+        using var product = await client.PostAsJsonAsync(
             $"{TestConstants.CatalogBasePath}/products",
             new
             {
                 sku = $"MILK-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
                 name = Unique("Milk"),
                 description = "Chilled",
-                brandId = await brandResp.DeserializeAsync<Guid>(),
-                categoryId = await categoryResp.DeserializeAsync<Guid>(),
+                brandId = await brand.DeserializeAsync<Guid>(),
+                categoryId = await category.DeserializeAsync<Guid>(),
                 priceAmount = 9m,
                 priceCurrency = "USD",
                 stock = 0,
                 temperatureZone = "Chilled"
             });
-        return await productResp.DeserializeAsync<Guid>();
-    }
-
-    private static async Task<Guid> ReceiveChilledAsync(
-        HttpClient client, Guid warehouseId, Guid productId, string lotNo, decimal quantity)
-    {
-        using var receive = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/receive",
-            new
-            {
-                warehouseId,
-                zone = "Chilled",
-                productId,
-                lotNo,
-                expiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
-                quantity,
-                idempotencyKey = $"recv-{Guid.NewGuid():N}",
-                manufacturedOn = (DateOnly?)null,
-                origin = "Boston",
-            });
-        receive.StatusCode.ShouldBe(HttpStatusCode.OK, await receive.Content.ReadAsStringAsync());
-        return await receive.DeserializeAsync<Guid>();
-    }
-
-    private static async Task PutCartAsync(HttpClient client, Guid storeId, Guid productId, decimal qty)
-    {
-        using var putCart = await client.PutAsJsonAsync(
-            $"{TestConstants.OrderingBasePath}/carts/{storeId}",
-            new { storeId, lines = new[] { new { productId, quantity = qty } } });
-        putCart.StatusCode.ShouldBe(HttpStatusCode.OK, await putCart.Content.ReadAsStringAsync());
-    }
-
-    private static async Task<Guid> CreateCustomerOrgAsync(HttpClient client)
-    {
-        using var response = await client.PostAsJsonAsync(
-            $"{TestConstants.OrderingBasePath}/customer-orgs",
-            new { code = $"C{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}", name = Unique("Org") });
-        return await response.DeserializeAsync<Guid>();
-    }
-
-    private static async Task<Guid> CreateStoreAsync(HttpClient client, Guid orgId, Guid warehouseId)
-    {
-        using var response = await client.PostAsJsonAsync(
-            $"{TestConstants.OrderingBasePath}/stores",
-            new
-            {
-                customerOrgId = orgId,
-                code = $"S{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
-                name = Unique("Store"),
-                address = "1 Harbor St",
-                defaultWarehouseId = warehouseId,
-                defaultRouteId = (Guid?)null,
-                deliveryWindow = "05:00-08:00",
-            });
-        return await response.DeserializeAsync<Guid>();
-    }
-
-    private static async Task<Guid> CreateVehicleAsync(HttpClient client)
-    {
-        using var response = await client.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/vehicles",
-            new { plate = $"P{Guid.NewGuid().ToString("N")[..7].ToUpperInvariant()}", compartmentZones = "Chilled", payloadKg = 3500m });
-        return await response.DeserializeAsync<Guid>();
-    }
-
-    private static async Task<Guid> CreateDriverAsync(HttpClient client)
-    {
-        using var response = await client.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/drivers",
-            new { userId = Guid.CreateVersion7(), phone = "+16175550100" });
-        return await response.DeserializeAsync<Guid>();
-    }
-
-    private static async Task<Guid> CreateRouteAsync(HttpClient client, Guid warehouseId, Guid storeId)
-    {
-        using var response = await client.PostAsJsonAsync(
-            $"{TestConstants.LogisticsBasePath}/routes",
-            new
-            {
-                warehouseId,
-                code = $"R{Guid.NewGuid().ToString("N")[..4].ToUpperInvariant()}",
-                storeIds = new[] { storeId },
-                defaultVehicleId = (Guid?)null
-            });
-        return await response.DeserializeAsync<Guid>();
+        product.StatusCode.ShouldBe(HttpStatusCode.OK, await product.Content.ReadAsStringAsync());
+        return await product.DeserializeAsync<Guid>();
     }
 
     private static async Task<decimal> GetAvailableAsync(HttpClient client, Guid warehouseId, Guid productId)
     {
         using var response = await client.GetAsync(
             $"{TestConstants.InventoryBasePath}/stock/available?warehouseId={warehouseId}&productId={productId}&zone=Chilled");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return (await response.DeserializeAsync<AvailableQtyDto>()).Available;
     }
 

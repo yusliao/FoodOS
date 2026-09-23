@@ -74,16 +74,18 @@ public sealed class PriceListTests
     }
 
     [Fact]
-    public async Task PlaceOrder_Should_SnapshotQuotedContractPrice()
+    public async Task PlaceOrder_Should_FailClosed_WhileContractQuoteAndCartRemainAvailable()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouseId = await CreateWarehouseAsync(client);
         var productId = await CreateProductAsync(client, listPrice: 20m);
-        await ReceiveAsync(client, warehouseId, productId, 10m);
-
         var orgId = await CreateCustomerOrgAsync(client);
         await CreatePriceListAsync(client, orgId, productId, 8m, minQty: 1m);
         var storeId = await CreateStoreAsync(client, orgId, warehouseId);
+        var quote = await QuoteAsync(client, orgId, productId, 4m);
+        quote.UnitPrice.ShouldBe(8m);
+        quote.Currency.ShouldBe("USD");
+        quote.Source.ShouldBe("Contract");
 
         using var putCart = await client.PutAsJsonAsync(
             $"{TestConstants.OrderingBasePath}/carts/{storeId}",
@@ -93,13 +95,14 @@ public sealed class PriceListTests
         using var place = await client.PostAsJsonAsync(
             $"{TestConstants.OrderingBasePath}/orders",
             new { storeId });
-        place.StatusCode.ShouldBe(HttpStatusCode.OK, await place.Content.ReadAsStringAsync());
-        var orderId = await place.DeserializeAsync<Guid>();
+        place.StatusCode.ShouldBe(HttpStatusCode.Conflict, await place.Content.ReadAsStringAsync());
+        (await place.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
 
-        using var get = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
-        var order = await get.DeserializeAsync<SalesOrderDto>();
-        order.Lines.ShouldHaveSingleItem().UnitPrice.ShouldBe(8m);
-        order.Lines[0].Currency.ShouldBe("USD");
+        using var getCart = await client.GetAsync($"{TestConstants.OrderingBasePath}/carts/{storeId}");
+        getCart.StatusCode.ShouldBe(HttpStatusCode.OK, await getCart.Content.ReadAsStringAsync());
+        var line = (await getCart.DeserializeAsync<CartDto>()).Lines.ShouldHaveSingleItem();
+        line.ProductId.ShouldBe(productId);
+        line.Quantity.ShouldBe(4m);
     }
 
     private static async Task<PriceQuoteDto> QuoteAsync(
@@ -207,26 +210,6 @@ public sealed class PriceListTests
             });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.DeserializeAsync<Guid>();
-    }
-
-    private static async Task ReceiveAsync(HttpClient client, Guid warehouseId, Guid productId, decimal quantity)
-    {
-        var expiry = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
-        using var receive = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/receive",
-            new
-            {
-                warehouseId,
-                zone = "Ambient",
-                productId,
-                lotNo = $"L{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
-                expiryDate = expiry,
-                quantity,
-                idempotencyKey = $"recv-{Guid.NewGuid():N}",
-                manufacturedOn = (DateOnly?)null,
-                origin = "Boston",
-            });
-        receive.StatusCode.ShouldBe(HttpStatusCode.OK, await receive.Content.ReadAsStringAsync());
     }
 
     private static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid().ToString("N")[..8]}";

@@ -1,10 +1,6 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
 using FSH.Framework.Eventing.Abstractions;
 using FSH.Framework.Shared.Constants;
 using FSH.Modules.Identity.Domain;
-using FSH.Modules.Logistics.Contracts.Dtos;
-using FSH.Modules.Logistics.Contracts.Events;
 using FSH.Modules.Multitenancy.Contracts;
 using FSH.Modules.Multitenancy.Data;
 using FSH.Modules.Notifications.Contracts.v1.DTOs;
@@ -16,7 +12,6 @@ using FSH.Modules.Ordering.Domain;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Integration.Tests.Tests.Ordering;
 
@@ -167,29 +162,6 @@ public sealed partial class CustomerShopIsolationTests
         InDeliveryScopeAsync(tenantId, services => ActivatorUtilities
             .CreateInstance<CustomerOrderDeliveryNotificationHandler>(services).HandleAsync(activity));
 
-    private async Task AssertDeliveryRoutingReplayAsync(ShipmentDto shipment, Guid storeA, Guid storeB,
-        Guid orderA, Guid orderB, HttpClient clientA, HttpClient clientB, string tenantB)
-    {
-        var departed = new ShipmentDepartedIntegrationEvent(Guid.NewGuid(), DateTime.UtcNow, "root", "replay",
-            "Logistics", shipment.Id, shipment.Number, shipment.WarehouseId, [orderA, orderB], [storeA, storeB]);
-        await InDeliveryScopeAsync("root", services => ActivatorUtilities
-            .CreateInstance<CustomerDeliveryNotificationRouter>(services).HandleAsync(departed));
-        var delivered = new ShipmentStopDeliveredIntegrationEvent(Guid.NewGuid(), DateTime.UtcNow, "root", "replay",
-            "Logistics", shipment.Id, shipment.Stops.Single(s => s.StoreId == storeA).Id, storeA, [orderA, orderB]);
-        await InDeliveryScopeAsync("root", services => ActivatorUtilities
-            .CreateInstance<CustomerDeliveryNotificationRouter>(services).HandleAsync(delivered));
-        await InDeliveryScopeAsync("root", services => ActivatorUtilities
-            .CreateInstance<CustomerDeliveryNotificationRouter>(services).HandleAsync(delivered with
-            { Id = Guid.NewGuid(), StoreId = storeB }));
-        // A delivery envelope cannot authorize another customer's order, even with that customer's valid scope.
-        await DeliverCustomerNotificationAsync(tenantB, new CustomerOrderDeliveryIntegrationEvent(Guid.NewGuid(),
-            DateTime.UtcNow, tenantB, "forged-owner", "Logistics", orderA, storeA, CustomerDeliveryActivity.Delivered));
-        (await ReadCustomerDeliveryNotificationsAsync(clientA)).Count.ShouldBe(2);
-        (await ReadCustomerDeliveryNotificationsAsync(clientB)).Count.ShouldBe(1);
-        await Should.ThrowAsync<InvalidOperationException>(() => InDeliveryScopeAsync(tenantB, services => ActivatorUtilities
-            .CreateInstance<CustomerDeliveryNotificationRouter>(services).HandleAsync(departed)));
-    }
-
     private async Task<(Guid Id, string Email)> CreateDeliveryMemberAsync(string tenantId, bool basic)
     {
         var email = $"notify-{Guid.NewGuid():N}@example.com";
@@ -218,40 +190,4 @@ public sealed partial class CustomerShopIsolationTests
         return await response.DeserializeAsync<IReadOnlyList<NotificationDto>>();
     }
 
-    private async Task<HubConnection> StartDeliveryHubAsync(HttpClient client, string tenantId, ConcurrentQueue<string> messages)
-    {
-        var token = client.DefaultRequestHeaders.Authorization!.Parameter!;
-        var hub = new HubConnectionBuilder().WithUrl(
-            $"http://localhost/api/v1/realtime/hub?access_token={Uri.EscapeDataString(token)}", options =>
-            {
-                options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
-                options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
-                options.Headers["tenant"] = tenantId;
-            }).Build();
-        hub.On<JsonElement>("NotificationCreated", payload => messages.Enqueue(payload.GetRawText()));
-        await hub.StartAsync();
-        return hub;
-    }
-
-    private static async Task WaitForDeliveryMessageAsync(ConcurrentQueue<string> messages, string type)
-    {
-        for (int i = 0; i < 100 && !messages.Any(m => m.Contains(type, StringComparison.Ordinal)); i++)
-            await Task.Delay(50);
-        messages.ShouldContain(m => m.Contains(type, StringComparison.Ordinal));
-    }
-
-    private static async Task AssertCustomerDeliveryNotificationsAsync(HttpClient client, Guid orderId, Guid storeId,
-        Guid foreignOrderId, string type)
-    {
-        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN");
-        var all = await ReadCustomerDeliveryNotificationsAsync(client);
-        all.ShouldNotContain(n => n.Link == $"/shop/orders/{foreignOrderId}" || n.Type.StartsWith("ops.", StringComparison.Ordinal));
-        var notification = all.Where(n => n.Type == type && n.Link == $"/shop/orders/{orderId}").ShouldHaveSingleItem();
-        notification.Body.ShouldBeNull();
-        notification.Title.ShouldBe(type == "shop.order-departed" ? "您的订单已发运" : "您的订单已签收");
-        using var metadata = JsonDocument.Parse(notification.MetadataJson!);
-        metadata.RootElement.EnumerateObject().Select(p => p.Name).Order().ShouldBe(new[] { "activity", "orderId", "storeId" });
-        metadata.RootElement.GetProperty("orderId").GetGuid().ShouldBe(orderId);
-        metadata.RootElement.GetProperty("storeId").GetGuid().ShouldBe(storeId);
-    }
 }

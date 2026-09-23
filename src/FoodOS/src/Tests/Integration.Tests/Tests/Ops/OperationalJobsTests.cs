@@ -19,20 +19,25 @@ public sealed class OperationalJobsTests
     }
 
     [Fact]
-    public void RecurringJobs_Should_RegisterCutoffReconcileAndNearExpiry()
+    public void RecurringJobs_Should_RetireCutoff_AndKeepReadOnlyReminders()
     {
         _ = _factory.Server;
         var jobs = JobStorage.Current.GetConnection().GetRecurringJobs();
-        jobs.ShouldContain(j => j.Id == "warehouse-cutoff" && j.Cron == "* * * * *");
+        jobs.ShouldNotContain(j => j.Id == "warehouse-cutoff");
         jobs.ShouldContain(j => j.Id == "ordering-reconcile-reminder" && j.Cron == "* * * * *");
         jobs.ShouldContain(j => j.Id == "inventory-near-expiry" && j.Cron == "15 7 * * *");
         jobs.ShouldContain(j => j.Id == "logistics-dispatch-reminder" && j.Cron == "* * * * *");
     }
 
     [Fact]
-    public async Task ConfirmCutoff_Should_WriteOpsCutoffInboxRow()
+    public async Task ConfirmCutoff_Should_BeBlocked_WithoutWritingOpsCutoffInboxRow()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
+        using var inboxBefore = await client.GetAsync("/api/v1/notifications/");
+        inboxBefore.StatusCode.ShouldBe(HttpStatusCode.OK, await inboxBefore.Content.ReadAsStringAsync());
+        var cutoffNotificationsBefore = (await inboxBefore.DeserializeAsync<List<NotificationDto>>())
+            .Count(n => n.Type == "ops.cutoff");
+
         using var create = await client.PostAsJsonAsync(
             $"{TestConstants.InventoryBasePath}/warehouses",
             new
@@ -48,11 +53,13 @@ public sealed class OperationalJobsTests
         using var cutoff = await client.PostAsJsonAsync(
             $"{TestConstants.WarehouseBasePath}/warehouses/{warehouseId}/cutoff",
             new { });
-        cutoff.StatusCode.ShouldBe(HttpStatusCode.OK, await cutoff.Content.ReadAsStringAsync());
+        cutoff.StatusCode.ShouldBe(HttpStatusCode.Conflict, await cutoff.Content.ReadAsStringAsync());
+        (await cutoff.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
 
-        using var inbox = await client.GetAsync("/api/v1/notifications/");
-        inbox.StatusCode.ShouldBe(HttpStatusCode.OK, await inbox.Content.ReadAsStringAsync());
-        var rows = await inbox.DeserializeAsync<List<NotificationDto>>();
-        rows.ShouldContain(n => n.Type == "ops.cutoff");
+        using var inboxAfter = await client.GetAsync("/api/v1/notifications/");
+        inboxAfter.StatusCode.ShouldBe(HttpStatusCode.OK, await inboxAfter.Content.ReadAsStringAsync());
+        var cutoffNotificationsAfter = (await inboxAfter.DeserializeAsync<List<NotificationDto>>())
+            .Count(n => n.Type == "ops.cutoff");
+        cutoffNotificationsAfter.ShouldBe(cutoffNotificationsBefore);
     }
 }

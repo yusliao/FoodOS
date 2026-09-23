@@ -1,4 +1,8 @@
-using FSH.Modules.Ordering.Contracts.Dtos;
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Ordering.Data;
+using FSH.Modules.Ordering.Domain;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
@@ -8,10 +12,12 @@ namespace Integration.Tests.Tests.Ordering;
 public sealed class OrderingAfterSalesTests
 {
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public OrderingAfterSalesTests(FshWebApplicationFactory factory)
     {
         _auth = new AuthHelper(factory);
+        _factory = factory;
     }
 
     [Fact]
@@ -20,30 +26,26 @@ public sealed class OrderingAfterSalesTests
         using var client = await _auth.CreateRootAdminClientAsync();
         var warehouseId = await CreateWarehouseAsync(client);
         var productId = await CreateProductAsync(client);
-        await ReceiveAsync(client, warehouseId, productId, "LOT-AS1", 8m);
-
         var orgId = await CreateCustomerOrgAsync(client);
         var storeId = await CreateStoreAsync(client, orgId, warehouseId);
-
-        using var putCart = await client.PutAsJsonAsync(
-            $"{TestConstants.OrderingBasePath}/carts/{storeId}",
-            new { storeId, lines = new[] { new { productId, quantity = 2m } } });
-        putCart.StatusCode.ShouldBe(HttpStatusCode.OK, await putCart.Content.ReadAsStringAsync());
-
-        using var place = await client.PostAsJsonAsync(
-            $"{TestConstants.OrderingBasePath}/orders",
-            new { storeId });
-        place.StatusCode.ShouldBe(HttpStatusCode.OK, await place.Content.ReadAsStringAsync());
-        var orderId = await place.DeserializeAsync<Guid>();
-
-        using var get = await client.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
-        var order = await get.DeserializeAsync<SalesOrderDto>();
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+        var order = SalesOrder.CreateDraft(
+            $"AS{Guid.NewGuid():N}", storeId, orgId, warehouseId,
+            DateOnly.FromDateTime(DateTime.UtcNow), DateTimeOffset.UtcNow.AddHours(1),
+            [(productId, "Ambient", 2m, 9.5m, "USD")]);
+        db.SalesOrders.Add(order);
+        await db.SaveChangesAsync();
 
         using var claim = await client.PostAsJsonAsync(
             $"{TestConstants.OrderingBasePath}/after-sales",
             new
             {
-                orderId,
+                orderId = order.Id,
                 orderLineId = order.Lines[0].Id,
                 type = "Return",
                 quantity = 1m,
@@ -90,31 +92,6 @@ public sealed class OrderingAfterSalesTests
             });
         productResp.StatusCode.ShouldBe(HttpStatusCode.OK, await productResp.Content.ReadAsStringAsync());
         return await productResp.DeserializeAsync<Guid>();
-    }
-
-    private static async Task ReceiveAsync(
-        HttpClient client,
-        Guid warehouseId,
-        Guid productId,
-        string lotNo,
-        decimal quantity)
-    {
-        var expiry = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
-        using var receive = await client.PostAsJsonAsync(
-            $"{TestConstants.InventoryBasePath}/stock/receive",
-            new
-            {
-                warehouseId,
-                zone = "Ambient",
-                productId,
-                lotNo,
-                expiryDate = expiry,
-                quantity,
-                idempotencyKey = $"recv-{Guid.NewGuid():N}",
-                manufacturedOn = (DateOnly?)null,
-                origin = "Boston",
-            });
-        receive.StatusCode.ShouldBe(HttpStatusCode.OK, await receive.Content.ReadAsStringAsync());
     }
 
     private static async Task<Guid> CreateCustomerOrgAsync(HttpClient client)

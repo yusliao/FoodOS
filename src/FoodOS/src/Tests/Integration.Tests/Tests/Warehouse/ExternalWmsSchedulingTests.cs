@@ -2,6 +2,7 @@ using FSH.Modules.Warehouse;
 using FSH.Modules.Warehouse.Jobs;
 using Hangfire;
 using Hangfire.Common;
+using Hangfire.InMemory;
 using Hangfire.Storage;
 using Integration.Tests.Infrastructure;
 using Microsoft.AspNetCore.Builder;
@@ -10,12 +11,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Integration.Tests.Tests.Warehouse;
 
 [Collection(FshCollectionDefinition.Name)]
-public sealed class ExternalWmsSchedulingTests(FshWebApplicationFactory factory)
+public sealed class ExternalWmsSchedulingTests
 {
     [Fact]
     public async Task Mapping_Should_RetirePersistedCutoffSchedule_WithoutRemovingOtherJobs()
     {
-        var manager = factory.Services.GetRequiredService<IRecurringJobManager>();
+        var sharedStorage = JobStorage.Current;
+        using var storage = new InMemoryStorage();
+        var manager = new RecurringJobManager(storage);
         const string otherId = "wms-scheduling-test-unrelated";
         var payload = Job.FromExpression<CutoffJob>(job => job.RunAsync(CancellationToken.None));
         manager.AddOrUpdate("warehouse-cutoff", payload, "* * * * *", new RecurringJobOptions());
@@ -24,10 +27,10 @@ public sealed class ExternalWmsSchedulingTests(FshWebApplicationFactory factory)
         {
             var builder = WebApplication.CreateBuilder();
             builder.Services.AddApiVersioning();
-            builder.Services.AddSingleton(manager);
+            builder.Services.AddSingleton<IRecurringJobManager>(manager);
             await using var app = builder.Build();
             new WarehouseModule().MapEndpoints(app);
-            using var connection = JobStorage.Current.GetConnection();
+            using var connection = storage.GetConnection();
             var jobs = connection.GetRecurringJobs();
             jobs.ShouldNotContain(job => job.Id == "warehouse-cutoff");
             jobs.ShouldContain(job => job.Id == otherId && job.Cron == "0 0 * * *");
@@ -36,6 +39,7 @@ public sealed class ExternalWmsSchedulingTests(FshWebApplicationFactory factory)
         {
             manager.RemoveIfExists(otherId);
             manager.RemoveIfExists("warehouse-cutoff");
+            JobStorage.Current = sharedStorage;
         }
     }
 

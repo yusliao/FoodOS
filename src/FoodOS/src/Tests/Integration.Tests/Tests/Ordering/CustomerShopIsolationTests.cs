@@ -1,6 +1,4 @@
 using FSH.Modules.Inventory.Contracts.Dtos;
-using FSH.Modules.Logistics.Contracts.Dtos;
-using FSH.Modules.Warehouse.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Multitenancy.Contracts.Dtos;
 using Integration.Tests.Infrastructure;
@@ -28,7 +26,7 @@ public sealed partial class CustomerShopIsolationTests
     }
 
     [Fact]
-    public async Task RestaurantCustomers_Should_ShareOperatorCatalog_But_Not_EachOthersBusinessData()
+    public async Task RestaurantCustomers_Should_ShareCatalogAndKeepCartsIsolated_WhenPlacementIsWmsBlocked()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -43,7 +41,6 @@ public sealed partial class CustomerShopIsolationTests
 
         var warehouse = await CreateWarehouseAsync(rootClient);
         Guid productId = await CreateProductAsync(rootClient);
-        await ReceiveAsync(rootClient, warehouse.Id, productId, $"LOT-{suffix}", 20m);
         Guid orgA = await CreateCustomerOrgAsync(rootClient, tenantA, $"A{suffix}");
         Guid orgB = await CreateCustomerOrgAsync(rootClient, tenantB, $"B{suffix}");
         Guid storeA = await CreateStoreAsync(rootClient, orgA, warehouse.Id, $"SA{suffix}");
@@ -54,270 +51,86 @@ public sealed partial class CustomerShopIsolationTests
         await GrantSelfStoreAccessAsync(clientA, storeA);
         await GrantSelfStoreAccessAsync(clientB, storeB);
 
-        var outsideStore = await CreateStoreAsync(rootClient, orgA, warehouse.Id, $"OTHER{suffix}");
-        var outsideMember = await CreateDeliveryMemberAsync(tenantA, true);
-        await SetDeliveryStoreAccessAsync(clientA, outsideMember.Id, outsideStore);
-        using var outsideClient = await CreateDashboardClientAsync(outsideMember.Email, tenantA);
-        var messagesA = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        var messagesB = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        var outsideMessages = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        await using var hubA = await StartDeliveryHubAsync(clientA, tenantA, messagesA);
-        await using var hubB = await StartDeliveryHubAsync(clientB, tenantB, messagesB);
-        await using var outsideHub = await StartDeliveryHubAsync(outsideClient, tenantA, outsideMessages);
-
         using var storesAResponse = await clientA.GetAsync($"{TestConstants.ShopBasePath}/stores");
         storesAResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await storesAResponse.Content.ReadAsStringAsync());
-        var storesA = await storesAResponse.DeserializeAsync<IReadOnlyList<ShopStoreDto>>();
-        storesA.ShouldHaveSingleItem().Id.ShouldBe(storeA);
-
-        using var foreignStore = await clientB.GetAsync($"{TestConstants.ShopBasePath}/stores/{storeA}");
-        foreignStore.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignStore.Content.ReadAsStringAsync());
+        (await storesAResponse.DeserializeAsync<IReadOnlyList<ShopStoreDto>>()).ShouldHaveSingleItem().Id.ShouldBe(storeA);
+        using var storesBResponse = await clientB.GetAsync($"{TestConstants.ShopBasePath}/stores");
+        storesBResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await storesBResponse.Content.ReadAsStringAsync());
+        (await storesBResponse.DeserializeAsync<IReadOnlyList<ShopStoreDto>>()).ShouldHaveSingleItem().Id.ShouldBe(storeB);
 
         using var productsResponse = await clientA.GetAsync($"{TestConstants.ShopBasePath}/products?pageNumber=1&pageSize=20");
         productsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await productsResponse.Content.ReadAsStringAsync());
-        var products = await productsResponse.DeserializeAsync<PagedResult<ShopProductDto>>();
-        var product = products.Items.Single(item => item.Id == productId);
+        var product = (await productsResponse.DeserializeAsync<PagedResult<ShopProductDto>>()).Items
+            .Single(item => item.Id == productId);
         product.UnitPrice.ShouldBe(9.5m);
-        product.IsAvailable.ShouldBeTrue();
+        product.IsAvailable.ShouldBeFalse();
 
-        using var oldCatalogResponse = await clientA.GetAsync($"{TestConstants.CatalogBasePath}/products?pageNumber=1&pageSize=20");
-        oldCatalogResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        foreach (string path in new[]
+        {
+            $"{TestConstants.CatalogBasePath}/products?pageNumber=1&pageSize=20",
+            $"{TestConstants.OrderingBasePath}/stores",
+            $"{TestConstants.ProcurementBasePath}/suppliers",
+            $"{TestConstants.WarehouseBasePath}/waves",
+            $"{TestConstants.LogisticsBasePath}/shipments",
+            TestConstants.AuditsBasePath,
+        })
+        {
+            using var response = await clientA.GetAsync(path);
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, path);
+        }
 
-        using var operatorStoresResponse = await clientA.GetAsync($"{TestConstants.OrderingBasePath}/stores");
-        operatorStoresResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
-        using var suppliersResponse = await clientA.GetAsync($"{TestConstants.ProcurementBasePath}/suppliers");
-        suppliersResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
-        using var warehouseResponse = await clientA.GetAsync($"{TestConstants.WarehouseBasePath}/waves");
-        warehouseResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
-        using var logisticsResponse = await clientA.GetAsync($"{TestConstants.LogisticsBasePath}/shipments");
-        logisticsResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
-        using var auditResponse = await clientA.GetAsync($"{TestConstants.AuditsBasePath}");
-        auditResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
-        using var deliveriesResponse = await clientA.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
-        deliveriesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await deliveriesResponse.Content.ReadAsStringAsync());
-        (await deliveriesResponse.DeserializeAsync<IReadOnlyList<ShopDeliveryDto>>()).ShouldBeEmpty();
-
-        using var updateCart = await clientA.PutAsJsonAsync(
+        using var updateCartA = await clientA.PutAsJsonAsync(
             $"{TestConstants.ShopBasePath}/stores/{storeA}/cart",
             new { lines = new[] { new { productId, quantity = 3m } } });
-        updateCart.StatusCode.ShouldBe(HttpStatusCode.OK, await updateCart.Content.ReadAsStringAsync());
-
-        using var place = await clientA.PostAsJsonAsync(
-            $"{TestConstants.ShopBasePath}/orders",
-            new { storeId = storeA });
-        place.StatusCode.ShouldBe(HttpStatusCode.OK, await place.Content.ReadAsStringAsync());
-        Guid orderId = await place.DeserializeAsync<Guid>();
-
-        using var ownOrder = await clientA.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
-        ownOrder.StatusCode.ShouldBe(HttpStatusCode.OK, await ownOrder.Content.ReadAsStringAsync());
-        var order = await ownOrder.DeserializeAsync<ShopOrderDto>();
-        order.StoreId.ShouldBe(storeA);
-        AssertOrderPayload(await ownOrder.Content.ReadAsStringAsync());
-
-        using var operatorReconcile = await clientA.PostAsJsonAsync(
-            $"{TestConstants.OrderingBasePath}/orders/{orderId}/reconcile",
-            new { });
-        operatorReconcile.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
-        using var foreignOrder = await clientB.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
-        foreignOrder.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignOrder.Content.ReadAsStringAsync());
-
-        using var cartB = await clientB.PutAsJsonAsync(
+        updateCartA.StatusCode.ShouldBe(HttpStatusCode.OK, await updateCartA.Content.ReadAsStringAsync());
+        using var updateCartB = await clientB.PutAsJsonAsync(
             $"{TestConstants.ShopBasePath}/stores/{storeB}/cart",
             new { lines = new[] { new { productId, quantity = 4m } } });
-        cartB.StatusCode.ShouldBe(HttpStatusCode.OK, await cartB.Content.ReadAsStringAsync());
-        using var placeB = await clientB.PostAsJsonAsync(
-            $"{TestConstants.ShopBasePath}/orders", new { storeId = storeB });
-        placeB.StatusCode.ShouldBe(HttpStatusCode.OK, await placeB.Content.ReadAsStringAsync());
-        Guid otherOrderId = await placeB.DeserializeAsync<Guid>();
-        otherOrderId.ShouldNotBe(orderId);
-        using var ownOrderB = await clientB.GetAsync($"{TestConstants.ShopBasePath}/orders/{otherOrderId}");
-        ownOrderB.StatusCode.ShouldBe(HttpStatusCode.OK, await ownOrderB.Content.ReadAsStringAsync());
-        var orderB = await ownOrderB.DeserializeAsync<ShopOrderDto>();
-        orderB.StoreId.ShouldBe(storeB);
-        orderB.Lines.Single().UnitPrice.ShouldBe(9.5m);
-        orderB.Lines.Single().OrderedQty.ShouldBe(4m);
-        AssertOrderPayload(await ownOrderB.Content.ReadAsStringAsync());
+        updateCartB.StatusCode.ShouldBe(HttpStatusCode.OK, await updateCartB.Content.ReadAsStringAsync());
 
-        await AssertCannotAccessOtherCustomerAsync(clientA, storeB, orderB, productId);
-        await AssertCannotAccessOtherCustomerAsync(clientB, storeA, order, productId);
-        await AssertOwnOrderListAsync(clientA, orderId, otherOrderId);
-        await AssertOwnOrderListAsync(clientB, otherOrderId, orderId);
+        foreach (var (client, storeId) in new[] { (clientA, storeA), (clientB, storeB) })
+        {
+            using var place = await client.PostAsJsonAsync(
+                $"{TestConstants.ShopBasePath}/orders", new { storeId });
+            place.StatusCode.ShouldBe(HttpStatusCode.Conflict, await place.Content.ReadAsStringAsync());
+            (await place.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
+        }
+
+        await AssertCartPreservedAsync(clientA, storeA, productId, 3m);
+        await AssertCartPreservedAsync(clientB, storeB, productId, 4m);
+        await AssertForeignStoreHiddenAsync(clientA, storeB, productId);
+        await AssertForeignStoreHiddenAsync(clientB, storeA, productId);
+
+        foreach (var client in new[] { clientA, clientB })
+        {
+            using var orders = await client.GetAsync($"{TestConstants.ShopBasePath}/orders?pageNumber=1&pageSize=20");
+            orders.StatusCode.ShouldBe(HttpStatusCode.OK, await orders.Content.ReadAsStringAsync());
+            (await orders.DeserializeAsync<PagedResult<ShopOrderDto>>()).Items.ShouldBeEmpty();
+            using var deliveries = await client.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
+            deliveries.StatusCode.ShouldBe(HttpStatusCode.OK, await deliveries.Content.ReadAsStringAsync());
+            (await deliveries.DeserializeAsync<IReadOnlyList<ShopDeliveryDto>>()).ShouldBeEmpty();
+        }
 
         using var operatorOrders = await rootClient.GetAsync(
             $"{TestConstants.OrderingBasePath}/orders?pageNumber=1&pageSize=200");
         operatorOrders.StatusCode.ShouldBe(HttpStatusCode.OK, await operatorOrders.Content.ReadAsStringAsync());
         var allOrders = (await operatorOrders.DeserializeAsync<PagedResult<SalesOrderDto>>()).Items;
-        var operatorA = allOrders.Single(item => item.Id == orderId);
-        var operatorB = allOrders.Single(item => item.Id == otherOrderId);
-        operatorA.CustomerTenantId.ShouldBe(tenantA.ToUpperInvariant());
-        operatorB.CustomerTenantId.ShouldBe(tenantB.ToUpperInvariant());
-        operatorA.Lines.Single().OrderedQty.ShouldBe(3m);
-        operatorB.Lines.Single().OrderedQty.ShouldBe(4m);
-        operatorA.Status.ShouldBe(order.Status);
-        operatorB.Status.ShouldBe(orderB.Status);
-
-        var shipment = await FulfillMixedShipmentAsync(
-            rootClient, clientA, clientB,
-            warehouse.Id,
-            storeA,
-            orderId,
-            storeB,
-            otherOrderId);
-        await AssertCustomerDeliveryNotificationsAsync(clientA, orderId, storeA, otherOrderId, "shop.order-departed");
-        await AssertCustomerDeliveryNotificationsAsync(clientB, otherOrderId, storeB, orderId, "shop.order-departed");
-        await WaitForDeliveryMessageAsync(messagesA, "shop.order-departed");
-        await WaitForDeliveryMessageAsync(messagesB, "shop.order-departed");
-        messagesA.ShouldNotContain(m => m.Contains(otherOrderId.ToString(), StringComparison.Ordinal));
-        messagesB.ShouldNotContain(m => m.Contains(orderId.ToString(), StringComparison.Ordinal));
-        (await ReadCustomerDeliveryNotificationsAsync(outsideClient)).ShouldBeEmpty();
-        Guid shipmentId = shipment.Id;
-        foreach (var (customer, id) in new[] { (clientA, orderId), (clientB, otherOrderId) })
-        {
-            using var progress = await customer.GetAsync($"{TestConstants.ShopBasePath}/orders/{id}");
-            (await progress.DeserializeAsync<ShopOrderDto>()).Status.ShouldBe("InTransit");
-            AssertOrderPayload(await progress.Content.ReadAsStringAsync());
-            using var kpis = await customer.GetAsync($"{TestConstants.OpsBasePath}/kpis");
-            kpis.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-            using var trace = await customer.GetAsync(
-                $"{TestConstants.OpsBasePath}/lots/{shipment.Lines[0].Lots[0].LotId}/trace");
-            trace.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        }
-        using var deliveriesAResponse = await clientA.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
-        deliveriesAResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await deliveriesAResponse.Content.ReadAsStringAsync());
-        var deliveriesA = await deliveriesAResponse.DeserializeAsync<IReadOnlyList<ShopDeliveryDto>>();
-        var deliveryA = deliveriesA.Single(item => item.ShipmentId == shipmentId);
-        deliveryA.StoreId.ShouldBe(storeA);
-        deliveryA.OrderIds.ShouldBe([orderId]);
-        deliveryA.OrderIds.ShouldNotContain(otherOrderId);
-        deliveryA.ShipmentStatus.ShouldBe("Departed");
-        AssertDeliveryPayload(await deliveriesAResponse.Content.ReadAsStringAsync(), storeB, otherOrderId, shipment);
-
-        using var deliveriesBResponse = await clientB.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
-        deliveriesBResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await deliveriesBResponse.Content.ReadAsStringAsync());
-        var deliveriesB = await deliveriesBResponse.DeserializeAsync<IReadOnlyList<ShopDeliveryDto>>();
-        var deliveryB = deliveriesB.Single(item => item.ShipmentId == shipmentId);
-        deliveryB.StoreId.ShouldBe(storeB);
-        deliveryB.OrderIds.ShouldBe([otherOrderId]);
-        deliveryB.OrderIds.ShouldNotContain(orderId);
-        AssertDeliveryPayload(await deliveriesBResponse.Content.ReadAsStringAsync(), storeA, orderId, shipment);
-
-        using var foreignDeliveryFilter = await clientA.GetAsync(
-            $"{TestConstants.ShopBasePath}/deliveries?storeId={storeB}");
-        foreignDeliveryFilter.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        using var reverseDeliveryFilter = await clientB.GetAsync($"{TestConstants.ShopBasePath}/deliveries?storeId={storeA}");
-        reverseDeliveryFilter.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-
-        foreach (var customer in new[] { clientA, clientB })
-        {
-            using var internalDetail = await customer.GetAsync($"{TestConstants.LogisticsBasePath}/shipments/{shipmentId}");
-            internalDetail.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-            using var driverDetail = await customer.GetAsync($"{TestConstants.LogisticsBasePath}/shipments/mine/{shipmentId}");
-            driverDetail.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        }
-
-        var stopA = shipment.Stops.Single(s => s.StoreId == storeA);
-        var lotA = shipment.Lines.Single(l => l.OrderId == orderId).Lots.ShouldHaveSingleItem();
-        var signature = new
-        {
-            lines = new[] { new { orderLineId = lotA.OrderLineId, lotId = lotA.LotId, signedQty = lotA.Quantity } },
-            signerName = "Restaurant A private signer", photoFileIds = Array.Empty<Guid>(), geo = "42.36,-71.06",
-        };
-        using var customerPod = await clientB.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/stops/{stopA.Id}/pod", signature);
-        customerPod.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        using var signed = await rootClient.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/stops/{stopA.Id}/pod", signature);
-        signed.StatusCode.ShouldBe(HttpStatusCode.OK, await signed.Content.ReadAsStringAsync());
-        await AssertCustomerDeliveryNotificationsAsync(clientA, orderId, storeA, otherOrderId, "shop.order-delivered");
-        (await ReadCustomerDeliveryNotificationsAsync(clientB)).ShouldNotContain(n => n.Type == "shop.order-delivered");
-        await WaitForDeliveryMessageAsync(messagesA, "shop.order-delivered");
-        await Task.Delay(250);
-        messagesB.ShouldNotContain(m => m.Contains("shop.order-delivered", StringComparison.Ordinal));
-        outsideMessages.ShouldBeEmpty();
-        messagesA.ShouldNotContain(m => m.Contains("signer", StringComparison.OrdinalIgnoreCase)
-            || m.Contains("warehouseId", StringComparison.Ordinal) || m.Contains("routeId", StringComparison.Ordinal));
-        await AssertDeliveryRoutingReplayAsync(shipment, storeA, storeB, orderId, otherOrderId, clientA, clientB, tenantB);
-        using var afterSignA = await clientA.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
-        var signedA = (await afterSignA.DeserializeAsync<List<ShopDeliveryDto>>()).ShouldHaveSingleItem();
-        signedA.SignedAt.ShouldNotBeNull();
-        using var receivedOrder = await clientA.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
-        (await receivedOrder.DeserializeAsync<ShopOrderDto>()).Status.ShouldBe("Received");
-        AssertOrderPayload(await receivedOrder.Content.ReadAsStringAsync());
-        using var afterSignB = await clientB.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
-        var unsignedB = (await afterSignB.DeserializeAsync<List<ShopDeliveryDto>>()).ShouldHaveSingleItem();
-        unsignedB.SignedAt.ShouldBeNull();
-        AssertDeliveryPayload(await afterSignB.Content.ReadAsStringAsync(), storeA, orderId, shipment);
-        (await afterSignB.Content.ReadAsStringAsync()).ShouldNotContain("Restaurant A private signer");
-
-        using var foreignAfterSales = await clientB.PostAsJsonAsync(
-            $"{TestConstants.ShopBasePath}/after-sales",
-            new
-            {
-                orderId,
-                orderLineId = order.Lines.Single().Id,
-                type = "Shortage",
-                quantity = 1m,
-                reason = "Must not reveal another restaurant's order",
-            });
-        foreignAfterSales.StatusCode.ShouldBe(
-            HttpStatusCode.NotFound,
-            await foreignAfterSales.Content.ReadAsStringAsync());
-
-        using var foreignTickets = await clientB.GetAsync(
-            $"{TestConstants.ShopBasePath}/after-sales?orderId={orderId}");
-        foreignTickets.StatusCode.ShouldBe(HttpStatusCode.OK, await foreignTickets.Content.ReadAsStringAsync());
-        (await foreignTickets.DeserializeAsync<IReadOnlyList<ShopAfterSalesTicketDto>>()).ShouldBeEmpty();
-
-        await AssertReconciliationBoundaryAsync(rootClient, clientA, clientB, outsideClient,
-            tenantA, tenantB, warehouse.Id, storeA, storeB, orderId, otherOrderId);
-
-        using var operatorOrder = await rootClient.GetAsync($"{TestConstants.OrderingBasePath}/orders/{orderId}");
-        operatorOrder.StatusCode.ShouldBe(HttpStatusCode.OK, await operatorOrder.Content.ReadAsStringAsync());
+        allOrders.ShouldNotContain(order => order.StoreId == storeA || order.StoreId == storeB);
     }
 
-    private static async Task AssertOwnOrderListAsync(HttpClient client, Guid ownId, Guid foreignId)
+    private static async Task AssertForeignStoreHiddenAsync(HttpClient client, Guid storeId, Guid productId)
     {
-        using var response = await client.GetAsync($"{TestConstants.ShopBasePath}/orders?pageNumber=1&pageSize=20");
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        var orders = (await response.DeserializeAsync<PagedResult<ShopOrderDto>>()).Items;
-        orders.ShouldHaveSingleItem().Id.ShouldBe(ownId);
-        orders.ShouldNotContain(order => order.Id == foreignId);
-    }
-
-    private static async Task AssertCannotAccessOtherCustomerAsync(
-        HttpClient client, Guid foreignStoreId, ShopOrderDto foreignOrder, Guid productId)
-    {
-        foreach (string path in new[]
-        {
-            $"/stores/{foreignStoreId}", $"/stores/{foreignStoreId}/cart",
-            $"/orders/{foreignOrder.Id}", $"/orders?storeId={foreignStoreId}&pageNumber=1&pageSize=20",
-        })
-        {
-            using var response = await client.GetAsync($"{TestConstants.ShopBasePath}{path}");
-            response.StatusCode.ShouldBe(HttpStatusCode.NotFound, path);
-        }
-
-        using var cart = await client.PutAsJsonAsync($"{TestConstants.ShopBasePath}/stores/{foreignStoreId}/cart",
+        using var store = await client.GetAsync($"{TestConstants.ShopBasePath}/stores/{storeId}");
+        store.StatusCode.ShouldBe(HttpStatusCode.NotFound, await store.Content.ReadAsStringAsync());
+        using var cart = await client.GetAsync($"{TestConstants.ShopBasePath}/stores/{storeId}/cart");
+        cart.StatusCode.ShouldBe(HttpStatusCode.NotFound, await cart.Content.ReadAsStringAsync());
+        using var update = await client.PutAsJsonAsync(
+            $"{TestConstants.ShopBasePath}/stores/{storeId}/cart",
             new { lines = new[] { new { productId, quantity = 1m } } });
-        cart.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        using var place = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/orders",
-            new { storeId = foreignStoreId });
-        place.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        using var amend = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/orders/{foreignOrder.Id}/amend",
-            new { lines = new[] { new { productId, quantity = 1m } } });
-        amend.StatusCode.ShouldBe(HttpStatusCode.NotFound, await amend.Content.ReadAsStringAsync());
-        using var cancel = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/orders/{foreignOrder.Id}/cancel", new { });
-        cancel.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        using var afterSales = await client.PostAsJsonAsync($"{TestConstants.ShopBasePath}/after-sales", new
-        {
-            orderId = foreignOrder.Id, orderLineId = foreignOrder.Lines.Single().Id,
-            type = "Shortage", quantity = 1m, reason = "Cross-customer attempt",
-        });
-        afterSales.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        update.StatusCode.ShouldBe(HttpStatusCode.NotFound, await update.Content.ReadAsStringAsync());
+        using var place = await client.PostAsJsonAsync(
+            $"{TestConstants.ShopBasePath}/orders", new { storeId });
+        place.StatusCode.ShouldBe(HttpStatusCode.NotFound, await place.Content.ReadAsStringAsync());
     }
 
     private async Task<HttpClient> CreateDashboardClientAsync(string email, string tenantId)
@@ -420,23 +233,6 @@ public sealed partial class CustomerShopIsolationTests
         return await product.DeserializeAsync<Guid>();
     }
 
-    private static async Task ReceiveAsync(HttpClient client, Guid warehouseId, Guid productId, string lotNo, decimal quantity)
-    {
-        using var response = await client.PostAsJsonAsync($"{TestConstants.InventoryBasePath}/stock/receive", new
-        {
-            warehouseId,
-            zone = "Ambient",
-            productId,
-            lotNo,
-            expiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)),
-            quantity,
-            idempotencyKey = $"recv-{Guid.NewGuid():N}",
-            manufacturedOn = (DateOnly?)null,
-            origin = "Boston",
-        });
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-    }
-
     private static async Task<Guid> CreateCustomerOrgAsync(HttpClient client, string tenantId, string code)
     {
         using var response = await client.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/customer-orgs",
@@ -461,101 +257,4 @@ public sealed partial class CustomerShopIsolationTests
         return await response.DeserializeAsync<Guid>();
     }
 
-    private static void AssertOrderPayload(string json)
-    {
-        using var document = JsonDocument.Parse(json);
-        var orderFields = new[] { "id", "number", "storeId", "status", "businessDate", "cutoffAt", "placedAt", "revision", "lines" };
-        var lineFields = new[] { "id", "productId", "orderedQty", "deliveredQty", "returnedQty", "shortageQty", "shortageReason", "unitPrice", "currency" };
-        foreach (var property in document.RootElement.EnumerateObject()) orderFields.ShouldContain(property.Name);
-        foreach (var line in document.RootElement.GetProperty("lines").EnumerateArray())
-            foreach (var property in line.EnumerateObject()) lineFields.ShouldContain(property.Name);
-    }
-
-    private static void AssertDeliveryPayload(string json, Guid foreignStoreId, Guid foreignOrderId, ShipmentDto shipment)
-    {
-        json.ShouldNotContain(foreignStoreId.ToString());
-        json.ShouldNotContain(foreignOrderId.ToString());
-        json.ShouldNotContain(shipment.DriverId.ToString());
-        json.ShouldNotContain(shipment.VehicleId.ToString());
-        json.ShouldNotContain(shipment.RouteId.ToString());
-        using var document = JsonDocument.Parse(json);
-        var allowed = new[] { "shipmentId", "shipmentNumber", "storeId", "businessDate", "shipmentStatus",
-            "stopStatus", "sequence", "deliveryWindow", "signedAt", "orderIds" };
-        foreach (var delivery in document.RootElement.EnumerateArray())
-            foreach (var property in delivery.EnumerateObject()) allowed.ShouldContain(property.Name);
-    }
-
-    private static async Task<ShipmentDto> FulfillMixedShipmentAsync(
-        HttpClient admin,
-        HttpClient customerA,
-        HttpClient customerB,
-        Guid warehouseId,
-        Guid storeA,
-        Guid orderA,
-        Guid storeB,
-        Guid orderB)
-    {
-        using var cutoff = await admin.PostAsJsonAsync($"{TestConstants.WarehouseBasePath}/warehouses/{warehouseId}/cutoff", new { });
-        cutoff.EnsureSuccessStatusCode();
-        var plan = await cutoff.DeserializeAsync<CutoffResultDto>();
-        plan.OrdersLocked.ShouldBe(2);
-        using var generate = await admin.PostAsJsonAsync($"{TestConstants.WarehouseBasePath}/waves",
-            new { warehouseId, businessDate = plan.BusinessDate });
-        generate.EnsureSuccessStatusCode();
-        var wave = (await generate.DeserializeAsync<List<WaveDto>>()).ShouldHaveSingleItem();
-        string assignment = $"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/assign";
-        using var foreignAssignee = await admin.PostAsJsonAsync(assignment,
-            new { pickerUserId = await WaveAssignments.UserIdAsync(customerA) });
-        foreignAssignee.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        foreach (var customer in new[] { customerA, customerB })
-        {
-            using var assign = await customer.PostAsJsonAsync(assignment,
-                new { pickerUserId = await WaveAssignments.UserIdAsync(admin) });
-            assign.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-            using var waveDetail = await customer.GetAsync($"{TestConstants.WarehouseBasePath}/waves/{wave.Id}");
-            waveDetail.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        }
-        await WaveAssignments.AssignToSelfAsync(admin, wave.Id);
-        using var release = await admin.PostAsJsonAsync($"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/release", new { });
-        release.EnsureSuccessStatusCode();
-        var released = await release.DeserializeAsync<WaveDto>();
-        released.Tasks.Count.ShouldBe(2);
-        foreach (var task in released.Tasks)
-        {
-            using var customerPick = await customerA.PostAsJsonAsync(
-                $"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm", new { scannedLotId = task.LotId });
-            customerPick.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-            using var pick = await admin.PostAsJsonAsync($"{TestConstants.WarehouseBasePath}/pick-tasks/{task.Id}/confirm",
-                new { scannedLotId = task.LotId });
-            pick.EnsureSuccessStatusCode();
-        }
-        using var pack = await admin.PostAsJsonAsync($"{TestConstants.WarehouseBasePath}/waves/{wave.Id}/pack",
-            new { orderIds = new[] { orderA, orderB }, sscc = $"SSCC{Guid.NewGuid():N}"[..18] });
-        pack.EnsureSuccessStatusCode();
-        var tote = await pack.DeserializeAsync<PackToteDto>();
-        using var vehicle = await admin.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/vehicles",
-            new { plate = $"M{Guid.NewGuid():N}"[..8], compartmentZones = "Ambient", payloadKg = 1000m });
-        vehicle.EnsureSuccessStatusCode();
-        Guid vehicleId = await vehicle.DeserializeAsync<Guid>();
-        using var driver = await admin.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/drivers",
-            new { userId = await WaveAssignments.UserIdAsync(admin), phone = "+16175550111" });
-        driver.EnsureSuccessStatusCode();
-        Guid driverId = await driver.DeserializeAsync<Guid>();
-        using var route = await admin.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/routes",
-            new { warehouseId, code = $"MIX{Guid.NewGuid():N}"[..12], storeIds = new[] { storeA, storeB }, defaultVehicleId = vehicleId });
-        route.EnsureSuccessStatusCode();
-        Guid routeId = await route.DeserializeAsync<Guid>();
-        using var create = await admin.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/shipments",
-            new { routeId, warehouseId, vehicleId, driverId, businessDate = plan.BusinessDate });
-        create.EnsureSuccessStatusCode();
-        var shipment = await create.DeserializeAsync<ShipmentDto>();
-        shipment.Stops.Count.ShouldBe(2);
-        shipment.Lines.Select(l => l.OrderId).Order().ShouldBe(new[] { orderA, orderB }.Order());
-        using var load = await admin.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/load",
-            new { toteIds = new[] { tote.Id } });
-        load.EnsureSuccessStatusCode();
-        using var depart = await admin.PostAsJsonAsync($"{TestConstants.LogisticsBasePath}/shipments/{shipment.Id}/depart", new { });
-        depart.EnsureSuccessStatusCode();
-        return await depart.DeserializeAsync<ShipmentDto>();
-    }
 }
