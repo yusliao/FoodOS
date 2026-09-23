@@ -9,8 +9,8 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 5174);
  * tests don't need a running backend. This keeps the test loop fast
  * (~5s per test) and deterministic — no flaky network, no DB seeding.
  *
- * For tests that need a real backend, see `clients/dashboard/tests/e2e/`
- * (none today — all current tests are route-mocked).
+ * Real-backend tests live under `tests/real` and use the separate
+ * `playwright.real.config.ts`; the default suite explicitly excludes them.
  *
  * Usage:
  *   npm run test:e2e               # headless, all browsers
@@ -20,6 +20,7 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 5174);
  */
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: ["**/real/**"],
   // Tests are deterministic (mocked APIs) so parallelism is safe and
   // dramatically faster. We still serialise within a file via test.serial
   // when state spans tests (e.g. password-reset multi-step flows).

@@ -1,8 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getShopStores, type ShopStoreDto } from "@/api/shop";
-
-const STORAGE_KEY = "foodos.shop.storeId";
+import { SHOP_STORE_STORAGE_KEY } from "@/auth/session-scope";
 
 type ShopStoreContextValue = {
   stores: ShopStoreDto[];
@@ -19,7 +18,7 @@ const ShopStoreContext = createContext<ShopStoreContextValue | null>(null);
 function readStored(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage.getItem(STORAGE_KEY);
+    return window.localStorage.getItem(SHOP_STORE_STORAGE_KEY);
   } catch {
     return null;
   }
@@ -27,14 +26,15 @@ function readStored(): string | null {
 
 function writeStored(id: string | null) {
   try {
-    if (id) window.localStorage.setItem(STORAGE_KEY, id);
-    else window.localStorage.removeItem(STORAGE_KEY);
+    if (id) window.localStorage.setItem(SHOP_STORE_STORAGE_KEY, id);
+    else window.localStorage.removeItem(SHOP_STORE_STORAGE_KEY);
   } catch {
     /* storage unavailable */
   }
 }
 
 export function ShopStoreProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const storesQuery = useQuery({
     queryKey: ["shop", "stores"],
     queryFn: getShopStores,
@@ -51,6 +51,7 @@ export function ShopStoreProvider({ children }: { children: ReactNode }) {
   }, [refetchStores]);
 
   const [storeId, setStoreIdState] = useState<string | null>(readStored);
+  const previousStoreId = useRef(storeId);
   const stores = useMemo(() => storesData ?? [], [storesData]);
 
   const setStoreId = useCallback((id: string | null) => {
@@ -63,6 +64,16 @@ export function ShopStoreProvider({ children }: { children: ReactNode }) {
     if (storeId && stores.some((s) => s.id === storeId)) return;
     setStoreId(stores[0]?.id ?? null);
   }, [stores, storeId, setStoreId]);
+
+  useEffect(() => {
+    const previous = previousStoreId.current;
+    previousStoreId.current = storeId;
+    if (!previous || previous === storeId) return;
+    queryClient.removeQueries({
+      predicate: (query) =>
+        query.queryKey[0] === "shop" && query.queryKey.includes(previous),
+    });
+  }, [queryClient, storeId]);
 
   const store = useMemo(
     () => stores.find((s) => s.id === storeId) ?? null,

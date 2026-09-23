@@ -152,6 +152,29 @@ test.describe("shop/catalog", () => {
     });
   });
 
+  test("mobile customer can browse and add a quoted item without horizontal overflow", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockShopApis(page);
+    let putBody: unknown;
+    await page.route("**/api/v1/shop/stores/*/cart", async (route) => {
+      if (route.request().method() !== "PUT") {
+        await route.fallback();
+        return;
+      }
+      putBody = JSON.parse(route.request().postData() ?? "{}");
+      await route.fulfill({ json: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" });
+    });
+
+    await page.goto("/shop/catalog");
+    await expect(page.getByText(PRODUCT.name).first()).toBeVisible();
+    await page.getByRole("button", { name: /^add/i }).first().click();
+    await expect.poll(() => putBody).toMatchObject({
+      lines: [{ productId: PRODUCT.id, quantity: 1 }],
+    });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+
   test("lets a read-only customer browse without requesting or changing a cart", async ({ page }) => {
     await mockShopApis(page, { permissions: ["Permissions.Ordering.Shop.View"] });
     const cartRequests: string[] = [];

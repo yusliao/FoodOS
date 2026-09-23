@@ -1,5 +1,10 @@
 import { apiFetch } from "@/lib/api-client";
 
+export const NOTIFICATION_PERMISSIONS = {
+  view: "Permissions.Notifications.Inbox.View",
+  markRead: "Permissions.Notifications.Inbox.MarkRead",
+} as const;
+
 // Mirrors FSH.Modules.Notifications.Contracts.v1.DTOs.NotificationDto.
 export type NotificationDto = {
   id: string;

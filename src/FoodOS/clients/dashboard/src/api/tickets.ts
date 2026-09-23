@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api-client";
-import type { PagedResponse } from "@/api/catalog";
+import type { PagedResponse } from "@/lib/api-types";
 
 // ─── Enums (string-serialized via JsonStringEnumConverter) ───────────────
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using FSH.Framework.Shared.Multitenancy;
+using FSH.Framework.Persistence.Inteceptors;
 using FSH.Framework.Web;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Auditing;
@@ -26,6 +27,7 @@ using FoodOS.DbMigrator;
 using FoodOS.DbMigrator.DemoSeed;
 using Finbuckle.MultiTenant.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -160,6 +162,17 @@ builder.AddHeroPlatform(o =>
 });
 
 builder.AddModules(moduleAssemblies);
+
+// A deployment-time migrator persists schema and seed fixtures; it must not fan those fixtures out
+// as runtime notifications, webhooks, or background jobs. Keep the remaining persistence
+// interceptors, but remove post-save domain-event publication from this reduced host.
+foreach (var descriptor in builder.Services
+    .Where(d => d.ServiceType == typeof(ISaveChangesInterceptor)
+        && d.ImplementationType == typeof(DomainEventsInterceptor))
+    .ToList())
+{
+    builder.Services.Remove(descriptor);
+}
 
 // TenantProvisioningService needs IJobService, but Hangfire's is gated behind EnableJobs (off here).
 // Provide a throwing no-op so the DI graph resolves; the migration code paths don't enqueue jobs.

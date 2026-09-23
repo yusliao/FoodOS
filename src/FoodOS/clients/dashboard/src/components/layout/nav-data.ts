@@ -1,31 +1,17 @@
 import {
-  Activity,
   ClipboardList,
-  CreditCard,
   FolderOpen,
-  FolderTree,
-  HeartPulse,
   LayoutDashboard,
   MessageCircle,
-  Package,
-  PackagePlus,
-  Receipt,
-  ScrollText,
   Settings,
   ShieldCheck,
   ShoppingCart,
   Store,
-  Tags,
   Ticket,
-  Trash2,
-  Truck,
   Users,
   UsersRound,
-  Wifi,
 } from "lucide-react";
 import { SHOP_PERMISSIONS } from "@/api/shop";
-import { PROCUREMENT_PERMISSIONS } from "@/api/procurement";
-import { ALL_TRASH_PERMISSIONS } from "@/lib/trash-permissions";
 
 export type NavSpec = {
   to: string;
@@ -85,35 +71,6 @@ export const sections: NavSection[] = [
     ],
   },
   {
-    id: "fulfillment",
-    caption: "Fulfillment",
-    icon: Truck,
-    items: [
-      { to: "/ops/purchase", label: "Purchasing", icon: PackagePlus, perm: PROCUREMENT_PERMISSIONS.purchaseView },
-    ],
-  },
-  {
-    id: "operations",
-    caption: "Operations",
-    icon: Activity,
-    items: [
-      // Live activity is SSE-backed; the stream is auth-only (no permission), so no gate.
-      { to: "/activity", label: "Live activity", icon: Activity },
-      { to: "/subscription", label: "Subscription", icon: CreditCard, perm: "Permissions.Billing.View" },
-      { to: "/invoices", label: "Invoices", icon: Receipt, perm: "Permissions.Billing.View" },
-    ],
-  },
-  {
-    id: "catalog",
-    caption: "Catalog",
-    icon: Package,
-    items: [
-      { to: "/catalog/products", label: "Products", icon: Package, perm: "Permissions.Catalog.Products.View" },
-      { to: "/catalog/brands", label: "Brands", icon: Tags, perm: "Permissions.Catalog.Brands.View" },
-      { to: "/catalog/categories", label: "Categories", icon: FolderTree, perm: "Permissions.Catalog.Categories.View" },
-    ],
-  },
-  {
     id: "helpdesk",
     caption: "Helpdesk",
     icon: Ticket,
@@ -132,21 +89,6 @@ export const sections: NavSection[] = [
       { to: "/identity/users", label: "Users", icon: Users, perm: "Permissions.Users.Update" },
       { to: "/identity/roles", label: "Roles", icon: ShieldCheck, perm: "Permissions.Roles.Update" },
       { to: "/identity/groups", label: "Groups", icon: UsersRound, perm: "Permissions.Groups.Update" },
-    ],
-  },
-  {
-    id: "system",
-    caption: "System",
-    icon: HeartPulse,
-    items: [
-      // Health hits the anonymous /health/ready probe — visible to everyone.
-      { to: "/system/health", label: "Health", icon: HeartPulse },
-      { to: "/system/audits", label: "Audit trail", icon: ScrollText, perm: "Permissions.AuditTrails.View" },
-      { to: "/system/sessions", label: "Sessions", icon: Wifi, perm: "Permissions.Sessions.ViewAll" },
-      // Trash fronts five tabs, each gated on a different resource's restore /
-      // view-trash permission. Show the entry if the user can reach any tab; the
-      // page hides the individual tabs they can't (see trash-permissions.ts).
-      { to: "/system/trash", label: "Trash", icon: Trash2, anyPerm: ALL_TRASH_PERMISSIONS },
     ],
   },
 ];

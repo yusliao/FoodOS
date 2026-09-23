@@ -1,5 +1,33 @@
 import { apiFetch } from "@/lib/api-client";
-import type { PagedResponse } from "@/api/catalog";
+import type { PagedResponse } from "@/lib/api-types";
+
+export const IDENTITY_PERMISSIONS = {
+  users: {
+    view: "Permissions.Users.View",
+    create: "Permissions.Users.Create",
+    update: "Permissions.Users.Update",
+    delete: "Permissions.Users.Delete",
+    manageRoles: "Permissions.Users.ManageRoles",
+    confirmEmail: "Permissions.Users.ConfirmEmail",
+  },
+  roles: {
+    view: "Permissions.Roles.View",
+    create: "Permissions.Roles.Create",
+    update: "Permissions.Roles.Update",
+    delete: "Permissions.Roles.Delete",
+  },
+  groups: {
+    view: "Permissions.Groups.View",
+    create: "Permissions.Groups.Create",
+    update: "Permissions.Groups.Update",
+    delete: "Permissions.Groups.Delete",
+    manageMembers: "Permissions.Groups.ManageMembers",
+  },
+  sessions: {
+    viewAll: "Permissions.Sessions.ViewAll",
+    revokeAll: "Permissions.Sessions.RevokeAll",
+  },
+} as const;
 
 // -----------------------------
 // Types

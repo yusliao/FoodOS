@@ -303,8 +303,8 @@
     "demoTitle": "Demo accounts",
     "demoDescription": "Pick a demo tenant and account to sign in with.",
     "demoBadge": "Live demo",
-    "demoHeadline": "Step into any role.",
-    "demoHint": "Explore fullstackhero as any user across the demo tenants — we'll sign you in instantly.",
+    "demoHeadline": "Choose a restaurant account.",
+    "demoHint": "Explore the customer portal as a user from either demo restaurant — we'll sign you in instantly.",
     "demoOnly": "demo only",
     "demoResets": "Resets with every reseed.",
     "demoTenantsAria": "Demo tenants",
@@ -312,8 +312,6 @@
     "demoUsers": "Users",
     "demoTapToSignIn": "tap to sign in",
     "tierTenantAdmin": "Tenant Admin",
-    "tierManager": "Manager",
-    "tierSupport": "Support",
     "tierBasic": "Basic",
     "stillThere": "Still there?",
     "inactivityBody": "You've been inactive for a while. We'll sign you out shortly to keep your account secure.",
@@ -523,6 +521,8 @@
     "noPicksBody": "Release a wave to allocate FEFO lots onto pick tasks."
   },
   "identity": {
+    "accessDeniedTitle": "Access required",
+    "accessDeniedBody": "Your account does not have permission to open this customer management area.",
     "discard": "Discard",
     "saveChanges": "Save changes",
     "saving": "Saving…",
@@ -815,6 +815,12 @@
       "noMatch": "No users match \"{q}\".",
       "results": "Search results"
     }
+  },
+  "retiredRoute": {
+    "title": "This page has moved",
+    "body": "Internal operations, software subscriptions, and system administration now belong in the operator workspace. They are no longer available in the restaurant portal.",
+    "requested": "Retired route: {path}",
+    "backToShop": "Back to ordering"
   },
   "catalog": {
     "clear": "Clear",

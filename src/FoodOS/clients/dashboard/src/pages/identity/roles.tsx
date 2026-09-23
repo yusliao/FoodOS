@@ -7,7 +7,8 @@ import {
 } from "@tanstack/react-query";
 import { ChevronRight, Plus, Shield } from "lucide-react";
 import { toast } from "sonner";
-import { listRoles, upsertRole, type RoleDto } from "@/api/identity";
+import { IDENTITY_PERMISSIONS, listRoles, upsertRole, type RoleDto } from "@/api/identity";
+import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,6 +55,8 @@ function newGuid(): string {
 
 export function RolesPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canCreate = user?.permissions.includes(IDENTITY_PERMISSIONS.roles.create) ?? false;
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -90,13 +93,15 @@ export function RolesPage() {
         unit={t("identity.roles.unit")}
         description={t("identity.roles.description")}
       >
-        <Button
-          onClick={() => setCreateOpen(true)}
-          className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
-        >
-          <Plus className="size-4" />
-          {t("identity.roles.newRole")}
-        </Button>
+        {canCreate && (
+          <Button
+            onClick={() => setCreateOpen(true)}
+            className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
+          >
+            <Plus className="size-4" />
+            {t("identity.roles.newRole")}
+          </Button>
+        )}
       </EntityPageHeader>
 
       <EntitySearch
@@ -125,7 +130,7 @@ export function RolesPage() {
               >
                 {t("identity.clearSearch")}
               </Button>
-            ) : (
+            ) : canCreate ? (
               <Button
                 onClick={() => setCreateOpen(true)}
                 className="h-9 rounded-lg px-4 text-[13px]"
@@ -133,7 +138,7 @@ export function RolesPage() {
                 <Plus className="mr-1.5 size-4" />
                 {t("identity.roles.addRole")}
               </Button>
-            )
+            ) : undefined
           }
         />
       ) : (
@@ -180,10 +185,12 @@ export function RolesPage() {
         </div>
       )}
 
-      <CreateRoleDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-      />
+      {canCreate && (
+        <CreateRoleDialog
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+        />
+      )}
     </div>
   );
 }

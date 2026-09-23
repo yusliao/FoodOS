@@ -6,6 +6,8 @@ type RuntimeConfig = {
   apiBase: string;
   defaultTenant: string;
   dashboardUrl: string;
+  /** Show demo credentials only in explicitly configured demo environments. */
+  demoMode: boolean;
   /** Idle time (ms) before the inactivity warning appears. Admin = sensitive operator console. */
   inactivityIdleMs: number;
   /** Warning-countdown length (ms) before auto sign-out. */
@@ -36,6 +38,7 @@ export async function loadRuntimeConfig(): Promise<void> {
     // Dashboard origin used by the impersonation handoff. Dev default
     // mirrors clients/dashboard/package.json's vite port.
     dashboardUrl: (cfg.dashboardUrl ?? "http://localhost:5174").replace(/\/$/, ""),
+    demoMode: cfg.demoMode ?? false,
     inactivityIdleMs: positiveOr(cfg.inactivityIdleMs, DEFAULT_INACTIVITY_IDLE_MS),
     inactivityWarningMs: positiveOr(cfg.inactivityWarningMs, DEFAULT_INACTIVITY_WARNING_MS),
   };
@@ -54,6 +57,7 @@ export const env = {
   get apiBase(): string { return get().apiBase; },
   get defaultTenant(): string { return get().defaultTenant; },
   get dashboardUrl(): string { return get().dashboardUrl; },
+  get demoMode(): boolean { return get().demoMode; },
   get inactivityIdleMs(): number { return get().inactivityIdleMs; },
   get inactivityWarningMs(): number { return get().inactivityWarningMs; },
 };

@@ -1,3 +1,5 @@
+import { clearCustomerScopeSelections } from "@/auth/session-scope";
+
 const ACCESS_KEY = "fsh.dashboard.accessToken";
 const REFRESH_KEY = "fsh.dashboard.refreshToken";
 const TENANT_KEY = "fsh.dashboard.tenant";
@@ -60,12 +62,14 @@ export const tokenStore = {
   clear() {
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(TENANT_KEY);
     localStorage.removeItem(PERMS_KEY);
     // Also clear any impersonation stash so a fresh login doesn't
     // inherit half of a previous operator's session.
     localStorage.removeItem(STASH_ACCESS_KEY);
     localStorage.removeItem(STASH_REFRESH_KEY);
     localStorage.removeItem(STASH_TENANT_KEY);
+    clearCustomerScopeSelections();
     emit();
   },
 
@@ -90,6 +94,7 @@ export const tokenStore = {
     // the auth context re-hydrates on the subject change.
     localStorage.removeItem(PERMS_KEY);
     if (impersonatedTenant) localStorage.setItem(TENANT_KEY, impersonatedTenant);
+    clearCustomerScopeSelections();
     emit();
   },
 
@@ -106,6 +111,7 @@ export const tokenStore = {
     localStorage.removeItem(STASH_ACCESS_KEY);
     localStorage.removeItem(STASH_REFRESH_KEY);
     localStorage.removeItem(STASH_TENANT_KEY);
+    clearCustomerScopeSelections();
     emit();
   },
 
@@ -127,6 +133,7 @@ export const tokenStore = {
     localStorage.removeItem(STASH_ACCESS_KEY);
     localStorage.removeItem(STASH_REFRESH_KEY);
     localStorage.removeItem(STASH_TENANT_KEY);
+    clearCustomerScopeSelections();
     emit();
     return true;
   },

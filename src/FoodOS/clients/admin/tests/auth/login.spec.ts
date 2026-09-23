@@ -17,6 +17,16 @@ const TOKEN_RESPONSE = {
 };
 
 test.describe("admin login", () => {
+  test("runtime demo flag hides seeded credentials", async ({ page }) => {
+    await page.route("**/config.json", (route) => route.fulfill({
+      json: { apiBase: "", defaultTenant: "root", dashboardUrl: "http://localhost:5174", demoMode: false },
+    }));
+
+    await page.goto("/login");
+
+    await expect(page.getByRole("button", { name: "Sign in with a demo account" })).toHaveCount(0);
+  });
+
   test("renders the FSH brand lockup + the welcome form", async ({ page }) => {
     await page.goto("/login");
 
@@ -86,17 +96,18 @@ test.describe("admin login", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test("DEV demo dialog lists the superadmin account and signs in on pick", async ({ page }) => {
+  test("runtime demo dialog lists seeded operator accounts and signs in on pick", async ({ page }) => {
     await mockJsonResponse(page, "**/api/v1/identity/token/issue", TOKEN_RESPONSE);
     await page.goto("/login");
 
-    // The dev server runs in DEV, so the demo affordance is rendered. It now
-    // opens a dialog account picker (the old inline "callout" was replaced).
+    // Local Vite explicitly enables demoMode, so the picker is rendered.
     await page.getByRole("button", { name: "Sign in with a demo account" }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("superadmin@root.com")).toBeVisible();
+    await expect(dialog.getByText("manager@root.com")).toBeVisible();
+    await expect(dialog.getByText("admin@root.com", { exact: true })).toHaveCount(0);
 
     // Picking the account fills the creds and signs in instantly — assert the
     // resulting token/issue POST carries the demo email + tenant header.

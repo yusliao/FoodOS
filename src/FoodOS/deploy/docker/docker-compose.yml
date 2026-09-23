@@ -183,6 +183,7 @@ services:
       FSH_API_URL: ${FSH_API_URL:?FSH_API_URL is required}
       FSH_DASHBOARD_URL: ${FSH_DASHBOARD_URL}
       FSH_DEFAULT_TENANT: ${FSH_DEFAULT_TENANT:-root}
+      FSH_DEMO_MODE: ${FSH_DEMO_MODE:-false}
     ports:
       - "${FSH_ADMIN_PORT:-8081}:80"
 
@@ -196,7 +197,8 @@ services:
       migrator: { condition: service_completed_successfully }
     environment:
       FSH_API_URL: ${FSH_API_URL}
-      FSH_DEFAULT_TENANT: ${FSH_DEFAULT_TENANT:-root}
+      FSH_DEFAULT_TENANT: ${FSH_DASHBOARD_DEFAULT_TENANT:-}
+      FSH_DEMO_MODE: ${FSH_DEMO_MODE:-false}
     ports:
       - "${FSH_DASHBOARD_PORT:-8082}:80"
 

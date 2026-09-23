@@ -1,8 +1,9 @@
 import { lazy, Suspense, type ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { WmsStatusNotice } from "@/components/wms-status";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProtectedRoute } from "@/auth/protected-route";
+import { PermissionBoundary } from "@/auth/permission-boundary";
+import { IDENTITY_PERMISSIONS } from "@/api/identity";
 import { RouteError } from "@/components/route-error";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
@@ -46,24 +47,11 @@ const OverviewPage = lazyNamed(
   () => import("@/pages/customer-overview"),
   "CustomerOverviewPage",
 );
-const ActivityPage = lazyNamed(() => import("@/pages/activity"), "ActivityPage");
-const InvoicesPage = lazyNamed(() => import("@/pages/invoices"), "InvoicesPage");
-const InvoiceDetailPage = lazyNamed(
-  () => import("@/pages/invoice-detail"),
-  "InvoiceDetailPage",
-);
-const SubscriptionPage = lazyNamed(
-  () => import("@/pages/subscription"),
-  "SubscriptionPage",
-);
-const BrandsPage = lazyNamed(() => import("@/pages/catalog/brands"), "BrandsPage");
-const CategoriesPage = lazyNamed(() => import("@/pages/catalog/categories"), "CategoriesPage");
-const ProductsPage = lazyNamed(() => import("@/pages/catalog/products"), "ProductsPage");
-const ProductDetailPage = lazyNamed(
-  () => import("@/pages/catalog/product-detail"),
-  "ProductDetailPage",
-);
 const NotFoundPage = lazyNamed(() => import("@/pages/not-found"), "NotFoundPage");
+const RetiredRoutePage = lazyNamed(
+  () => import("@/pages/retired-route"),
+  "RetiredRoutePage",
+);
 const TenantDeactivatedPage = lazyNamed(
   () => import("@/pages/tenant-deactivated"),
   "TenantDeactivatedPage",
@@ -86,16 +74,11 @@ const NotificationsSettings = lazyNamed(
   () => import("@/pages/settings/notifications"),
   "NotificationsSettings",
 );
-const ApiKeysSettings = lazyNamed(() => import("@/pages/settings/api-keys"), "ApiKeysSettings");
-const HealthPage = lazyNamed(() => import("@/pages/health"), "HealthPage");
-const AuditsPage = lazyNamed(() => import("@/pages/audits"), "AuditsPage");
 const TicketsPage = lazyNamed(() => import("@/pages/tickets/tickets"), "TicketsPage");
 const TicketDetailPage = lazyNamed(
   () => import("@/pages/tickets/ticket-detail"),
   "TicketDetailPage",
 );
-const TrashPage = lazyNamed(() => import("@/pages/system/trash"), "TrashPage");
-const SessionsPage = lazyNamed(() => import("@/pages/system/sessions"), "SessionsPage");
 const UsersPage = lazyNamed(() => import("@/pages/identity/users"), "UsersPage");
 const UserDetailPage = lazyNamed(
   () => import("@/pages/identity/user-detail"),
@@ -123,7 +106,6 @@ const ShopOrderDetailPage = lazyNamed(
   "ShopOrderDetailPage",
 );
 const ShopAfterSalesPage = lazyNamed(() => import("@/pages/shop/after-sales"), "ShopAfterSalesPage");
-const PurchaseDeskPage = lazyNamed(() => import("@/pages/ops/purchase"), "PurchaseDeskPage");
 
 /**
  * RouteFallback — what shows while a lazy chunk is downloading. Mirrors
@@ -209,26 +191,44 @@ export const router = createBrowserRouter([
         errorElement: <RouteError />,
         children: [
           { index: true, element: withSuspense(<OverviewPage />) },
-          { path: "activity", element: withSuspense(<ActivityPage />) },
-          { path: "subscription", element: withSuspense(<SubscriptionPage />) },
-          { path: "invoices", element: withSuspense(<InvoicesPage />) },
-          { path: "invoices/:id", element: withSuspense(<InvoiceDetailPage />) },
-          { path: "system/health", element: withSuspense(<HealthPage />) },
-          { path: "system/audits", element: withSuspense(<AuditsPage />) },
-          { path: "system/trash", element: withSuspense(<TrashPage />) },
-          { path: "system/sessions", element: withSuspense(<SessionsPage />) },
+          { path: "activity", element: withSuspense(<RetiredRoutePage />) },
+          { path: "subscription", element: withSuspense(<RetiredRoutePage />) },
+          { path: "invoices", element: withSuspense(<RetiredRoutePage />) },
+          { path: "invoices/*", element: withSuspense(<RetiredRoutePage />) },
+          { path: "system/health", element: withSuspense(<RetiredRoutePage />) },
+          { path: "system/audits/*", element: withSuspense(<RetiredRoutePage />) },
+          { path: "system/trash/*", element: withSuspense(<RetiredRoutePage />) },
+          { path: "system/sessions/*", element: withSuspense(<RetiredRoutePage />) },
           { path: "files", element: withSuspense(<MyFilesPage />) },
           { path: "chat", element: withSuspense(<ChatPage />) },
           { path: "chat/:channelId", element: withSuspense(<ChatPage />) },
           { path: "tickets", element: withSuspense(<TicketsPage />) },
           { path: "tickets/:ticketId", element: withSuspense(<TicketDetailPage />) },
           { path: "identity", element: <Navigate to="/identity/users" replace /> },
-          { path: "identity/users", element: withSuspense(<UsersPage />) },
-          { path: "identity/users/:userId", element: withSuspense(<UserDetailPage />) },
-          { path: "identity/roles", element: withSuspense(<RolesPage />) },
-          { path: "identity/roles/:roleId", element: withSuspense(<RoleDetailPage />) },
-          { path: "identity/groups", element: withSuspense(<GroupsPage />) },
-          { path: "identity/groups/:groupId", element: withSuspense(<GroupDetailPage />) },
+          {
+            path: "identity/users",
+            element: <PermissionBoundary permission={IDENTITY_PERMISSIONS.users.view}>{withSuspense(<UsersPage />)}</PermissionBoundary>,
+          },
+          {
+            path: "identity/users/:userId",
+            element: <PermissionBoundary permission={IDENTITY_PERMISSIONS.users.view}>{withSuspense(<UserDetailPage />)}</PermissionBoundary>,
+          },
+          {
+            path: "identity/roles",
+            element: <PermissionBoundary permission={IDENTITY_PERMISSIONS.roles.view}>{withSuspense(<RolesPage />)}</PermissionBoundary>,
+          },
+          {
+            path: "identity/roles/:roleId",
+            element: <PermissionBoundary permission={IDENTITY_PERMISSIONS.roles.view}>{withSuspense(<RoleDetailPage />)}</PermissionBoundary>,
+          },
+          {
+            path: "identity/groups",
+            element: <PermissionBoundary permission={IDENTITY_PERMISSIONS.groups.view}>{withSuspense(<GroupsPage />)}</PermissionBoundary>,
+          },
+          {
+            path: "identity/groups/:groupId",
+            element: <PermissionBoundary permission={IDENTITY_PERMISSIONS.groups.view}>{withSuspense(<GroupDetailPage />)}</PermissionBoundary>,
+          },
           {
             path: "shop",
             element: withSuspense(<ShopLayout />),
@@ -242,20 +242,9 @@ export const router = createBrowserRouter([
               { path: "after-sales", element: withSuspense(<ShopAfterSalesPage />) },
             ],
           },
-          { path: "ops/purchase", element: withSuspense(<PurchaseDeskPage />) },
-          { path: "ops/qc", element: <WmsStatusNotice /> },
-          { path: "ops/putaway", element: <WmsStatusNotice /> },
-          { path: "ops/waves", element: <WmsStatusNotice /> },
-          { path: "ops/picks", element: <WmsStatusNotice /> },
-          { path: "ops/shipments", element: <WmsStatusNotice /> },
-          { path: "catalog", element: <Navigate to="/catalog/brands" replace /> },
-          { path: "catalog/brands", element: withSuspense(<BrandsPage />) },
-          { path: "catalog/categories", element: withSuspense(<CategoriesPage />) },
-          { path: "catalog/products", element: withSuspense(<ProductsPage />) },
-          {
-            path: "catalog/products/:productId",
-            element: withSuspense(<ProductDetailPage />),
-          },
+          { path: "ops/*", element: withSuspense(<RetiredRoutePage />) },
+          { path: "catalog", element: withSuspense(<RetiredRoutePage />) },
+          { path: "catalog/*", element: withSuspense(<RetiredRoutePage />) },
           {
             path: "settings",
             element: withSuspense(<SettingsLayout />),
@@ -265,7 +254,7 @@ export const router = createBrowserRouter([
               { path: "security", element: withSuspense(<SecuritySettings />) },
               { path: "appearance", element: withSuspense(<AppearanceSettings />) },
               { path: "notifications", element: withSuspense(<NotificationsSettings />) },
-              { path: "api-keys", element: withSuspense(<ApiKeysSettings />) },
+              { path: "api-keys", element: withSuspense(<RetiredRoutePage />) },
             ],
           },
         ],

@@ -1,6 +1,6 @@
 import { env } from "@/env";
 import { tokenStore } from "@/auth/token-store";
-import { decodeJwt } from "@/auth/jwt";
+import { decodeJwt, isCustomerIdentity, isTokenExpired } from "@/auth/jwt";
 import { getCulture } from "@/i18n/locale-store";
 
 export type ApiError = {
@@ -108,11 +108,16 @@ export async function refreshAccessToken() {
   if (!refreshToken || !accessToken) {
     throw new ApiRequestError(401, "No refresh token");
   }
+  const previousClaims = decodeJwt(accessToken);
+  if (!isCustomerIdentity(previousClaims)) {
+    tokenStore.clear();
+    throw new ApiRequestError(401, "Restaurant session required");
+  }
 
   // Server's RefreshTokenCommand requires both `token` (the existing, possibly expired
   // access token, used to cross-check the subject) and `refreshToken`. Sending only one
   // of them fails FluentValidation and surfaces as 500.
-  const tenant = tokenStore.getTenant() ?? env.defaultTenant;
+  const tenant = previousClaims.tenant;
   const response = await fetch(`${env.apiBase}/api/v1/identity/token/refresh`, {
     method: "POST",
     headers: {
@@ -138,6 +143,17 @@ export async function refreshAccessToken() {
     token: string;
     refreshToken: string;
   };
+  const claims = decodeJwt(tokens.token);
+  if (
+    !isCustomerIdentity(claims) ||
+    isTokenExpired(claims) ||
+    claims?.sub !== previousClaims?.sub ||
+    claims?.tenant !== previousClaims?.tenant
+  ) {
+    tokenStore.clear();
+    throw new ApiRequestError(401, "Invalid restaurant session");
+  }
+  tokenStore.setTenant(claims.tenant);
   tokenStore.setTokens(tokens.token, tokens.refreshToken);
 }
 

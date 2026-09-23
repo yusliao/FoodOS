@@ -3,24 +3,6 @@ import { mockJsonResponse } from "../helpers/api-mocks";
 import { installShellMocks, paged } from "../helpers/shell-mocks";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 
-const INVOICE = {
-  id: "inv-1",
-  tenantId: "acme",
-  invoiceNumber: "INV-2026-05",
-  periodYear: 2026,
-  periodMonth: 5,
-  currency: "USD",
-  subtotalAmount: 149,
-  status: "Issued",
-  createdAtUtc: "2026-05-01T00:00:00Z",
-  issuedAtUtc: "2026-05-01T00:00:00Z",
-  dueAtUtc: "2026-05-15T00:00:00Z",
-  paidAtUtc: null,
-  voidedAtUtc: null,
-  notes: null,
-  lineItems: [],
-};
-
 const SHOP_PERMISSIONS = [
   "Permissions.Ordering.Shop.View",
   "Permissions.Ordering.Shop.Order",
@@ -182,80 +164,31 @@ test.describe("overview (/)", () => {
     await expect(page.getByText("Uptown Kitchen", { exact: true }).first()).toBeVisible();
     await expect.poll(() => page.evaluate(() => localStorage.getItem("foodos.shop.storeId"))).toBe(SECOND_STORE.id);
     await expect.poll(() => requestedStoreIds.at(-1)).toBe(SECOND_STORE.id);
+
+    await page.getByRole("button", { name: "Store", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: /Harbor Kitchen/ }).click();
+    await expect.poll(() => requestedStoreIds.filter((id) => id === STORE.id).length).toBeGreaterThan(1);
   });
 });
 
-test.describe("activity (/activity)", () => {
+test.describe("retired tenant dashboard routes", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuthedSession(page, TEST_USER);
     await installShellMocks(page);
   });
 
-  test("renders the live-activity page with its empty state (stream offline in tests)", async ({ page }) => {
-    await page.goto("/activity");
-    await expect(page.getByRole("heading", { name: /live activity/i })).toBeVisible();
-    await expect(page.getByText(/no events yet|listening for activity/i)).toBeVisible();
-  });
-});
-
-test.describe("invoices (/invoices)", () => {
-  test.beforeEach(async ({ page }) => {
-    await seedAuthedSession(page, TEST_USER);
-    await installShellMocks(page);
-  });
-
-  test("renders an invoice row from the API", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/billing/invoices/me**", paged([INVOICE]));
-    await page.goto("/invoices");
-    await expect(page.getByRole("heading", { name: /invoices/i })).toBeVisible();
-    // Invoice number + status render in both a (hidden) mobile card and the
-    // desktop table row; the desktop one is last in the DOM on a wide viewport.
-    await expect(page.getByText("INV-2026-05").last()).toBeVisible();
-    await expect(page.getByText("Issued").last()).toBeVisible();
-  });
-
-  test("shows the empty state when there are no invoices", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/billing/invoices/me**", paged([]));
-    await page.goto("/invoices");
-    await expect(page.getByText(/no invoices yet/i)).toBeVisible();
-  });
-
-  test("filters by search term", async ({ page }) => {
-    await mockJsonResponse(page, "**/api/v1/billing/invoices/me**", paged([INVOICE]));
-    await page.goto("/invoices");
-    await expect(page.getByText("INV-2026-05").last()).toBeVisible();
-    await page.getByPlaceholder(/search by invoice number/i).fill("nomatch-xyz");
-    await expect(page.getByText(/no invoices found/i)).toBeVisible();
-  });
-
-  test("paginates across pages using the PagedResult envelope", async ({ page }) => {
-    const PAGE_1 = { ...INVOICE, id: "inv-1", invoiceNumber: "INV-2026-05" };
-    const PAGE_2 = { ...INVOICE, id: "inv-2", invoiceNumber: "INV-2026-04", periodMonth: 4 };
-
-    // Serve page 1 or page 2 based on the requested pageNumber so the next
-    // control drives a real envelope transition. totalCount=2, totalPages=2.
-    await page.route("**/api/v1/billing/invoices/me**", async (route) => {
-      const url = new URL(route.request().url());
-      const pageNumber = Number(url.searchParams.get("pageNumber") ?? "1");
-      const item = pageNumber >= 2 ? PAGE_2 : PAGE_1;
-      await route.fulfill({
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          paged([item], { pageNumber, pageSize: 20, totalCount: 2, totalPages: 2 }),
-        ),
+  for (const path of ["/activity", "/invoices"]) {
+    test(`shows the explicit retired result for ${path}`, async ({ page }) => {
+      const requests: string[] = [];
+      page.on("request", (request) => {
+        if (/\/api\/v1\/(billing|activity)/.test(request.url())) requests.push(request.url());
       });
+
+      await page.goto(path);
+
+      await expect(page.getByRole("heading", { name: "This page has moved" })).toBeVisible();
+      await expect(page.getByText(`Retired route: ${path}`)).toBeVisible();
+      expect(requests).toEqual([]);
     });
-
-    await page.goto("/invoices");
-    // Header reflects the TRUE total, not the loaded page size.
-    await expect(page.getByText(/showing 1 of 2 invoices/i)).toBeVisible();
-    await expect(page.getByText("INV-2026-05").last()).toBeVisible();
-    await expect(page.getByText("Page 1 of 2", { exact: true })).toBeVisible();
-
-    await page.getByRole("button", { name: /next page/i }).click();
-
-    await expect(page.getByText("INV-2026-04").last()).toBeVisible();
-    await expect(page.getByText("Page 2 of 2", { exact: true })).toBeVisible();
-  });
+  }
 });

@@ -274,10 +274,6 @@ function tierLabel(tier: DemoTier, t: (key: string, fallback?: string) => string
   switch (tier) {
     case "tenant-admin":
       return t("auth.tierTenantAdmin");
-    case "manager":
-      return t("auth.tierManager");
-    case "support":
-      return t("auth.tierSupport");
     default:
       return t("auth.tierBasic");
   }

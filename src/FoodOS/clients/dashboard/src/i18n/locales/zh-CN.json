@@ -303,8 +303,8 @@
     "demoTitle": "演示账号",
     "demoDescription": "选择一个演示租户和账号登录。",
     "demoBadge": "在线演示",
-    "demoHeadline": "进入任意角色。",
-    "demoHint": "以任意演示租户用户体验 fullstackhero — 点击即登录。",
+    "demoHeadline": "选择饭店账号。",
+    "demoHint": "选择任一演示饭店的客户账号，点击即可登录客户门户。",
     "demoOnly": "仅演示",
     "demoResets": "每次重新种子都会重置。",
     "demoTenantsAria": "演示租户",
@@ -312,8 +312,6 @@
     "demoUsers": "用户",
     "demoTapToSignIn": "点击登录",
     "tierTenantAdmin": "租户管理员",
-    "tierManager": "经理",
-    "tierSupport": "支持",
     "tierBasic": "普通成员",
     "stillThere": "还在吗？",
     "inactivityBody": "您已一段时间未操作。为保障账号安全，即将自动退出登录。",
@@ -523,6 +521,8 @@
     "noPicksBody": "下发波次后会按 FEFO 分配批次到拣货任务。"
   },
   "identity": {
+    "accessDeniedTitle": "需要访问权限",
+    "accessDeniedBody": "当前账号无权访问此客户管理区域。",
     "discard": "放弃更改",
     "saveChanges": "保存更改",
     "saving": "正在保存…",
@@ -815,6 +815,12 @@
       "noMatch": "没有匹配“{q}”的用户。",
       "results": "搜索结果"
     }
+  },
+  "retiredRoute": {
+    "title": "此页面已迁出",
+    "body": "内部运营、软件订阅和系统管理现已归属运营方工作台，不再由饭店门户提供。",
+    "requested": "已退役路由：{path}",
+    "backToShop": "返回订货"
   },
   "catalog": {
     "clear": "清除",

@@ -103,6 +103,9 @@ docker compose up -d --build
 Sign in to the admin console as `admin@root.com` using the `SEED_ADMIN_PASSWORD` from your
 `.env`, then rotate it from Settings → Security.
 
+For the operator/restaurant release gate, migration checks, recovery sequence, account boundaries,
+and production troubleshooting, follow the [FoodOS operator and restaurant operations runbook](../../doc/FoodOS-运营方与饭店租户发布运维手册.md).
+
 ## Adding a feature
 
 1. Contracts command/query in `src/Modules/{Module}.Contracts/v1/{Area}/{Feature}/`

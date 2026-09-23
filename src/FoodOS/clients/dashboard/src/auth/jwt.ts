@@ -25,6 +25,18 @@ export type JwtClaims = {
   act_name?: string;
 };
 
+/** UI admission only; the API remains responsible for signature and permission validation. */
+export function isCustomerIdentity(
+  claims: JwtClaims | null,
+): claims is JwtClaims & { sub: string; tenant: string } {
+  return Boolean(
+    claims?.sub &&
+    claims.tenant &&
+    claims.tenant !== "root" &&
+    claims.business_actor !== "operator",
+  );
+}
+
 export function decodeJwt(token: string | null | undefined): JwtClaims | null {
   if (!token) return null;
   const parts = token.split(".");

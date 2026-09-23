@@ -15,9 +15,11 @@ import {
 import { toast } from "sonner";
 import {
   createGroup,
+  IDENTITY_PERMISSIONS,
   listGroups,
   type GroupDto,
 } from "@/api/identity";
+import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -52,6 +54,8 @@ const DESKTOP_COLUMNS = "grid-cols-[1fr_160px_120px_24px]";
 
 export function GroupsPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canCreate = user?.permissions.includes(IDENTITY_PERMISSIONS.groups.create) ?? false;
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -79,13 +83,15 @@ export function GroupsPage() {
         unit={t("identity.groups.unit")}
         description={t("identity.groups.description")}
       >
-        <Button
-          onClick={() => setCreateOpen(true)}
-          className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
-        >
-          <Plus className="size-4" />
-          {t("identity.groups.newGroup")}
-        </Button>
+        {canCreate && (
+          <Button
+            onClick={() => setCreateOpen(true)}
+            className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
+          >
+            <Plus className="size-4" />
+            {t("identity.groups.newGroup")}
+          </Button>
+        )}
       </EntityPageHeader>
 
       <EntitySearch
@@ -112,12 +118,12 @@ export function GroupsPage() {
               <Button variant="outline" onClick={() => setSearch("")} className="h-9 rounded-lg px-4 text-[13px]">
                 {t("identity.clearSearch")}
               </Button>
-            ) : (
+            ) : canCreate ? (
               <Button onClick={() => setCreateOpen(true)} className="h-9 rounded-lg px-4 text-[13px]">
                 <Plus className="mr-1.5 size-4" />
                 {t("identity.groups.addGroup")}
               </Button>
-            )
+            ) : undefined
           }
         />
       ) : (
@@ -163,7 +169,7 @@ export function GroupsPage() {
         </div>
       )}
 
-      <CreateGroupDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      {canCreate && <CreateGroupDialog open={createOpen} onClose={() => setCreateOpen(false)} />}
     </div>
   );
 }

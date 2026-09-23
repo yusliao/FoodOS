@@ -17,6 +17,7 @@ for (const replacement of ["customer", "root", "expired", "logout"]) {
       localStorage.setItem("fsh.dashboard.accessToken", original);
       localStorage.setItem("fsh.dashboard.tenant", "acme");
       localStorage.setItem("fsh.dashboard.permissions", JSON.stringify(["Permissions.Users.View"]));
+      localStorage.setItem("foodos.shop.storeId", "old-store");
     }, original);
     const profileTokens: string[] = [];
     let newPermissionReads = 0;
@@ -50,6 +51,7 @@ for (const replacement of ["customer", "root", "expired", "logout"]) {
       expect(await page.evaluate(() => localStorage.getItem("fsh.dashboard.accessToken"))).toBeNull();
       expect(profileTokens).not.toContain(`Bearer ${next}`);
     }
+    expect(await page.evaluate(() => localStorage.getItem("foodos.shop.storeId"))).toBeNull();
     await writer.close();
   });
 }

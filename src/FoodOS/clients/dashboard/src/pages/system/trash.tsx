@@ -20,7 +20,6 @@ import {
   restoreProduct,
   type BrandDto,
   type CategoryDto,
-  type PagedResponse,
   type ProductDto,
 } from "@/api/catalog";
 import {
@@ -34,6 +33,7 @@ import {
   type FileAssetDto,
 } from "@/api/files";
 import { useAuth } from "@/auth/use-auth";
+import type { PagedResponse } from "@/lib/api-types";
 import {
   TRASH_TAB_PERMISSIONS,
   type TrashTabKey,

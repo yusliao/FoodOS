@@ -37,7 +37,7 @@ export async function loadRuntimeConfig(): Promise<void> {
   const cfg = (await res.json()) as Partial<RuntimeConfig>;
   cached = {
     apiBase: (cfg.apiBase ?? "").replace(/\/$/, ""),
-    defaultTenant: cfg.defaultTenant ?? "root",
+    defaultTenant: cfg.defaultTenant ?? "",
     demoMode: cfg.demoMode ?? false,
     inactivityIdleMs: positiveOr(cfg.inactivityIdleMs, DEFAULT_INACTIVITY_IDLE_MS),
     inactivityWarningMs: positiveOr(cfg.inactivityWarningMs, DEFAULT_INACTIVITY_WARNING_MS),

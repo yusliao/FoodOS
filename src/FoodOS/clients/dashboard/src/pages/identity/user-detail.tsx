@@ -33,6 +33,7 @@ import {
   getUserById,
   getUserRoles,
   getUserSessionsAdmin,
+  IDENTITY_PERMISSIONS,
   resendUserConfirmationEmail,
   toggleUserStatus,
   type AdminUserSessionDto,
@@ -95,10 +96,13 @@ export function UserDetailPage() {
   const [impersonationReason, setImpersonationReason] = useState("");
   const [pending, setPending] = useState<Map<string, boolean>>(new Map());
 
+  const canUpdate = (actor?.permissions ?? []).includes(IDENTITY_PERMISSIONS.users.update);
+  const canDelete = (actor?.permissions ?? []).includes(IDENTITY_PERMISSIONS.users.delete);
+  const canManageRoles = (actor?.permissions ?? []).includes(IDENTITY_PERMISSIONS.users.manageRoles);
   const canImpersonate = (actor?.permissions ?? []).includes("Permissions.Users.Impersonate");
-  const canViewSessions = (actor?.permissions ?? []).includes("Permissions.Sessions.ViewAll");
-  const canRevokeSessions = (actor?.permissions ?? []).includes("Permissions.Sessions.RevokeAll");
-  const canConfirmEmail = (actor?.permissions ?? []).includes("Permissions.Users.ConfirmEmail");
+  const canViewSessions = (actor?.permissions ?? []).includes(IDENTITY_PERMISSIONS.sessions.viewAll);
+  const canRevokeSessions = (actor?.permissions ?? []).includes(IDENTITY_PERMISSIONS.sessions.revokeAll);
+  const canConfirmEmail = (actor?.permissions ?? []).includes(IDENTITY_PERMISSIONS.users.confirmEmail);
 
   const userQuery = useQuery({
     queryKey: ["identity", "users", userId],
@@ -394,28 +398,32 @@ export function UserDetailPage() {
                 </Button>
               </>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDialog({ mode: "toggle-status" })}
-            >
-              {user.isActive ? (
-                <>
-                  <PowerOff className="mr-1 h-3.5 w-3.5" /> {t("identity.users.deactivate")}
-                </>
-              ) : (
-                <>
-                  <Power className="mr-1 h-3.5 w-3.5" /> {t("identity.users.reactivate")}
-                </>
-              )}
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setDialog({ mode: "delete" })}
-            >
-              <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("identity.users.delete")}
-            </Button>
+            {canUpdate && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDialog({ mode: "toggle-status" })}
+              >
+                {user.isActive ? (
+                  <>
+                    <PowerOff className="mr-1 h-3.5 w-3.5" /> {t("identity.users.deactivate")}
+                  </>
+                ) : (
+                  <>
+                    <Power className="mr-1 h-3.5 w-3.5" /> {t("identity.users.reactivate")}
+                  </>
+                )}
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDialog({ mode: "delete" })}
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("identity.users.delete")}
+              </Button>
+            )}
           </>
         }
         stats={
@@ -486,7 +494,7 @@ export function UserDetailPage() {
           }
           padded={false}
           footer={
-            roles.length > 0 ? (
+            canManageRoles && roles.length > 0 ? (
               <div className="flex items-center justify-end gap-2">
                 <Button
                   variant="outline"
@@ -559,6 +567,7 @@ export function UserDetailPage() {
                     <Switch
                       checked={isOn}
                       onCheckedChange={() => toggle(role)}
+                      disabled={!canManageRoles}
                       aria-label={t("identity.users.toggleRole").replace("{name}", role.roleName ?? t("identity.users.roleUnit"))}
                     />
                   </li>
@@ -584,7 +593,7 @@ export function UserDetailPage() {
       )}
 
       {/* Delete confirmation */}
-      <Dialog
+      {canDelete && <Dialog
         open={dialog.mode === "delete"}
         onOpenChange={(o) => (!o ? setDialog({ mode: "closed" }) : undefined)}
       >
@@ -610,10 +619,10 @@ export function UserDetailPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       {/* Toggle status confirmation */}
-      <Dialog
+      {canUpdate && <Dialog
         open={dialog.mode === "toggle-status"}
         onOpenChange={(o) => (!o ? setDialog({ mode: "closed" }) : undefined)}
       >
@@ -641,7 +650,7 @@ export function UserDetailPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       {/* Impersonation confirmation */}
       <Dialog

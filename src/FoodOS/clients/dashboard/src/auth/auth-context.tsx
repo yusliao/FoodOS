@@ -1,10 +1,11 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { tokenStore } from "@/auth/token-store";
-import { decodeJwt, isTokenExpired, type JwtClaims } from "@/auth/jwt";
+import { decodeJwt, isCustomerIdentity, isTokenExpired, type JwtClaims } from "@/auth/jwt";
 import { issueToken } from "@/auth/api";
 import { refreshAccessToken } from "@/lib/api-client";
 import { endImpersonation, getMyPermissions, startImpersonation } from "@/api/identity";
+import { clearCustomerScopeSelections } from "@/auth/session-scope";
 
 export type AuthUser = {
   id: string;
@@ -108,9 +109,7 @@ function readStoredSession(): { claims: JwtClaims | null; usable: boolean } {
   return {
     claims,
     usable:
-      claims !== null &&
-      claims.tenant !== "root" &&
-      claims.business_actor !== "operator" &&
+      isCustomerIdentity(claims) &&
       !isTokenExpired(claims),
   };
 }
@@ -214,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // mounted forms, pending callbacks or queries belonging to the old user.
       // External account changes intentionally discard this tab's old drafts.
       reloading = true;
+      clearCustomerScopeSelections();
       if (readStoredSession().usable) tokenStore.setPermissions([]);
       else tokenStore.clear();
       queryClient.clear();
@@ -243,7 +243,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (input: { email: string; password: string; tenant: string }) => {
-      tokenStore.setTenant(input.tenant);
       // Stale permissions from a previous user must not leak into the new
       // session — clear before issuing the token so the hydration effect
       // re-fetches from scratch.
@@ -255,12 +254,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // so a future API regression can't quietly drop a root token into
       // a tenant-dashboard session.
       const claims = decodeJwt(tokens.accessToken);
-      if (claims?.tenant === "root" || claims?.business_actor === "operator") {
+      if (!isCustomerIdentity(claims) || isTokenExpired(claims)) {
         tokenStore.clear();
         throw new Error(
-          "SuperAdmin accounts must use the admin app. Sign in there instead.",
+          "Operator accounts must use the admin app. Sign in there instead.",
         );
       }
+      clearCustomerScopeSelections();
+      tokenStore.setTenant(claims.tenant);
       tokenStore.setTokens(tokens.accessToken, tokens.refreshToken);
       // Drop any cached query state from before login. Without this, a
       // failed pre-login probe (e.g. OverviewPage's billing fetch

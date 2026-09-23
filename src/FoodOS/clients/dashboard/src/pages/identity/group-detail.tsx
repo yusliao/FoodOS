@@ -23,6 +23,7 @@ import {
   deleteGroup,
   getGroupById,
   getGroupMembers,
+  IDENTITY_PERMISSIONS,
   listRoles,
   removeUserFromGroup,
   searchUsers,
@@ -31,6 +32,7 @@ import {
   type RoleDto,
   type UserDto,
 } from "@/api/identity";
+import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
@@ -77,6 +79,13 @@ export function GroupDetailPage() {
   const { groupId = "" } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const permissions = user?.permissions ?? [];
+  const canUpdate = permissions.includes(IDENTITY_PERMISSIONS.groups.update);
+  const canDelete = permissions.includes(IDENTITY_PERMISSIONS.groups.delete);
+  const canManageMembers = permissions.includes(IDENTITY_PERMISSIONS.groups.manageMembers);
+  const canViewUsers = permissions.includes(IDENTITY_PERMISSIONS.users.view);
+  const canViewRoles = permissions.includes(IDENTITY_PERMISSIONS.roles.view);
 
   const groupQuery = useQuery({
     queryKey: ["identity", "groups", groupId],
@@ -94,6 +103,7 @@ export function GroupDetailPage() {
     queryKey: ["identity", "roles"],
     queryFn: listRoles,
     staleTime: 60_000,
+    enabled: canViewRoles,
   });
 
   const group = groupQuery.data;
@@ -236,7 +246,7 @@ export function GroupDetailPage() {
         }
         subtitle={group.description || t("identity.groups.cohort")}
         actions={
-          !group.isSystemGroup ? (
+          canDelete && !group.isSystemGroup ? (
             <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)}>
               <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("identity.groups.deleteGroup")}
             </Button>
@@ -265,7 +275,7 @@ export function GroupDetailPage() {
           title={t("identity.groups.details")}
           icon={UsersIcon}
           description={t("identity.groups.detailsDesc")}
-          footer={
+          footer={canUpdate ? (
             <div className="flex items-center justify-end gap-2">
               <Button
                 variant="outline"
@@ -283,7 +293,7 @@ export function GroupDetailPage() {
                 {save.isPending ? t("identity.saving") : t("identity.saveChanges")}
               </Button>
             </div>
-          }
+          ) : undefined}
         >
           <div className="space-y-4">
             <Field id="g-name" label={t("identity.groups.name")} required>
@@ -291,7 +301,7 @@ export function GroupDetailPage() {
                 id="g-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                disabled={group.isSystemGroup}
+                disabled={group.isSystemGroup || !canUpdate}
                 maxLength={128}
               />
             </Field>
@@ -300,6 +310,7 @@ export function GroupDetailPage() {
                 id="g-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                disabled={!canUpdate}
                 placeholder={t("identity.groups.descPlaceholder")}
                 maxLength={512}
               />
@@ -314,12 +325,13 @@ export function GroupDetailPage() {
               <Switch
                 checked={isDefault}
                 onCheckedChange={setIsDefault}
+                disabled={!canUpdate}
                 aria-label={t("identity.groups.defaultGroup")}
               />
             </div>
 
             {/* Roles attached */}
-            <div className="pt-2">
+            {canViewRoles && <div className="pt-2">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[11.5px] font-medium text-[var(--color-muted-foreground)]">
                   {t("identity.groups.rolesAttached")}
@@ -349,11 +361,12 @@ export function GroupDetailPage() {
                       role={role}
                       selected={selectedRoleIds.has(role.id)}
                       onToggle={() => toggleRole(role.id)}
+                      disabled={!canUpdate}
                     />
                   ))}
                 </ul>
               )}
-            </div>
+            </div>}
           </div>
         </EntityDetailSection>
 
@@ -362,11 +375,11 @@ export function GroupDetailPage() {
           title={t("identity.groups.members")}
           icon={UsersIcon}
           description={t("identity.groups.membersDesc")}
-          action={
+          action={canManageMembers && canViewUsers ? (
             <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
               <UserPlus className="h-3.5 w-3.5" /> {t("identity.groups.addMembers")}
             </Button>
-          }
+          ) : undefined}
           padded={false}
         >
           {membersQuery.isLoading ? (
@@ -385,15 +398,9 @@ export function GroupDetailPage() {
             </div>
           ) : (
             <ul>
-              {members.map((member) => (
-                <li
-                  key={member.userId}
-                  className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3 last:border-b-0 transition-colors hover:bg-[var(--color-accent)]"
-                >
-                  <Link
-                    to={`/identity/users/${member.userId}`}
-                    className="flex min-w-0 flex-1 items-center gap-3"
-                  >
+              {members.map((member) => {
+                const summary = (
+                  <>
                     <Avatar name={memberDisplay(member, t("identity.unknownUser"))} size="sm" />
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium tracking-tight">
@@ -405,25 +412,44 @@ export function GroupDetailPage() {
                         </div>
                       )}
                     </div>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeMember.mutate(member.userId)}
-                    disabled={removeMember.isPending}
-                    className="shrink-0 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
+                  </>
+                );
+                return (
+                  <li
+                    key={member.userId}
+                    className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3 last:border-b-0 transition-colors hover:bg-[var(--color-accent)]"
                   >
-                    <UserMinus className="mr-1 h-3.5 w-3.5" /> {t("identity.groups.remove")}
-                  </Button>
-                </li>
-              ))}
+                    {canViewUsers ? (
+                      <Link
+                        to={`/identity/users/${member.userId}`}
+                        className="flex min-w-0 flex-1 items-center gap-3"
+                      >
+                        {summary}
+                      </Link>
+                    ) : (
+                      <div className="flex min-w-0 flex-1 items-center gap-3">{summary}</div>
+                    )}
+                    {canManageMembers && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeMember.mutate(member.userId)}
+                        disabled={removeMember.isPending}
+                        className="shrink-0 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
+                      >
+                        <UserMinus className="mr-1 h-3.5 w-3.5" /> {t("identity.groups.remove")}
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </EntityDetailSection>
       </div>
 
       {/* Delete dialog */}
-      <Dialog open={confirmDelete} onOpenChange={(o) => (!o ? setConfirmDelete(false) : undefined)}>
+      {canDelete && <Dialog open={confirmDelete} onOpenChange={(o) => (!o ? setConfirmDelete(false) : undefined)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("identity.groups.deleteTitle")}</DialogTitle>
@@ -446,14 +472,14 @@ export function GroupDetailPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
-      <AddMembersDialog
+      {canManageMembers && canViewUsers && <AddMembersDialog
         open={addOpen}
         groupId={groupId}
         existingMemberIds={new Set(members.map((m) => m.userId))}
         onClose={() => setAddOpen(false)}
-      />
+      />}
     </div>
   );
 }
@@ -462,10 +488,12 @@ function RoleToggleRow({
   role,
   selected,
   onToggle,
+  disabled,
 }: {
   role: RoleDto;
   selected: boolean;
   onToggle: () => void;
+  disabled: boolean;
 }) {
   const t = useT();
   return (
@@ -497,6 +525,7 @@ function RoleToggleRow({
       <Switch
         checked={selected}
         onCheckedChange={onToggle}
+        disabled={disabled}
         aria-label={t("identity.groups.attachRole").replace("{name}", role.name)}
       />
     </li>

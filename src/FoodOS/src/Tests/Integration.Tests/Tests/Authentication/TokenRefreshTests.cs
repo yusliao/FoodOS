@@ -22,6 +22,7 @@ public sealed class TokenRefreshTests
         using var client = _factory.CreateClient();
         var request = new HttpRequestMessage(HttpMethod.Post, $"{TestConstants.IdentityBasePath}/token/refresh");
         request.Headers.Add("tenant", TestConstants.RootTenantId);
+        request.Headers.Add("X-FSH-App", "admin");
         request.Content = JsonContent.Create(new
         {
             token = originalToken.AccessToken,
@@ -37,6 +38,25 @@ public sealed class TokenRefreshTests
         newToken.ShouldNotBeNull();
         newToken.Token.ShouldNotBeNullOrWhiteSpace();
         newToken.RefreshToken.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task RefreshToken_Should_Return403_When_RootUsesDashboardApp()
+    {
+        var originalToken = await _auth.GetRootAdminTokenAsync();
+        using var client = _factory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{TestConstants.IdentityBasePath}/token/refresh");
+        request.Headers.Add("tenant", TestConstants.RootTenantId);
+        request.Headers.Add("X-FSH-App", "dashboard");
+        request.Content = JsonContent.Create(new
+        {
+            token = originalToken.AccessToken,
+            refreshToken = originalToken.RefreshToken
+        });
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     [Fact]

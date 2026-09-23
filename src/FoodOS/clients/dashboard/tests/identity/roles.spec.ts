@@ -46,10 +46,18 @@ const CATALOG = [
   },
 ];
 
+const ROLE_PERMISSIONS = [
+  "Permissions.Roles.View",
+  "Permissions.Roles.Create",
+  "Permissions.Roles.Update",
+  "Permissions.Roles.Delete",
+];
+
 test.describe("identity/roles — list", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuthedSession(page, TEST_USER);
     await installShellMocks(page);
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ROLE_PERMISSIONS);
     await mockJsonResponse(page, "**/api/v1/identity/roles", ROLES);
   });
 
@@ -90,6 +98,15 @@ test.describe("identity/roles — list", () => {
     ).toBeVisible();
     await expect(dialog.getByLabel("Name")).toBeVisible();
   });
+
+  test("view-only member cannot create a role", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ["Permissions.Roles.View"]);
+
+    await page.goto("/identity/roles");
+
+    await expect(page.getByText("Editor", { exact: true }).last()).toBeVisible();
+    await expect(page.getByRole("button", { name: /new role/i })).toHaveCount(0);
+  });
 });
 
 test.describe("identity/roles/:roleId — detail", () => {
@@ -99,6 +116,7 @@ test.describe("identity/roles/:roleId — detail", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuthedSession(page, TEST_USER);
     await installShellMocks(page);
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ROLE_PERMISSIONS);
     await mockJsonResponse(page, "**/api/v1/identity/permissions/catalog", CATALOG);
     // getRoleWithPermissions hits /identity/{roleId}/permissions (no /roles/).
     await mockJsonResponse(page, `**/api/v1/identity/${ROLE_ID}/permissions`, ROLE);
@@ -133,5 +151,16 @@ test.describe("identity/roles/:roleId — detail", () => {
     await expect(
       page.getByRole("button", { name: "Toggle all Products", exact: true }),
     ).toBeVisible();
+  });
+
+  test("view-only member cannot edit or delete a role", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ["Permissions.Roles.View"]);
+
+    await page.goto(`/identity/roles/${ROLE_ID}`);
+
+    await expect(page.getByLabel("Name")).toHaveAttribute("readonly", "");
+    await expect(page.getByRole("button", { name: "Toggle all Users", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /save changes/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /delete role/i })).toHaveCount(0);
   });
 });

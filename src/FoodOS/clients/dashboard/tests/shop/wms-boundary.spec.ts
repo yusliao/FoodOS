@@ -6,18 +6,14 @@ for (const granted of [true, false]) test(`legacy execution is absent from navig
   const permissions = granted ? ["Permissions.Procurement.Purchase.View", "Permissions.Warehouse.Putaway.View", "Permissions.Warehouse.Waves.View", "Permissions.Warehouse.Picks.View", "Permissions.Logistics.Shipments.View"] : [];
   await page.route("**/api/v1/identity/permissions", route => route.fulfill({ json: permissions }));
   await page.goto("/ops/qc");
-  await expect(page.getByRole("heading", { name: "Warehouse integration" })).toBeVisible();
-  if (granted) {
-    await page.getByRole("button", { name: "Fulfillment", exact: true }).click();
-    await expect(page.getByRole("link", { name: "Purchasing", exact: true })).toBeVisible();
-  }
+  await expect(page.getByRole("heading", { name: "This page has moved" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fulfillment", exact: true })).toHaveCount(0);
   for (const path of ["qc", "putaway", "waves", "picks", "shipments"]) {
     await expect(page.locator(`a[href="/ops/${path}"]`)).toHaveCount(0);
   }
   await page.keyboard.press("Control+k");
   await expect(page.getByRole("combobox", { name: "Search commands" })).toBeVisible();
-  if (granted) await expect(page.getByRole("option", { name: /Purchasing/ })).toBeVisible();
-  for (const name of [/Quality desk/, /Putaway/, /Waves/, /Pick tasks/, /Load & POD/]) {
+  for (const name of [/Purchasing/, /Quality desk/, /Putaway/, /Waves/, /Pick tasks/, /Load & POD/]) {
     await expect(page.getByRole("option", { name })).toHaveCount(0);
   }
 });
@@ -45,21 +41,17 @@ for (const path of ["qc", "putaway", "waves", "picks", "shipments"]) test("direc
   const requests: string[] = [];
   page.on("request", request => { if (/api\/v1\/(procurement|warehouse|inventory|logistics)/.test(request.url())) requests.push(request.url()); });
   await page.goto("/ops/" + path);
-  await expect(page.getByRole("heading", { name: "Warehouse integration" })).toBeVisible();
-  await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "This page has moved" })).toBeVisible();
+  await expect(page.getByText(`Retired route: /ops/${path}`)).toBeVisible();
   expect(requests).toEqual([]);
 });
 
-test("Chinese mobile WMS error retries without enabling local work", async ({ page }) => {
+test("Chinese mobile legacy route shows a stable retired result", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => localStorage.setItem("foodos.culture", "zh-CN"));
-  let fail = true;
-  await page.route("**/api/v1/fulfillment/capabilities", route => route.fulfill(fail ? { status: 500, json: {} } : { json: status }));
   await page.goto("/ops/qc");
-  await expect(page.getByText("无法确认 WMS 状态，执行操作继续禁用。")).toBeVisible();
-  fail = false;
-  await page.getByRole("button", { name: "重试 WMS 状态" }).click();
-  await expect(page.getByText("WMS 对接尚未就绪，暂不能确认库存及配送承诺。")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "此页面已迁出" })).toBeVisible();
+  await expect(page.getByText("退役路由：/ops/qc")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 

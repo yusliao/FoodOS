@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
         }
         res.setHeader("Content-Type", "application/json");
         res.setHeader("Cache-Control", "no-store");
-        res.end(JSON.stringify({ ...base, apiBase }));
+        res.end(JSON.stringify({ ...base, apiBase, defaultTenant: "acme", demoMode: true }));
       });
     },
   };

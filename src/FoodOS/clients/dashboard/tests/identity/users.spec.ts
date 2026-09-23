@@ -31,10 +31,17 @@ const ROLES = [
   { id: "22222222-2222-2222-2222-222222222222", name: "Manager", description: "Manage users" },
 ];
 
+const USER_PERMISSIONS = [
+  "Permissions.Users.View",
+  "Permissions.Users.Create",
+  "Permissions.Users.ManageRoles",
+];
+
 test.describe("identity/users — list", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuthedSession(page, TEST_USER);
     await installShellMocks(page);
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", USER_PERMISSIONS);
     // The role filter combobox loads the role list on mount.
     await mockJsonResponse(page, "**/api/v1/identity/roles", ROLES);
   });
@@ -98,6 +105,35 @@ test.describe("identity/users — list", () => {
     await expect(dialog.getByLabel("First name")).toBeVisible();
     await expect(dialog.getByLabel("Username")).toBeVisible();
   });
+
+  test("view-only member can list users without role or create requests", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ["Permissions.Users.View"]);
+    await mockJsonResponse(page, "**/api/v1/identity/users/search**", paged(USERS));
+    let roleRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/v1/identity/roles")) roleRequests += 1;
+    });
+
+    await page.goto("/identity/users");
+
+    await expect(page.getByText("Bob Patel").last()).toBeVisible();
+    await expect(page.getByRole("button", { name: /register user/i })).toHaveCount(0);
+    expect(roleRequests).toBe(0);
+  });
+});
+
+test("direct identity route without permission does not issue a user query", async ({ page }) => {
+  await seedAuthedSession(page, TEST_USER);
+  await installShellMocks(page);
+  let userRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/api/v1/identity/users/search")) userRequests += 1;
+  });
+
+  await page.goto("/identity/users");
+
+  await expect(page.getByRole("heading", { name: "Access required", level: 2 })).toBeVisible();
+  expect(userRequests).toBe(0);
 });
 
 test.describe("identity/users/:userId — detail", () => {
@@ -107,6 +143,7 @@ test.describe("identity/users/:userId — detail", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuthedSession(page, TEST_USER);
     await installShellMocks(page);
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", USER_PERMISSIONS);
     await mockJsonResponse(page, `**/api/v1/identity/users/${USER_ID}/roles`, [
       {
         roleId: ROLES[0].id,
@@ -153,5 +190,16 @@ test.describe("identity/users/:userId — detail", () => {
     await expect(page.getByText("bob@acme.com").first()).toBeVisible();
     // @username subtitle is shown in the hero.
     await expect(page.getByText("@bob").first()).toBeVisible();
+  });
+
+  test("view-only member sees read-only roles and no account mutations", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ["Permissions.Users.View"]);
+
+    await page.goto(`/identity/users/${USER_ID}`);
+
+    await expect(page.getByRole("switch").first()).toBeDisabled();
+    await expect(page.getByRole("button", { name: /deactivate/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /delete user/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /save changes/i })).toHaveCount(0);
   });
 });

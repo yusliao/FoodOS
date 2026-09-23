@@ -716,13 +716,19 @@ variable "frontend_response_headers_policy_id" {
 
 variable "frontend_default_tenant" {
   type        = string
-  description = "Default tenant identifier baked into the SPA runtime config.json."
+  description = "Default operator tenant identifier baked into the admin SPA runtime config.json."
   default     = "root"
+}
+
+variable "dashboard_default_tenant" {
+  type        = string
+  description = "Optional restaurant tenant identifier prefilled by the dashboard SPA. Leave blank outside a known demo/customer deployment."
+  default     = ""
 }
 
 variable "dashboard_demo_mode" {
   type        = bool
-  description = "Set the dashboard SPA into demo mode via its runtime config.json."
+  description = "Advertise seeded demo credentials in both SPAs via runtime config.json."
   default     = false
 }
 

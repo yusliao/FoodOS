@@ -220,7 +220,7 @@ module "dashboard_site" {
 
   runtime_config = {
     apiBase       = local.api_origin
-    defaultTenant = var.frontend_default_tenant
+    defaultTenant = var.dashboard_default_tenant
     demoMode      = var.dashboard_demo_mode
   }
 
@@ -245,6 +245,7 @@ module "admin_site" {
     defaultTenant = var.frontend_default_tenant
     # The admin app links to the tenant dashboard for the impersonation handoff.
     dashboardUrl = local.dashboard_url
+    demoMode     = var.dashboard_demo_mode
   }
 
   tags = local.common_tags

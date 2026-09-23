@@ -7,8 +7,10 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  NOTIFICATION_PERMISSIONS,
   type NotificationDto,
 } from "@/api/notifications";
+import { useAuth } from "@/auth/use-auth";
 import { useRealtimeEvent } from "@/realtime/realtime-context";
 import {
   DropdownMenu,
@@ -29,17 +31,21 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, permissionsHydrated } = useAuth();
+  const canView = user?.permissions.includes(NOTIFICATION_PERMISSIONS.view) ?? false;
+  const canMarkRead = user?.permissions.includes(NOTIFICATION_PERMISSIONS.markRead) ?? false;
 
   const unreadQuery = useQuery({
     queryKey: ["notifications", "unread-count"],
     queryFn: getUnreadCount,
     staleTime: 30_000,
+    enabled: permissionsHydrated && canView,
   });
 
   const inboxQuery = useQuery({
     queryKey: ["notifications", "inbox"],
     queryFn: () => listNotifications({ pageSize: 30 }),
-    enabled: open,
+    enabled: open && canView,
     staleTime: 0,
   });
 
@@ -77,12 +83,14 @@ export function NotificationBell() {
   const inbox = inboxQuery.data ?? [];
 
   const onItemSelect = (n: NotificationDto) => {
-    if (!n.readAtUtc) markOneMutation.mutate(n.id);
+    if (canMarkRead && !n.readAtUtc) markOneMutation.mutate(n.id);
     if (n.link) {
       setOpen(false);
       navigate(n.link);
     }
   };
+
+  if (!permissionsHydrated || !canView) return null;
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
@@ -101,7 +109,7 @@ export function NotificationBell() {
           )}
         >
           <Bell className="h-4 w-4" aria-hidden />
-          {unread > 0 && (
+          {canMarkRead && unread > 0 && (
             <span
               aria-hidden
               className={cn(

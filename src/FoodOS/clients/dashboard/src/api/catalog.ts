@@ -1,14 +1,5 @@
 import { apiFetch } from "@/lib/api-client";
-
-export type PagedResponse<T> = {
-  items: T[];
-  pageNumber: number;
-  pageSize: number;
-  totalCount: number;
-  totalPages: number;
-  hasNext: boolean;
-  hasPrevious: boolean;
-};
+import type { PagedResponse } from "@/lib/api-types";
 
 export type BrandDto = {
   id: string;

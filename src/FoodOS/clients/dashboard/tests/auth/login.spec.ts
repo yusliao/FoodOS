@@ -1,12 +1,18 @@
 import { expect, test } from "@playwright/test";
 import { mockJsonResponse, mockProblemDetails } from "../helpers/api-mocks";
+import { installShellMocks } from "../helpers/shell-mocks";
 
 // The dashboard login page (rebuilt to the dentalOS card layout): FSH logo
 // lockup + tenant workspace caption, tenant/email/password card, and a
-// demoMode-gated "Step into any role" picker that signs in instantly.
+// demoMode-gated restaurant account picker that signs in instantly.
+
+function token(tenant = "acme", subject = "customer-1") {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return [encode({ alg: "HS256" }), encode({ sub: subject, tenant, business_actor: "customer", exp: Math.floor(Date.now() / 1000) + 3600 }), "sig"].join(".");
+}
 
 const TOKEN_RESPONSE = {
-  accessToken: "header.payload.sig",
+  accessToken: token(),
   refreshToken: "refresh",
   accessTokenExpiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   refreshTokenExpiresAt: new Date(Date.now() + 7_200_000).toISOString(),
@@ -18,7 +24,7 @@ async function setConfig(page: import("@playwright/test").Page, demoMode: boolea
     route.fulfill({
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiBase: "", defaultTenant: "root", demoMode }),
+      body: JSON.stringify({ apiBase: "", defaultTenant: "acme", demoMode }),
     }),
   );
 }
@@ -57,7 +63,7 @@ test.describe("login — page chrome", () => {
   test("submit is disabled until tenant + email + password are filled", async ({ page }) => {
     await page.goto("/login");
     const submit = page.getByRole("button", { name: /^sign in$/i });
-    // Tenant defaults to "root"; fill the rest to enable.
+    // Tenant defaults to the configured restaurant demo tenant; fill the rest to enable.
     await expect(submit).toBeDisabled();
     await page.getByLabel("Email").fill("alice@acme.com");
     await page.getByLabel("Password", { exact: true }).fill("secret123");
@@ -112,17 +118,17 @@ test.describe("login — demo account picker", () => {
     await expect(page.getByRole("button", { name: /sign in with a demo account/i })).toHaveCount(0);
   });
 
-  test("opens the 'Step into any role' dialog and lists demo tenants", async ({ page }) => {
+  test("opens the restaurant account dialog without advertising root", async ({ page }) => {
     await setConfig(page, true);
     await page.goto("/login");
     await page.getByRole("button", { name: /sign in with a demo account/i }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading", { name: /step into any role/i })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: /choose a restaurant account/i })).toBeVisible();
     await expect(dialog.getByText(/live demo/i)).toBeVisible();
     // Tenant rail — scope to the nav so we don't collide with user rows.
     const rail = dialog.getByRole("navigation", { name: /demo tenants/i });
-    await expect(rail.getByRole("button", { name: /root/i })).toBeVisible();
+    await expect(rail.getByRole("button", { name: /root/i })).toHaveCount(0);
     await expect(rail.getByRole("button", { name: /acme corp/i })).toBeVisible();
     await expect(rail.getByRole("button", { name: /globex/i })).toBeVisible();
   });
@@ -134,14 +140,16 @@ test.describe("login — demo account picker", () => {
     const dialog = page.getByRole("dialog");
     const rail = dialog.getByRole("navigation", { name: /demo tenants/i });
 
-    // Root is active first → its single admin shows.
-    await expect(dialog.getByText("admin@root.com")).toBeVisible();
-    await rail.getByRole("button", { name: /acme corp/i }).click();
+    // Acme is the first restaurant and active by default.
     await expect(dialog.getByText("admin@acme.com")).toBeVisible();
+    await rail.getByRole("button", { name: /globex/i }).click();
+    await expect(dialog.getByText("admin@globex.com")).toBeVisible();
   });
 
   test("tapping a demo user signs in instantly with that account's tenant", async ({ page }) => {
     await setConfig(page, true);
+    await page.addInitScript(() => localStorage.setItem("foodos.shop.storeId", "previous-account-store"));
+    await installShellMocks(page);
     await mockJsonResponse(page, "**/api/v1/identity/token/issue", TOKEN_RESPONSE);
     await page.goto("/login");
     await page.getByRole("button", { name: /sign in with a demo account/i }).click();
@@ -158,5 +166,6 @@ test.describe("login — demo account picker", () => {
 
     expect(req.headers().tenant).toBe("acme");
     expect(JSON.parse(req.postData() ?? "{}")).toMatchObject({ email: "admin@acme.com" });
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("foodos.shop.storeId"))).toBeNull();
   });
 });

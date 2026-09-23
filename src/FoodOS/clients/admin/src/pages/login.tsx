@@ -20,6 +20,7 @@ import { LanguageSwitcher } from "@/i18n/language-switcher";
 import { useT } from "@/i18n/locale-provider";
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { env } from "@/env";
 import type { DemoAccount } from "@/pages/login.demo-accounts";
 
 // ────────────────────────────────────────────────────────────────────────
@@ -28,8 +29,8 @@ import type { DemoAccount } from "@/pages/login.demo-accounts";
 // lockup, warm-paper card with backdrop blur.
 // The dev demo button ("Sign in with a demo account") opens the same
 // popup dialog UX the dashboard uses — pick an account → fills
-// tenant/email/password → instant sign-in. Gated on import.meta.env.DEV
-// (admin has no runtime demoMode flag).
+// tenant/email/password → instant sign-in. Gated by runtime configuration so
+// promoted production builds never advertise demo credentials.
 // ────────────────────────────────────────────────────────────────────────
 
 type LocationState = { from?: { pathname: string } };
@@ -280,7 +281,7 @@ export function LoginPage() {
               </form>
 
               {/* Demo accounts — dev-only, same dashed-button pattern as dashboard. */}
-              {import.meta.env.DEV && (
+              {env.demoMode && (
                 <div className="mt-7">
                   <button
                     type="button"
@@ -310,7 +311,7 @@ export function LoginPage() {
       </div>
 
       {/* Demo dialog — rendered outside the shell to escape any overflow clipping. */}
-      {import.meta.env.DEV && (
+      {env.demoMode && (
         <DemoAccountsDialog open={demoOpen} onOpenChange={setDemoOpen} onPick={onPickDemo} />
       )}
     </>

@@ -22,9 +22,11 @@ import {
   deleteRole,
   getPermissionsCatalog,
   getRoleWithPermissions,
+  IDENTITY_PERMISSIONS,
   updateRolePermissions,
   upsertRole,
 } from "@/api/identity";
+import { useAuth } from "@/auth/use-auth";
 import {
   groupPermissions,
   type PermissionDescriptor,
@@ -69,6 +71,13 @@ export function RoleDetailPage() {
   const { roleId = "" } = useParams<{ roleId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const permissions = user?.permissions ?? [];
+  // The combined create/update endpoint currently requires Roles.Create for
+  // metadata changes; permission assignment has its own Roles.Update policy.
+  const canEditMeta = permissions.includes(IDENTITY_PERMISSIONS.roles.create);
+  const canUpdatePerms = permissions.includes(IDENTITY_PERMISSIONS.roles.update);
+  const canDelete = permissions.includes(IDENTITY_PERMISSIONS.roles.delete);
 
   const roleQuery = useQuery({
     queryKey: ["identity", "roles", roleId],
@@ -258,8 +267,8 @@ export function RoleDetailPage() {
 
   const saveAll = async () => {
     try {
-      if (dirtyMeta) await saveMeta.mutateAsync();
-      if (dirtyPerms) await savePerms.mutateAsync();
+      if (dirtyMeta && canEditMeta) await saveMeta.mutateAsync();
+      if (dirtyPerms && canUpdatePerms) await savePerms.mutateAsync();
       toast.success(t("identity.roles.saved"));
     } catch {
       // mutations report their own errors via toast
@@ -329,15 +338,17 @@ export function RoleDetailPage() {
         }
         subtitle={role.description || (isSystem ? t("identity.roles.systemSubtitle") : t("identity.roles.customSubtitle"))}
         actions={
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setConfirmDelete(true)}
-            disabled={isSystem}
-            title={isSystem ? t("identity.roles.cannotDeleteSystem") : undefined}
-          >
-            <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("identity.roles.deleteRole")}
-          </Button>
+          canDelete ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setConfirmDelete(true)}
+              disabled={isSystem}
+              title={isSystem ? t("identity.roles.cannotDeleteSystem") : undefined}
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("identity.roles.deleteRole")}
+            </Button>
+          ) : undefined
         }
         stats={
           <>
@@ -387,9 +398,9 @@ export function RoleDetailPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={128}
-              readOnly={isSystem}
-              aria-readonly={isSystem || undefined}
-              className={cn(isSystem && "cursor-not-allowed opacity-70")}
+              readOnly={isSystem || !canEditMeta}
+              aria-readonly={isSystem || !canEditMeta || undefined}
+              className={cn((isSystem || !canEditMeta) && "cursor-not-allowed opacity-70")}
             />
           </Field>
           <Field id="role-desc" label={t("identity.roles.descriptionLabel")}>
@@ -399,9 +410,9 @@ export function RoleDetailPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t("identity.roles.descPlaceholder")}
               maxLength={512}
-              readOnly={isSystem}
-              aria-readonly={isSystem || undefined}
-              className={cn(isSystem && "cursor-not-allowed opacity-70")}
+              readOnly={isSystem || !canEditMeta}
+              aria-readonly={isSystem || !canEditMeta || undefined}
+              className={cn((isSystem || !canEditMeta) && "cursor-not-allowed opacity-70")}
             />
           </Field>
         </div>
@@ -418,15 +429,15 @@ export function RoleDetailPage() {
               onClick={presetBasic}
               icon={<Sparkles className="h-3 w-3" />}
               label={t("identity.roles.presetBasic")}
-              disabled={isSystem}
+              disabled={isSystem || !canUpdatePerms}
             />
-            <PresetButton onClick={presetAll} label={t("identity.roles.presetAll")} disabled={isSystem} />
-            <PresetButton onClick={presetClear} label={t("identity.roles.presetClear")} disabled={isSystem} />
+            <PresetButton onClick={presetAll} label={t("identity.roles.presetAll")} disabled={isSystem || !canUpdatePerms} />
+            <PresetButton onClick={presetClear} label={t("identity.roles.presetClear")} disabled={isSystem || !canUpdatePerms} />
           </div>
         }
         padded={false}
         footer={
-          !isSystem ? (
+          !isSystem && (canEditMeta || canUpdatePerms) ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-[11.5px] font-medium text-[var(--color-muted-foreground)]">
                 {isDirty ? (
@@ -445,7 +456,7 @@ export function RoleDetailPage() {
                 <Button
                   size="sm"
                   onClick={saveAll}
-                  disabled={!isDirty || isSaving}
+                  disabled={!isDirty || isSaving || (dirtyMeta && !canEditMeta) || (dirtyPerms && !canUpdatePerms)}
                 >
                   {isSaving ? t("identity.saving") : t("identity.saveChanges")}
                 </Button>
@@ -640,7 +651,7 @@ export function RoleDetailPage() {
                   onTogglePerm={togglePerm}
                   selected={selected}
                   initial={initial}
-                  disabled={isSystem}
+                  disabled={isSystem || !canUpdatePerms}
                 />
               );
             })}
@@ -649,7 +660,7 @@ export function RoleDetailPage() {
       </EntityDetailSection>
 
       {/* Delete dialog */}
-      <Dialog
+      {canDelete && <Dialog
         open={confirmDelete}
         onOpenChange={(o) => (!o ? setConfirmDelete(false) : undefined)}
       >
@@ -675,7 +686,7 @@ export function RoleDetailPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

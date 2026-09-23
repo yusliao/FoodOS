@@ -42,6 +42,7 @@ app_s3_enable_cloudfront  = true
 dashboard_s3_bucket_name = "dev-fsh-dashboard"
 admin_s3_bucket_name     = "dev-fsh-admin"
 dashboard_demo_mode      = true
+dashboard_default_tenant = "acme"
 
 # HTTPS for the API without a custom domain: front the ALB with CloudFront
 # (free *.cloudfront.net cert) so the HTTPS SPAs can call it (no mixed content).

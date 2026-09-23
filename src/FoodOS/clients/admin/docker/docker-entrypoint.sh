@@ -7,8 +7,9 @@ set -e
 
 # Defaults for non-required values.
 : "${FSH_DEFAULT_TENANT:=root}"
+: "${FSH_DEMO_MODE:=false}"
 
-export FSH_API_URL FSH_DASHBOARD_URL FSH_DEFAULT_TENANT
+export FSH_API_URL FSH_DASHBOARD_URL FSH_DEFAULT_TENANT FSH_DEMO_MODE
 
 # Render the runtime config from the template, writing into nginx's web root.
 envsubst < /usr/share/nginx/html/config.json.template > /usr/share/nginx/html/config.json

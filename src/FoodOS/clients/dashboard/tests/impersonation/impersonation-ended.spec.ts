@@ -58,18 +58,21 @@ async function seedImpersonationSession(page: Page): Promise<void> {
 test.beforeEach(async ({ page }) => {
   await seedImpersonationSession(page);
   await installShellMocks(page);
+  await page.route("**/api/v1/identity/permissions", (route) =>
+    route.fulfill({ json: ["Permissions.Ordering.Shop.View"] }),
+  );
 });
 
 test.describe("impersonation revoked mid-session", () => {
   test("a 401 on an impersonation session routes to the terminal page", async ({ page }) => {
-    // The products list 401s the moment the grant is revoked. The dev build
+    // The restaurant store list 401s the moment the grant is revoked. The dev build
     // surfaces the JwtBearer rejection reason on the ProblemDetails.
-    await mockProblemDetails(page, "**/api/v1/catalog/products**", 401, {
+    await mockProblemDetails(page, "**/api/v1/shop/stores**", 401, {
       title: "Unauthorized",
       detail: "Authentication is required to access this resource.",
     });
 
-    await page.goto("/catalog/products");
+    await page.goto("/shop/catalog");
 
     // Lands on the dedicated terminal page rather than showing an inline
     // error band under the half-loaded catalog.
@@ -83,12 +86,12 @@ test.describe("impersonation revoked mid-session", () => {
   });
 
   test("'Back to sign in' clears the dead token and routes to /login", async ({ page }) => {
-    await mockProblemDetails(page, "**/api/v1/catalog/products**", 401, {
+    await mockProblemDetails(page, "**/api/v1/shop/stores**", 401, {
       title: "Unauthorized",
       detail: "Authentication is required to access this resource.",
     });
 
-    await page.goto("/catalog/products");
+    await page.goto("/shop/catalog");
     await expect(page).toHaveURL(/\/impersonation-ended$/);
 
     await page.getByRole("button", { name: /back to sign in/i }).click();

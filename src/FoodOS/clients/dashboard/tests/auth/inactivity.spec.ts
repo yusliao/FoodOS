@@ -23,6 +23,7 @@ test.beforeEach(async ({ page }) => {
     }),
   );
   await seedAuthedSession(page, TEST_USER);
+  await page.addInitScript(() => localStorage.setItem("foodos.shop.storeId", "store-before-logout"));
   // Defensive catch-all so a stray protected call can't 401→logout and race the
   // idle timer; the specific shell mocks register after this and win.
   await page.route("**/api/v1/**", (route) =>
@@ -57,5 +58,7 @@ test.describe("inactivity auto-logout", () => {
 
     await expect(page).toHaveURL(/\/login$/, { timeout: WARNING_MS + 6_000 });
     await expect(page.getByText(/signed out due to inactivity/i)).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem("fsh.dashboard.tenant"))).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem("foodos.shop.storeId"))).toBeNull();
   });
 });

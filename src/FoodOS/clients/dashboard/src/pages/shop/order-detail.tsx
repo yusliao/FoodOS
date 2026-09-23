@@ -61,9 +61,9 @@ export function ShopOrderDetailPage() {
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const query = useQuery({
-    queryKey: ["shop", "orders", orderId],
+    queryKey: ["shop", "orders", store?.id, orderId],
     queryFn: () => getShopOrderById(orderId),
-    enabled: !!orderId,
+    enabled: !!store && !!orderId,
   });
 
   const order = query.data;

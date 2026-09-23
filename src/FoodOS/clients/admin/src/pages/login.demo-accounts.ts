@@ -18,10 +18,9 @@ export type DemoAccount = {
 export const DEMO_PASSWORD = "Password123!";
 
 /**
- * Admin exposes a single demo account: the root superadmin.
- * In the Aspire dev stack the demo seeder (`seed-demo`) aligns this
- * account's password to the shared DEMO_PASSWORD so it works out of
- * the box in local dev.
+ * Root/operator accounts provisioned by DemoSeeder. The recovery account
+ * admin@root.com intentionally stays out of this list because its password is
+ * controlled by Seed:DefaultAdminPassword rather than the demo credential.
  */
 export const ADMIN_DEMO_ACCOUNTS: DemoAccount[] = [
   {
@@ -32,4 +31,13 @@ export const ADMIN_DEMO_ACCOUNTS: DemoAccount[] = [
     initials: "SA",
     persona: "Platform operator · cross-tenant control",
   },
+  { email: "manager@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Manager", initials: "ML", persona: "Operator manager" },
+  { email: "support@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Support", initials: "SR", persona: "Customer support" },
+  { email: "purchaser@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Purchaser", initials: "PC", persona: "Procurement operator" },
+  { email: "qc@root.com", password: DEMO_PASSWORD, tenant: "root", label: "QC Inspector", initials: "QD", persona: "Quality inspector" },
+  { email: "whlead@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Warehouse Lead", initials: "WL", persona: "Warehouse lead" },
+  { email: "picker@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Picker", initials: "PP", persona: "Warehouse picker" },
+  { email: "dispatch@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Dispatcher", initials: "DC", persona: "Logistics dispatcher" },
+  { email: "driver@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Driver", initials: "DN", persona: "Delivery driver" },
+  { email: "finance@root.com", password: DEMO_PASSWORD, tenant: "root", label: "Finance", initials: "FO", persona: "Finance clerk" },
 ];

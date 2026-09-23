@@ -2,7 +2,6 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Bell,
   ChevronRight,
-  KeyRound,
   Palette,
   Settings as SettingsIcon,
   Shield,
@@ -25,7 +24,6 @@ const TABS: Tab[] = [
   { to: "/settings/security", labelKey: "settings.tabSecurity", hintKey: "settings.tabSecurityHint", icon: Shield },
   { to: "/settings/appearance", labelKey: "settings.tabAppearance", hintKey: "settings.tabAppearanceHint", icon: Palette },
   { to: "/settings/notifications", labelKey: "settings.tabNotifications", hintKey: "settings.tabNotificationsHint", icon: Bell },
-  { to: "/settings/api-keys", labelKey: "settings.tabApiKeys", hintKey: "settings.tabApiKeysHint", icon: KeyRound },
 ];
 
 const pad2 = (n: number) => n.toString().padStart(2, "0");

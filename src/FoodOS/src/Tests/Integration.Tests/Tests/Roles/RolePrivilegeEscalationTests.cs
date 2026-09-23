@@ -1,4 +1,6 @@
+using FSH.Framework.Shared.Constants;
 using FSH.Modules.Identity.Contracts.Authorization;
+using FSH.Modules.Identity.Contracts.DTOs;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
@@ -42,6 +44,19 @@ public sealed class RolePrivilegeEscalationTests
 
         using var tenantAdmin = await CreateTenantAdminClientWithRetryAsync(
             adminEmail, TestConstants.DefaultPassword, tenantId);
+
+        var catalogResponse = await tenantAdmin.GetAsync(
+            $"{TestConstants.IdentityBasePath}/permissions/catalog");
+        catalogResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var catalog = await catalogResponse.DeserializeAsync<List<PermissionCatalogEntryDto>>();
+        var expectedCustomerPermissions = PermissionConstants.CustomerAdmin
+            .Select(permission => permission.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        catalog.Select(permission => permission.Name).ToHashSet(StringComparer.Ordinal)
+            .ShouldBe(expectedCustomerPermissions, ignoreOrder: true);
+        catalog.ShouldNotContain(permission =>
+            permission.Name.StartsWith("Permissions.Catalog.", StringComparison.Ordinal));
+        catalog.ShouldNotContain(permission => permission.Name == OperatorPermission);
 
         // The tenant admin creates a role and attempts to grant it a ROOT-only permission alongside a
         // legitimate non-root one.

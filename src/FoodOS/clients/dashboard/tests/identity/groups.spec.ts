@@ -34,10 +34,21 @@ const ROLES = [
   { id: "22222222-2222-2222-2222-222222222222", name: "Manager", description: "Manage users" },
 ];
 
+const GROUP_PERMISSIONS = [
+  "Permissions.Groups.View",
+  "Permissions.Groups.Create",
+  "Permissions.Groups.Update",
+  "Permissions.Groups.Delete",
+  "Permissions.Groups.ManageMembers",
+  "Permissions.Users.View",
+  "Permissions.Roles.View",
+];
+
 test.describe("identity/groups — list", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuthedSession(page, TEST_USER);
     await installShellMocks(page);
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", GROUP_PERMISSIONS);
     await mockJsonResponse(page, "**/api/v1/identity/groups**", GROUPS);
   });
 
@@ -80,6 +91,15 @@ test.describe("identity/groups — list", () => {
     ).toBeVisible();
     await expect(dialog.getByLabel("Name")).toBeVisible();
   });
+
+  test("view-only member cannot create a group", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ["Permissions.Groups.View"]);
+
+    await page.goto("/identity/groups");
+
+    await expect(page.getByText("Engineering", { exact: true }).last()).toBeVisible();
+    await expect(page.getByRole("button", { name: /new group/i })).toHaveCount(0);
+  });
 });
 
 test.describe("identity/groups/:groupId — detail", () => {
@@ -101,6 +121,7 @@ test.describe("identity/groups/:groupId — detail", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuthedSession(page, TEST_USER);
     await installShellMocks(page);
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", GROUP_PERMISSIONS);
     await mockJsonResponse(page, "**/api/v1/identity/roles", ROLES);
     // user search only fires once the Add members dialog is open.
     await mockJsonResponse(page, "**/api/v1/identity/users/search**", paged([]));
@@ -138,5 +159,21 @@ test.describe("identity/groups/:groupId — detail", () => {
     await expect(
       dialog.getByPlaceholder("Search by name, username, or email…"),
     ).toBeVisible();
+  });
+
+  test("view-only member does not load roles or expose group mutations", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/permissions", ["Permissions.Groups.View"]);
+    let roleRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/v1/identity/roles")) roleRequests += 1;
+    });
+
+    await page.goto(`/identity/groups/${GROUP_ID}`);
+
+    await expect(page.getByLabel("Name")).toBeDisabled();
+    await expect(page.getByRole("button", { name: /add members/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /delete group/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /save changes/i })).toHaveCount(0);
+    expect(roleRequests).toBe(0);
   });
 });

@@ -20,11 +20,13 @@ import {
 import { toast } from "sonner";
 import {
   listRoles,
+  IDENTITY_PERMISSIONS,
   registerUser,
   searchUsers,
   type UserDto,
   type RegisterUserInput,
 } from "@/api/identity";
+import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -78,6 +80,10 @@ function fullName(u: UserDto, unnamed: string): string {
 
 export function UsersPage() {
   const t = useT();
+  const { user } = useAuth();
+  const permissions = user?.permissions ?? [];
+  const canCreate = permissions.includes(IDENTITY_PERMISSIONS.users.create);
+  const canViewRoles = permissions.includes(IDENTITY_PERMISSIONS.roles.view);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
@@ -122,6 +128,7 @@ export function UsersPage() {
     queryKey: ["identity", "roles"],
     queryFn: listRoles,
     staleTime: 60_000,
+    enabled: canViewRoles,
   });
 
   const data = query.data;
@@ -147,13 +154,15 @@ export function UsersPage() {
         unit={t("identity.users.unit")}
         description={t("identity.users.description")}
       >
-        <Button
-          onClick={() => setRegisterOpen(true)}
-          className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
-        >
-          <Plus className="size-4" />
-          {t("identity.users.register")}
-        </Button>
+        {canCreate && (
+          <Button
+            onClick={() => setRegisterOpen(true)}
+            className="h-9 flex-1 gap-1.5 rounded-lg px-4 text-[13px] font-semibold sm:flex-none"
+          >
+            <Plus className="size-4" />
+            {t("identity.users.register")}
+          </Button>
+        )}
       </EntityPageHeader>
 
       <EntitySearch
@@ -183,18 +192,20 @@ export function UsersPage() {
             { value: "unconfirmed", label: t("identity.users.pending") },
           ]}
         />
-        <Combobox
-          label={t("identity.users.role")}
-          value={roleFilter}
-          onChange={setRoleFilter}
-          options={(rolesQuery.data ?? []).map((r) => ({
-            value: r.id,
-            label: r.name,
-          }))}
-          variant="filter"
-          searchable
-          clearable
-        />
+        {canViewRoles && (
+          <Combobox
+            label={t("identity.users.role")}
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={(rolesQuery.data ?? []).map((r) => ({
+              value: r.id,
+              label: r.name,
+            }))}
+            variant="filter"
+            searchable
+            clearable
+          />
+        )}
       </div>
 
       {query.isLoading && items.length === 0 ? (
@@ -219,7 +230,7 @@ export function UsersPage() {
               >
                 {t("identity.clearFilters")}
               </Button>
-            ) : (
+            ) : canCreate ? (
               <Button
                 onClick={() => setRegisterOpen(true)}
                 className="h-9 rounded-lg px-4 text-[13px]"
@@ -227,7 +238,7 @@ export function UsersPage() {
                 <Plus className="mr-1.5 size-4" />
                 {t("identity.users.register")}
               </Button>
-            )
+            ) : undefined
           }
         />
       ) : (
@@ -283,10 +294,12 @@ export function UsersPage() {
         </div>
       )}
 
-      <RegisterUserDialog
-        open={registerOpen}
-        onClose={() => setRegisterOpen(false)}
-      />
+      {canCreate && (
+        <RegisterUserDialog
+          open={registerOpen}
+          onClose={() => setRegisterOpen(false)}
+        />
+      )}
     </div>
   );
 }

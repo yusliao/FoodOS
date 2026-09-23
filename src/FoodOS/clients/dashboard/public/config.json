@@ -1,7 +1,7 @@
 {
   "apiBase": "",
-  "defaultTenant": "root",
-  "demoMode": true,
+  "defaultTenant": "",
+  "demoMode": false,
   "inactivityIdleMs": 1200000,
   "inactivityWarningMs": 60000
 }
