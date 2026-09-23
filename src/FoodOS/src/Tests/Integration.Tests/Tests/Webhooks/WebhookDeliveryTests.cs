@@ -199,7 +199,7 @@ public sealed class WebhookDeliveryTests
     }
 
     [Fact]
-    public async Task GetDeliveries_Should_NotLeakOtherTenantsDeliveries_When_QueriedCrossTenant()
+    public async Task GetDeliveries_Should_Return403_ForRestaurantTenant()
     {
         // Arrange — root creates a subscription and a (successful) delivery via test-send.
         var transport = new SteerableHandler(HttpStatusCode.OK);
@@ -224,13 +224,12 @@ public sealed class WebhookDeliveryTests
         using var otherClient = await CreateTenantAdminClientWithRetryAsync(
             capturingFactory, otherAdminEmail, TestConstants.DefaultPassword, otherTenantId);
 
-        // Act — the other tenant queries root's subscription id. The Deliveries table is
-        // IsMultiTenant(), so the Finbuckle filter scopes the read to the other tenant → empty.
-        var crossDeliveries = await GetDeliveriesAsync(otherClient, rootSubId);
-
-        // Assert — no leak.
-        crossDeliveries.TotalCount.ShouldBe(0);
-        crossDeliveries.Items.ShouldBeEmpty();
+        // Restaurant tenants do not receive Webhooks.View, so the operator endpoint rejects the
+        // request before subscription or delivery lookup.
+        using var crossResponse = await otherClient.GetAsync(
+            $"{TestConstants.WebhooksBasePath}/subscriptions/{rootSubId}/deliveries?pageNumber=1&pageSize=10");
+        crossResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await crossResponse.Content.ReadAsStringAsync()).ShouldNotContain("manual.event");
     }
 
     #endregion

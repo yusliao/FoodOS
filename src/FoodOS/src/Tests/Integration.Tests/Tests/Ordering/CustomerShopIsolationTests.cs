@@ -63,7 +63,7 @@ public sealed partial class CustomerShopIsolationTests
         var product = (await productsResponse.DeserializeAsync<PagedResult<ShopProductDto>>()).Items
             .Single(item => item.Id == productId);
         product.UnitPrice.ShouldBe(9.5m);
-        product.IsAvailable.ShouldBeFalse();
+        product.IsAvailable.ShouldBeTrue();
 
         foreach (string path in new[]
         {
@@ -130,7 +130,8 @@ public sealed partial class CustomerShopIsolationTests
         update.StatusCode.ShouldBe(HttpStatusCode.NotFound, await update.Content.ReadAsStringAsync());
         using var place = await client.PostAsJsonAsync(
             $"{TestConstants.ShopBasePath}/orders", new { storeId });
-        place.StatusCode.ShouldBe(HttpStatusCode.NotFound, await place.Content.ReadAsStringAsync());
+        place.StatusCode.ShouldBe(HttpStatusCode.Conflict, await place.Content.ReadAsStringAsync());
+        (await place.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
     }
 
     private async Task<HttpClient> CreateDashboardClientAsync(string email, string tenantId)

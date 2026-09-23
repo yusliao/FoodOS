@@ -177,21 +177,18 @@ public sealed class UsageSnapshotQueryTests
     }
 
     [Fact]
-    public async Task GetUsageSnapshots_Should_Return200_For_NonAdmin_User_With_Basic_View_Permission()
+    public async Task GetUsageSnapshots_Should_Return403_For_BasicUser_WithoutOperatorBillingRole()
     {
-        // Billing.View is a Basic permission, so a freshly-registered (Basic-role) user can read the usage
-        // list — proving the gate admits an authenticated non-admin, not just the seeded root admin.
-        // Arrange
+        // A freshly registered root user only receives the built-in Basic role. Operational billing
+        // access is assigned through an explicit operator role, not through Basic.
         using var adminClient = await _auth.CreateRootAdminClientAsync();
         var (email, password) = await RegisterBasicUserAsync(adminClient, "snap-basic");
         using var basicClient = await _auth.CreateAuthenticatedClientAsync(email, password);
 
-        // Act
         using var response = await basicClient.GetAsync($"{BillingBasePath}/usage?pageNumber=1");
 
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK,
-            "Billing.View is a Basic permission, so an authenticated Basic-role user must be admitted");
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden,
+            "operational Billing.View must be granted through an explicit root operator role");
     }
 
     #endregion

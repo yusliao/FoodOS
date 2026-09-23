@@ -35,7 +35,7 @@ public sealed class OrderingAfterSalesTests
             new MultiTenantContext<AppTenantInfo>(tenant);
         var db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
         var order = SalesOrder.CreateDraft(
-            $"AS{Guid.NewGuid():N}", storeId, orgId, warehouseId,
+            $"AS{Guid.NewGuid():N}"[..32], storeId, orgId, warehouseId,
             DateOnly.FromDateTime(DateTime.UtcNow), DateTimeOffset.UtcNow.AddHours(1),
             [(productId, "Ambient", 2m, 9.5m, "USD")]);
         db.SalesOrders.Add(order);

@@ -1,3 +1,7 @@
+using FSH.Modules.Ordering.Contracts.Dtos;
+using Integration.Tests.Infrastructure;
+using Integration.Tests.Infrastructure.Extensions;
+
 namespace Integration.Tests.Tests.Ordering;
 
 public sealed partial class CustomerShopIsolationTests

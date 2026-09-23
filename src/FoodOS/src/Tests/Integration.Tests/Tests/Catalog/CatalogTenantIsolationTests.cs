@@ -1,16 +1,12 @@
-using FSH.Modules.Catalog.Contracts.Dtos;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
 namespace Integration.Tests.Tests.Catalog;
 
 /// <summary>
-/// Cross-TENANT isolation for the catalog module. Proves a product (and the
-/// brand/category it depends on) created in tenant A (root) is completely
-/// invisible to tenant B: B cannot fetch it, list it, or delete it — every
-/// cross-tenant access returns 404, never a leak. The CatalogDbContext gets
-/// tenant isolation via BaseDbContext's auto-apply, so these assert the
-/// intended behavior. Intra-tenant CRUD lives in <see cref="ProductsEndpointTests"/>.
+/// Operator catalog authorization for restaurant identities. Catalog product CRUD is owned by
+/// root operators; restaurant tenants consume the separate Shop projection and are rejected here
+/// before object-level lookup. Intra-operator CRUD lives in <see cref="ProductsEndpointTests"/>.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
 public sealed class CatalogTenantIsolationTests
@@ -23,21 +19,23 @@ public sealed class CatalogTenantIsolationTests
     }
 
     [Fact]
-    public async Task GetProductById_Should_Return404_When_OwnedByDifferentTenant()
+    public async Task GetProductById_Should_Return403_ForRestaurantTenant()
     {
         // Arrange — tenant A (root) creates a product; tenant B is freshly provisioned.
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
         using var otherClient = await ProvisionTenantClientAsync(rootClient, $"catalog-get-{uniqueId}");
 
-        var productId = await CreateProductAsync(rootClient);
+        var productName = $"Product-RootOnly-{uniqueId}";
+        var productId = await CreateProductAsync(rootClient, productName);
 
         // Act — tenant B tries to fetch tenant A's product.
         using var crossGet = await otherClient.GetAsync(
             $"{TestConstants.CatalogBasePath}/products/{productId}");
 
-        // Assert — must be a clean 404, never tenant A's data.
-        crossGet.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // Assert — the restaurant identity cannot enter the operator catalog API.
+        crossGet.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await crossGet.Content.ReadAsStringAsync()).ShouldNotContain(productName);
 
         // Sanity: tenant A still sees its own product.
         using var ownGet = await rootClient.GetAsync(
@@ -46,7 +44,7 @@ public sealed class CatalogTenantIsolationTests
     }
 
     [Fact]
-    public async Task SearchProducts_Should_NotReturn_OtherTenants_Products()
+    public async Task SearchProducts_Should_Return403_ForRestaurantTenant()
     {
         // Arrange.
         using var rootClient = await _auth.CreateRootAdminClientAsync();
@@ -59,19 +57,19 @@ public sealed class CatalogTenantIsolationTests
         // Act — tenant B lists products.
         using var listResponse = await otherClient.GetAsync(
             $"{TestConstants.CatalogBasePath}/products?pageNumber=1&pageSize=200");
-        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var page = await listResponse.DeserializeAsync<PagedResult<ProductDto>>();
-        var body = await otherClient.GetStringAsync(
-            $"{TestConstants.CatalogBasePath}/products?pageNumber=1&pageSize=200");
-
-        // Assert — tenant A's product never appears in tenant B's listing.
-        page.Items.ShouldNotContain(p => p.Id == productId,
-            "tenant B's product list must not include tenant A's product");
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        var body = await listResponse.Content.ReadAsStringAsync();
+        body.ShouldNotContain(productId.ToString());
         body.ShouldNotContain(rootName);
+
+        using var rootList = await rootClient.GetAsync(
+            $"{TestConstants.CatalogBasePath}/products?pageNumber=1&pageSize=200");
+        rootList.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await rootList.Content.ReadAsStringAsync()).ShouldContain(productId.ToString());
     }
 
     [Fact]
-    public async Task DeleteProduct_Should_Return404_When_OwnedByDifferentTenant()
+    public async Task DeleteProduct_Should_Return403_ForRestaurantTenant_AndLeaveProductUntouched()
     {
         // Arrange.
         using var rootClient = await _auth.CreateRootAdminClientAsync();
@@ -84,8 +82,8 @@ public sealed class CatalogTenantIsolationTests
         using var crossDelete = await otherClient.DeleteAsync(
             $"{TestConstants.CatalogBasePath}/products/{productId}");
 
-        // Assert — 404 (not 204): the mutation never reaches tenant A's row.
-        crossDelete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // Assert — authorization rejects the mutation before object lookup.
+        crossDelete.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         // Sanity: tenant A's product is untouched and still fetchable.
         using var ownGet = await rootClient.GetAsync(

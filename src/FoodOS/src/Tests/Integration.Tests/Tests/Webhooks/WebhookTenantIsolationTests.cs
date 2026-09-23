@@ -14,7 +14,7 @@ public sealed class WebhookTenantIsolationTests
     }
 
     [Fact]
-    public async Task GetSubscriptions_Should_OnlyReturnCurrentTenantsSubscriptions()
+    public async Task GetSubscriptions_Should_Return403_ForRestaurantTenant()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -43,19 +43,22 @@ public sealed class WebhookTenantIsolationTests
                 events = new[] { "user.created" },
                 secret = "other-secret"
             });
-        otherCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
+        otherCreate.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         var otherListResponse = await otherClient.GetAsync(
             $"{TestConstants.WebhooksBasePath}/subscriptions?pageNumber=1&pageSize=100");
-        otherListResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        otherListResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         var otherListBody = await otherListResponse.Content.ReadAsStringAsync();
-
         otherListBody.ShouldNotContain(rootMarker);
-        otherListBody.ShouldContain($"other-{uniqueId}");
+
+        using var rootListResponse = await rootClient.GetAsync(
+            $"{TestConstants.WebhooksBasePath}/subscriptions?pageNumber=1&pageSize=100");
+        rootListResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await rootListResponse.Content.ReadAsStringAsync()).ShouldContain(rootMarker);
     }
 
     [Fact]
-    public async Task DeleteSubscription_Should_Return404_When_OwnedByDifferentTenant()
+    public async Task DeleteSubscription_Should_Return403_ForRestaurantTenant()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -79,7 +82,7 @@ public sealed class WebhookTenantIsolationTests
 
         var crossDelete = await otherClient.DeleteAsync(
             $"{TestConstants.WebhooksBasePath}/subscriptions/{rootSubId}");
-        crossDelete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        crossDelete.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         var ownDelete = await rootClient.DeleteAsync(
             $"{TestConstants.WebhooksBasePath}/subscriptions/{rootSubId}");
@@ -87,7 +90,7 @@ public sealed class WebhookTenantIsolationTests
     }
 
     [Fact]
-    public async Task TestSubscription_Should_Return404_When_OwnedByDifferentTenant()
+    public async Task TestSubscription_Should_Return403_ForRestaurantTenant()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
@@ -112,7 +115,7 @@ public sealed class WebhookTenantIsolationTests
         var crossTrigger = await otherClient.PostAsync(
             $"{TestConstants.WebhooksBasePath}/subscriptions/{rootSubId}/test",
             content: null);
-        crossTrigger.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        crossTrigger.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     private async Task<HttpClient> CreateTenantAdminClientWithRetryAsync(

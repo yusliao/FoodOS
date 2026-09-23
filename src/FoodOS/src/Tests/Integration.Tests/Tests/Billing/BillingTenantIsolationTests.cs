@@ -15,11 +15,9 @@ using Integration.Tests.Infrastructure.Extensions;
 namespace Integration.Tests.Tests.Billing;
 
 /// <summary>
-/// Cross-TENANT direct fetch-by-id isolation for the Billing module. The list endpoints already
-/// prove "my invoices/subscription only" (see BillingEndpointTests). This class closes the
-/// remaining gap: fetching a billing resource that belongs to ANOTHER tenant by its id must
-/// behave as if the resource does not exist (404 / empty) — never a leak — while the OWNING
-/// tenant fetches the exact same id successfully.
+/// Operator billing authorization and cross-identity isolation. Software subscription billing is
+/// owned by root operators; restaurant identities are rejected with 403 before object lookup,
+/// while the owning root operator can read and mutate the same resources.
 ///
 /// Tenant A is <c>root</c> (the owner). Tenant A's admin creates a fresh tenant B, waits for
 /// provisioning, and authenticates as B's admin. B then attempts the cross-tenant fetches.
@@ -53,7 +51,7 @@ public sealed class BillingTenantIsolationTests
     #region Invoice fetch-by-id isolation
 
     [Fact]
-    public async Task GetInvoiceById_Should_Return404_When_OwnedByDifferentTenant()
+    public async Task GetInvoiceById_Should_Return403_ForRestaurantTenant()
     {
         // Arrange — root (tenant A) owns a draft invoice; a fresh tenant B is the attacker.
         var (year, month) = NextPeriod();
@@ -77,13 +75,13 @@ public sealed class BillingTenantIsolationTests
         ownerDto.Id.ShouldBe(invoiceId);
         ownerDto.TenantId.ShouldBe(TestConstants.RootTenantId);
 
-        // Act + Assert — a different tenant fetching the SAME id must see a 404, not a leak.
+        // Restaurant tenants have no operational Billing.View permission, so authorization rejects
+        // the request before object-level lookup.
         using var crossResponse = await otherClient.GetAsync($"{BillingBasePath}/invoices/{invoiceId}");
-        crossResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound,
-            "cross-tenant fetch-by-id must return 404, never the other tenant's invoice");
+        crossResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden,
+            "restaurant identities must not enter the operator billing API");
 
-        // The 404 body must not leak the other tenant's invoice data. (The caller-supplied id may
-        // appear in a "not found" message — that is not a leak — but private fields must not.)
+        // The denial body must not leak the operator invoice.
         var crossBody = await crossResponse.Content.ReadAsStringAsync();
         crossBody.ShouldNotContain("42.50");
         crossBody.ShouldNotContain("\"tenantId\":\"root\"");
@@ -95,7 +93,7 @@ public sealed class BillingTenantIsolationTests
     #region Subscription fetch isolation
 
     [Fact]
-    public async Task GetSubscription_Should_NotLeak_When_OtherTenantPassesOwnersTenantId()
+    public async Task GetSubscription_Should_Return403_ForRestaurantTenant()
     {
         // Arrange — root (tenant A) holds an active subscription; a fresh tenant B is the attacker.
         using var rootClient = await _auth.CreateRootAdminClientAsync();
@@ -118,24 +116,13 @@ public sealed class BillingTenantIsolationTests
         ownerSub!.Id.ShouldBe(rootSubId);
         ownerSub.TenantId.ShouldBe(TestConstants.RootTenantId);
 
-        // Act + Assert — tenant B passing root's tenant id must NOT receive root's subscription.
-        // The global tenant filter scopes the query to B, so the (TenantId == "root") predicate
-        // matches nothing and the endpoint returns an empty/null body — not a leak.
+        // Software subscriptions are an operator concern; a restaurant tenant cannot enter this API
+        // even when it supplies its own or another tenant id.
         using var crossResponse = await otherClient.GetAsync(
             $"{BillingBasePath}/subscriptions?tenantId={TestConstants.RootTenantId}");
-        crossResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        crossResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         var crossBody = await crossResponse.Content.ReadAsStringAsync();
-
-        // A different tenant must not be able to read root's subscription by passing root's tenant id.
         crossBody.ShouldNotContain(rootSubId.ToString());
-
-        // The attacking tenant has its own (auto-provisioned) subscription, so the fetch may return
-        // THAT — but never root's. The isolation guarantee is "you never see another tenant's row".
-        var crossSub = await GetSubscriptionAsync(otherClient, TestConstants.RootTenantId);
-        crossSub?.Id.ShouldNotBe(rootSubId,
-            "cross-tenant subscription fetch must never resolve to root's subscription");
-        crossSub?.TenantId.ShouldNotBe(TestConstants.RootTenantId,
-            "cross-tenant subscription fetch must never resolve to root's subscription");
     }
 
     #endregion
@@ -146,7 +133,7 @@ public sealed class BillingTenantIsolationTests
     // alone is insufficient). Each test below has tenant B target root's resource; pre-fix these succeeded.
 
     [Fact]
-    public async Task VoidInvoice_Should_Return404_When_OwnedByDifferentTenant()
+    public async Task VoidInvoice_Should_Return403_ForRestaurantTenant_AndLeaveInvoiceUnchanged()
     {
         var (year, month) = NextPeriod();
         var invoiceId = await SeedDraftInvoiceAsync(TestConstants.RootTenantId, year, month, basePrice: 77.00m);
@@ -155,11 +142,11 @@ public sealed class BillingTenantIsolationTests
         var (otherClient, _) = await CreateForeignTenantClientAsync(rootClient, "void");
         using var _o = otherClient;
 
-        // Tenant B tries to void root's invoice → must 404, and the invoice must stay Draft.
+        // Tenant B cannot enter the operator billing mutation API, and the invoice stays Draft.
         using var crossResp = await otherClient.PostAsJsonAsync(
             $"{BillingBasePath}/invoices/{invoiceId}/void", new { reason = "malicious" });
-        crossResp.StatusCode.ShouldBe(HttpStatusCode.NotFound,
-            "a tenant must not be able to void another tenant's invoice by id");
+        crossResp.StatusCode.ShouldBe(HttpStatusCode.Forbidden,
+            "a restaurant tenant must not be able to void operator invoices");
 
         using var ownerRead = await rootClient.GetAsync($"{BillingBasePath}/invoices/{invoiceId}");
         var dto = await ParseAsync<InvoiceDto>(ownerRead);
@@ -194,7 +181,7 @@ public sealed class BillingTenantIsolationTests
     }
 
     [Fact]
-    public async Task GetUsage_Should_NotLeak_OtherTenants_Snapshots()
+    public async Task GetUsage_Should_Return403_ForRestaurantTenant_WithoutLeakingSnapshots()
     {
         var (year, month) = NextPeriod();
         const long Marker = 918273645; // distinctive usedUnits value to spot a leak in the raw JSON
@@ -210,15 +197,14 @@ public sealed class BillingTenantIsolationTests
         using var _o = otherClient;
         var markerText = Marker.ToString(CultureInfo.InvariantCulture);
 
-        // B with no filter must not see root's snapshot.
+        // Restaurant identities cannot access operational billing usage, with or without a filter.
         using var noFilter = await otherClient.GetAsync($"{BillingBasePath}/usage");
-        noFilter.StatusCode.ShouldBe(HttpStatusCode.OK);
+        noFilter.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await noFilter.Content.ReadAsStringAsync()).Contains(markerText, StringComparison.Ordinal)
             .ShouldBeFalse("a tenant must not see another tenant's usage snapshots");
 
-        // B explicitly passing root's tenant id must STILL be scoped to B (no bypass).
         using var withRootId = await otherClient.GetAsync($"{BillingBasePath}/usage?tenantId={TestConstants.RootTenantId}");
-        withRootId.StatusCode.ShouldBe(HttpStatusCode.OK);
+        withRootId.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await withRootId.Content.ReadAsStringAsync()).Contains(markerText, StringComparison.Ordinal)
             .ShouldBeFalse("passing another tenant's id must not bypass tenant scoping");
 
@@ -229,23 +215,25 @@ public sealed class BillingTenantIsolationTests
     }
 
     [Fact]
-    public async Task CaptureUsage_Should_BeScopedToCaller_When_NonRootPassesForeignTenantId()
+    public async Task CaptureUsage_Should_Return403_ForRestaurantTenant_WithoutWritingSnapshots()
     {
         var (year, month) = NextPeriod();
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         var (otherClient, _) = await CreateForeignTenantClientAsync(rootClient, "capture");
         using var _o = otherClient;
 
-        // B asks to capture usage FOR ROOT. The handler must pin to B, so nothing it returns/writes
-        // belongs to root.
+        // Usage capture is an operator-only action. The restaurant request must be rejected before
+        // the command can write either its own or the supplied tenant's snapshots.
         using var resp = await otherClient.PostAsJsonAsync(
             $"{BillingBasePath}/usage/snapshots/capture",
             new { tenantId = TestConstants.RootTenantId, periodYear = year, periodMonth = month });
-        resp.StatusCode.ShouldBe(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+        resp.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await resp.Content.ReadAsStringAsync());
 
-        var snaps = await ParseAsync<List<UsageSnapshotDto>>(resp);
-        snaps.ShouldAllBe(s => s.TenantId != TestConstants.RootTenantId,
-            "a tenant capturing usage must be scoped to itself — never able to write another tenant's usage");
+        using var rootRead = await rootClient.GetAsync(
+            $"{BillingBasePath}/usage?tenantId={TestConstants.RootTenantId}&periodYear={year}&periodMonth={month}");
+        rootRead.StatusCode.ShouldBe(HttpStatusCode.OK, await rootRead.Content.ReadAsStringAsync());
+        (await ParseAsync<List<UsageSnapshotDto>>(rootRead)).ShouldBeEmpty(
+            "the rejected restaurant request must not create root usage snapshots");
     }
 
     [Fact]
