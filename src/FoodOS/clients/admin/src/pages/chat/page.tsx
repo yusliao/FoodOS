@@ -13,6 +13,8 @@ import { ChatComposer } from "./composer";
 import { MessageActions } from "./message-actions";
 import { ReadAction } from "./read-action";
 import { ChannelManagement, CreateChannelButton } from "./channel-management";
+import { ArchivedChannelsButton } from "./archived-channels";
+import { ChatAttachmentDownload } from "./attachment-download";
 
 const validId = (value: string) => /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value) && !/^0{8}(-0{4}){3}-0{12}$/.test(value);
 function useChatAccess() {
@@ -33,7 +35,7 @@ export function ChatPage() {
   const [page, setPage] = useState(1);
   const query = useQuery({ queryKey: ["chat", userId, "channels", page], queryFn: ({ signal }) => listChatChannels(page, signal), enabled: allowed });
   return <div className="space-y-6">
-    <EntityPageHeader icon={MessageSquare} title={t("chat.title")} description={t("chat.description")}><CreateChannelButton /></EntityPageHeader>
+    <EntityPageHeader icon={MessageSquare} title={t("chat.title")} description={t("chat.description")}><div className="flex flex-wrap gap-2"><ArchivedChannelsButton /><CreateChannelButton /></div></EntityPageHeader>
     {query.isPending && <LoadingRow label={t("common.loading")} />}
     {query.isError && <Failure error={query.error} retry={() => { if (allowed) void query.refetch(); }} pending={query.isFetching} />}
     {query.isSuccess && <>
@@ -140,7 +142,7 @@ function MessageCard({ message, openThread = false }: { message: ChatMessage; op
       <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.body}</p>
       {message.editedAtUtc && <span className="text-sm">{t("chat.edited")}</span>}
       {message.isPinned && <span className="text-sm"> · {t("chat.pinned")}</span>}
-      {message.attachments.length > 0 && <div className="text-sm"><p>{t("chat.attachmentHint")}</p><ul className="list-inside list-disc break-all">{message.attachments.map(file => <li key={file.id}>{file.originalFileName}</li>)}</ul></div>}
+      {message.attachments.length > 0 && <div className="space-y-2 text-sm"><p>{t("chat.attachmentHint")}</p><ul className="grid gap-2 sm:grid-cols-2">{message.attachments.map(file => <ChatAttachmentDownload key={file.id} attachment={file} />)}</ul></div>}
       {message.reactions.length > 0 && <p className="break-words">{message.reactions.map(reaction => reaction.emoji).join(" ")}</p>}
       <MessageActions message={message} />
     </>}

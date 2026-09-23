@@ -1,4 +1,5 @@
 using FSH.Modules.Chat.Contracts.v1.DTOs;
+using FSH.Framework.Shared.Persistence;
 using FSH.Modules.Multitenancy.Contracts.Dtos;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
@@ -310,8 +311,10 @@ public sealed class ChatTenantIsolationTests
     {
         using var root = await _auth.CreateRootAdminClientAsync();
         using var customer = await CreateProvisionedTenantAdminClientAsync();
-        var rootChannel = await CreateChannelAsync(root, $"root-restore-{Unique()}");
-        var customerChannel = await CreateChannelAsync(customer, $"customer-restore-{Unique()}");
+        string rootName = $"root-restore-{Unique()}";
+        string customerName = $"customer-restore-{Unique()}";
+        var rootChannel = await CreateChannelAsync(root, rootName);
+        var customerChannel = await CreateChannelAsync(customer, customerName);
         using var archiveRoot = await root.DeleteAsync($"{ChatBasePath}/channels/{rootChannel}");
         using var archiveCustomer = await customer.DeleteAsync($"{ChatBasePath}/channels/{customerChannel}");
         archiveRoot.StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -321,6 +324,13 @@ public sealed class ChatTenantIsolationTests
         using var crossCustomer = await customer.PostAsync($"{ChatBasePath}/channels/{rootChannel}/restore", null);
         crossRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         crossCustomer.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        using var rootCannotListCustomer = await root.GetAsync(
+            $"{ChatBasePath}/channels/trash?search={Uri.EscapeDataString(customerName)}");
+        using var customerCannotListRoot = await customer.GetAsync(
+            $"{ChatBasePath}/channels/trash?search={Uri.EscapeDataString(rootName)}");
+        (await rootCannotListCustomer.DeserializeAsync<PagedResponse<ChannelDto>>()).Items.ShouldBeEmpty();
+        (await customerCannotListRoot.DeserializeAsync<PagedResponse<ChannelDto>>()).Items.ShouldBeEmpty();
 
         using var ownRoot = await root.PostAsync($"{ChatBasePath}/channels/{rootChannel}/restore", null);
         using var ownCustomer = await customer.PostAsync($"{ChatBasePath}/channels/{customerChannel}/restore", null);

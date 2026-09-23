@@ -1,11 +1,22 @@
 using System.Runtime.CompilerServices;
 using FSH.Framework.Core.Exceptions;
+using FSH.Modules.Inventory.Contracts.v1.Warehouses;
 using FSH.Modules.Inventory.Contracts.v1.Stock;
+using FSH.Modules.Ordering.Contracts.v1.AfterSales;
+using FSH.Modules.Ordering.Contracts.v1.Carts;
+using FSH.Modules.Ordering.Contracts.v1.CustomerOrgs;
 using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Contracts.v1.Shop;
+using FSH.Modules.Ordering.Contracts.v1.StoreAccess;
+using FSH.Modules.Ordering.Contracts.v1.Stores;
+using FSH.Modules.Procurement.Contracts.v1.PurchaseOrders;
 using FSH.Modules.Procurement.Contracts.v1.QualityChecks;
+using FSH.Modules.Procurement.Contracts.v1.Suppliers;
+using FSH.Modules.Logistics.Contracts.v1.Drivers;
+using FSH.Modules.Logistics.Contracts.v1.Routes;
 using FSH.Modules.Logistics.Contracts.v1.Shipments;
 using FSH.Modules.Logistics.Contracts.v1.ProofOfDelivery;
+using FSH.Modules.Logistics.Contracts.v1.Vehicles;
 using FSH.Modules.Warehouse.Contracts.v1.Putaway;
 using Integration.Tests.Infrastructure;
 using Mediator;
@@ -17,18 +28,30 @@ public sealed class ExternalWmsBoundaryTests(FshWebApplicationFactory factory)
 {
     public static IEnumerable<object[]> BlockedMessages()
     {
-        var inventory = typeof(ReceiveInventoryCommand).Assembly.GetTypes().Where(type =>
-            type.Namespace is "FSH.Modules.Inventory.Contracts.v1.Stock" or "FSH.Modules.Inventory.Contracts.v1.Plans");
-        var warehouse = typeof(CreatePutawayTaskCommand).Assembly.GetTypes();
-        var additional = new[] {
-            typeof(PassQualityCheckCommand), typeof(FailQualityCheckCommand),
-            typeof(PlaceOrderCommand), typeof(AmendOrderCommand), typeof(CancelOrderCommand),
-            typeof(PlaceShopOrderCommand), typeof(AmendShopOrderCommand), typeof(CancelShopOrderCommand),
-            typeof(LockOrdersForCutoffCommand), typeof(StartOrderPickingCommand), typeof(ConfirmOrderPackedCommand),
-            typeof(RecordOrderLineShortageCommand), typeof(StartOrderInTransitCommand), typeof(ConfirmOrderReceivedCommand),
-            typeof(CreateShipmentCommand), typeof(LoadShipmentCommand), typeof(DepartShipmentCommand), typeof(ConfirmPodCommand),
+        // Fail closed when a new command is added to an execution-adjacent module. A command must
+        // be explicitly classified as FoodOS-owned master data / transaction maintenance below;
+        // every other command is expected to hit the external-WMS boundary before its handler.
+        var contractAssemblies = new[]
+        {
+            typeof(ReceiveInventoryCommand).Assembly,
+            typeof(CreatePutawayTaskCommand).Assembly,
+            typeof(PassQualityCheckCommand).Assembly,
+            typeof(PlaceOrderCommand).Assembly,
+            typeof(CreateShipmentCommand).Assembly,
         };
-        return inventory.Concat(warehouse).Concat(additional).Where(type => !type.IsAbstract && type.GetInterfaces()
+        var allowedFoodOsCommands = new HashSet<Type>
+        {
+            typeof(CreateWarehouseCommand),
+            typeof(CreateSupplierCommand), typeof(CreatePurchaseOrderCommand),
+            typeof(SendPurchaseOrderCommand), typeof(CreateInboundAppointmentCommand),
+            typeof(UpdateCartCommand), typeof(UpdateShopCartCommand),
+            typeof(CreateStoreCommand), typeof(SetUserStoreAccessCommand),
+            typeof(CreateCustomerOrgCommand), typeof(CreateAfterSalesTicketCommand),
+            typeof(CreateShopAfterSalesCommand), typeof(ReconcileOrderCommand),
+            typeof(CreateVehicleCommand), typeof(CreateDriverCommand), typeof(CreateRouteCommand),
+        };
+        return contractAssemblies.SelectMany(assembly => assembly.GetTypes()).Distinct()
+            .Where(type => !allowedFoodOsCommands.Contains(type) && !type.IsAbstract && type.GetInterfaces()
             .Any(contract => contract.IsGenericType && contract.GetGenericTypeDefinition() == typeof(ICommand<>)))
             .Distinct().Select(type => new object[] { type });
     }

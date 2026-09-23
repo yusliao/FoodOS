@@ -20,6 +20,7 @@ namespace FSH.Modules.Chat.Features.v1.Messages.SendMessage;
 public sealed class SendMessageCommandHandler(
     ChatDbContext db,
     ICurrentUser currentUser,
+    IMediator mediator,
     IHubContext<AppHub> hub,
     IMentionResolver mentionResolver,
     IEventBus eventBus)
@@ -99,7 +100,10 @@ public sealed class SendMessageCommandHandler(
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        var dto = message.ToDto();
+        // Never echo the client-provided URL for a Files-backed attachment. Resolve it through the
+        // current Files policy before the HTTP response and SignalR broadcast leave the server.
+        var dto = (await ChatAttachmentUrls.ResolveAsync([message.ToDto()], mediator, cancellationToken)
+            .ConfigureAwait(false)).Single();
         await hub.Clients.CurrentMembers(channel)
             .SendAsync("ChatMessageCreated", dto, cancellationToken)
             .ConfigureAwait(false);

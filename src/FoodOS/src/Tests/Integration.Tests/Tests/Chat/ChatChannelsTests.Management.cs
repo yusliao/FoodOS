@@ -1,5 +1,6 @@
 using FSH.Modules.Chat.Contracts.Authorization;
 using FSH.Modules.Chat.Contracts.v1.DTOs;
+using FSH.Framework.Shared.Persistence;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
 
@@ -7,6 +8,51 @@ namespace Integration.Tests.Tests.Chat;
 
 public sealed partial class ChatChannelsTests
 {
+    [Fact]
+    public async Task ArchivedChannels_Should_Search_Page_Restore_And_Require_ManageAll()
+    {
+        using var admin = await _auth.CreateRootAdminClientAsync();
+        string prefix = UniqueName("ArchivedList");
+        var ids = new List<Guid>();
+        for (int index = 0; index < 3; index++)
+        {
+            var id = await CreateChannelAsync(admin, $"{prefix}-{index}");
+            using var archive = await admin.DeleteAsync($"{ChatBasePath}/channels/{id}");
+            archive.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            ids.Add(id);
+        }
+
+        using var first = await admin.GetAsync(
+            $"{ChatBasePath}/channels/trash?search={Uri.EscapeDataString(prefix)}&pageNumber=1&pageSize=2");
+        var page1 = await first.DeserializeAsync<PagedResponse<ChannelDto>>();
+        page1.TotalCount.ShouldBe(3);
+        page1.TotalPages.ShouldBe(2);
+        page1.Items.Count.ShouldBe(2);
+        page1.HasNext.ShouldBeTrue();
+        page1.Items.ShouldAllBe(channel => channel.Name!.StartsWith(prefix, StringComparison.Ordinal));
+
+        using var second = await admin.GetAsync(
+            $"{ChatBasePath}/channels/trash?search={Uri.EscapeDataString(prefix)}&pageNumber=2&pageSize=2");
+        var page2 = await second.DeserializeAsync<PagedResponse<ChannelDto>>();
+        page2.Items.ShouldHaveSingleItem();
+        page2.HasPrevious.ShouldBeTrue();
+        page1.Items.Select(channel => channel.Id).Intersect(page2.Items.Select(channel => channel.Id)).ShouldBeEmpty();
+
+        using var restore = await admin.PostAsync($"{ChatBasePath}/channels/{ids[0]}/restore", null);
+        restore.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var afterRestore = await admin.GetAsync(
+            $"{ChatBasePath}/channels/trash?search={Uri.EscapeDataString(prefix)}&pageNumber=1&pageSize=200");
+        var remaining = await afterRestore.DeserializeAsync<PagedResponse<ChannelDto>>();
+        remaining.TotalCount.ShouldBe(2);
+        remaining.Items.ShouldNotContain(channel => channel.Id == ids[0]);
+
+        using var viewOnly = await OperatorTestUsers.CreateOperatorAsync(_factory, ChatPermissions.Channels.View);
+        using var forbidden = await viewOnly.GetAsync($"{ChatBasePath}/channels/trash");
+        forbidden.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var invalid = await admin.GetAsync($"{ChatBasePath}/channels/trash?pageNumber=0&pageSize=201");
+        invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task ChannelManagement_Should_Enforce_Permissions_And_Member_Roles()
     {

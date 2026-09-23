@@ -10,6 +10,7 @@ const otherId = "77777777-7777-7777-7777-777777777777";
 const candidateId = "88888888-8888-8888-8888-888888888888";
 const view = "Permissions.Chat.Channels.View";
 const create = "Permissions.Chat.Channels.Create";
+const manage = "Permissions.Chat.Channels.ManageAll";
 const users = "Permissions.Users.View";
 type SetupOptions = { role?: "Member" | "Admin"; private?: boolean; type?: "Channel" | "DirectMessage" | "GroupMessage" };
 
@@ -54,6 +55,7 @@ for (const [name, permissions, options, createVisible, editVisible, addVisible, 
   await expect(members.getByRole("button", { name: en.chatManage.leave })).toBeVisible();
   await page.getByRole("link", { name: en.chat.back }).click();
   await expect(page.getByRole("button", { name: en.chatManage.create })).toHaveCount(createVisible ? 1 : 0);
+  await expect(page.getByRole("button", { name: en.chatManage.archived })).toHaveCount(0);
   expect(requests.filter(request => request.path.includes("/identity/users"))).toEqual([]);
 });
 
@@ -218,4 +220,87 @@ test("admin remove failure is explicit and self leave navigates only after refre
   await expect(dialog.getByRole("button", { name: en.chrome.cancel })).toBeDisabled();
   release();
   await expect(page).toHaveURL("/chat");
+});
+
+for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) {
+  test(`${culture} archived channels recover list and restore failures, then wait for refresh`, async ({ page }) => {
+    const { requests } = await setup(page, [view, manage]);
+    await page.addInitScript(value => localStorage.setItem("foodos.culture", value), culture);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const archived = { id: newChannelId, type: "Channel", name: "Archived team", isPrivate: true, unreadCount: 0, members: [{ id: "archived-member", userId: TEST_USER.sub, role: "Admin" }] };
+    const state = { rows: [archived] };
+    let listFails = true, restoreFails = true, saved = false, release!: () => void, writes = 0;
+    const hold = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/api/v1/chat/channels/trash?**", async route => {
+      if (listFails) return route.fulfill({ status: 403, json: { detail: "Archive list denied" } });
+      if (saved) await hold;
+      return route.fulfill({ json: { items: state.rows, pageNumber: 1, pageSize: 20, totalCount: state.rows.length, totalPages: state.rows.length ? 1 : 0, hasPrevious: false, hasNext: false } });
+    });
+    await page.route(`**/api/v1/chat/channels/${newChannelId}/restore`, route => {
+      expect(route.request().method()).toBe("POST");
+      writes++;
+      if (restoreFails) return route.fulfill({ status: 403, json: { detail: "Restore denied" } });
+      state.rows = [];
+      saved = true;
+      return route.fulfill({ status: 204 });
+    });
+    await page.goto("/chat");
+    await page.getByRole("button", { name: m.chatManage.archived }).click();
+    const archiveDialog = page.getByRole("dialog", { name: m.chatManage.archived });
+    await expect(archiveDialog.getByText("Archive list denied")).toBeVisible();
+    listFails = false;
+    await archiveDialog.getByRole("button", { name: m.workbench.retry, exact: true }).click();
+    const row = archiveDialog.getByRole("article").filter({ hasText: "Archived team" });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: m.chatManage.restore }).click();
+    let confirm = page.getByRole("dialog", { name: m.chatManage.restore });
+    expect(writes).toBe(0);
+    await confirm.getByRole("button", { name: m.chatManage.restore }).click();
+    await expect(confirm.getByText("Restore denied")).toBeVisible();
+    await confirm.getByRole("button", { name: m.chrome.cancel }).click();
+    await row.getByRole("button", { name: m.chatManage.restore }).click();
+    confirm = page.getByRole("dialog", { name: m.chatManage.restore });
+    await expect(confirm.getByText("Restore denied")).toHaveCount(0);
+    restoreFails = false;
+    await confirm.getByRole("button", { name: m.chatManage.restore }).click();
+    await expect.poll(() => saved).toBe(true);
+    await expect(confirm.getByRole("button", { name: m.chrome.cancel })).toBeDisabled();
+    release();
+    await expect(confirm).toHaveCount(0);
+    await expect(archiveDialog.getByText(m.chatManage.noArchived)).toBeVisible();
+    expect(writes).toBe(2);
+    expect(requests.filter(request => request.path.endsWith("/channels/trash")).length).toBeGreaterThanOrEqual(2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+test("archived channel search and paging use bounded root queries", async ({ page }) => {
+  await setup(page, [view, manage]);
+  const rows = Array.from({ length: 20 }, (_, index) => ({ id: index === 0 ? newChannelId : `99999999-9999-9999-9999-${String(index).padStart(12, "0")}`, type: "Channel", name: `Archived ${index}`, isPrivate: false, unreadCount: 0, members: [] }));
+  await page.route("**/api/v1/chat/channels/trash?**", route => {
+    const query = new URL(route.request().url()).searchParams;
+    expect(query.get("pageSize")).toBe("20");
+    const pageNumber = Number(query.get("pageNumber"));
+    const search = query.get("search");
+    if (search) expect(search).toBe("needle");
+    const items = search || pageNumber === 2 ? [] : rows;
+    return route.fulfill({ json: { items, pageNumber, pageSize: 20, totalCount: search ? 0 : 20, totalPages: search ? 0 : 1, hasPrevious: pageNumber > 1, hasNext: !search && pageNumber === 1 } });
+  });
+  await page.goto("/chat");
+  await page.getByRole("button", { name: en.chatManage.archived }).click();
+  const dialog = page.getByRole("dialog", { name: en.chatManage.archived });
+  await expect(dialog.getByText("Archived 0", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: en.common.next, exact: true }).click();
+  await expect(dialog.getByText(en.chatManage.noArchived)).toBeVisible();
+  await dialog.getByLabel(en.chatManage.searchChannels).fill(" needle ");
+  await dialog.getByRole("button", { name: en.chatManage.searchAction }).click();
+  await expect(dialog.getByText(en.chatManage.noArchived)).toBeVisible();
+});
+
+test("ManageAll without channel view cannot expose archived channels or issue requests", async ({ page }) => {
+  const { requests } = await setup(page, [manage]);
+  await page.goto("/chat");
+  await expect(page.getByRole("heading", { name: en.common.forbiddenTitle })).toBeVisible();
+  await expect(page.getByRole("button", { name: en.chatManage.archived })).toHaveCount(0);
+  expect(requests).toEqual([]);
 });

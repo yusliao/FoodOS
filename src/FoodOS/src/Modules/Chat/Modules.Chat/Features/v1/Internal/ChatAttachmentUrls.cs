@@ -10,8 +10,9 @@ namespace FSH.Modules.Chat.Features.v1.Internal;
 /// time — it expires, breaking historical images. For every attachment that carries a
 /// <c>FileAssetId</c> we mint a fresh presigned URL via <see cref="GetFileDownloadUrlQuery"/> (which
 /// also enforces the file's access policy), so the link is always valid when the page is fetched.
-/// If a file can't be resolved (deleted / access denied) the stored URL is kept as a best-effort
-/// fallback rather than failing the whole page.
+/// If a file can't be resolved (deleted / access denied), its URL is cleared rather than falling
+/// back to the persisted value. Persisted URLs are expired credentials or untrusted client input;
+/// returning them would bypass the current Files access decision.
 /// </summary>
 internal static class ChatAttachmentUrls
 {
@@ -51,16 +52,16 @@ internal static class ChatAttachmentUrls
             catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
             {
-                // Keep the stored URL as a best-effort fallback.
+                // Keep the message readable, but never return a stale or client-supplied fallback.
             }
         }
 
         return [.. messages.Select(m => m with
         {
             Attachments = [.. m.Attachments.Select(a =>
-                a.FileAssetId is { } fid && resolved.TryGetValue(fid, out var url)
-                    ? a with { Url = url }
-                    : a)],
+                a.FileAssetId is not { } fid
+                    ? a
+                    : a with { Url = resolved.GetValueOrDefault(fid, string.Empty) })],
         })];
     }
 }

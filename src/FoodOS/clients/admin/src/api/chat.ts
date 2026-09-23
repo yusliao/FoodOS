@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-client";
+import type { PagedResponse } from "@/lib/api-types";
 
 export const CHAT_PAGE_SIZE = 20;
 export type ChatChannel = {
@@ -6,12 +7,18 @@ export type ChatChannel = {
   name?: string | null; description?: string | null; isPrivate: boolean; unreadCount: number;
   members: { id: string; userId: string; role: "Member" | "Admin"; joinedAtUtc: string; lastReadMessageId?: string | null }[];
 };
+export type ChatAttachment = {
+  id: string; fileAssetId?: string | null; url: string; originalFileName: string; contentType: string; sizeBytes: number;
+};
 export type ChatMessage = {
   id: string; channelId: string; authorUserId: string; body?: string | null;
   parentMessageId?: string | null; replyCount: number; createdAtUtc: string;
   editedAtUtc?: string | null; deletedAtUtc?: string | null; isPinned?: boolean;
-  attachments: { id: string; fileAssetId?: string | null; url: string; originalFileName: string; contentType: string; sizeBytes: number }[];
+  attachments: ChatAttachment[];
   reactions: { id: string; userId: string; emoji: string }[];
+};
+export type SendChatAttachment = {
+  fileAssetId: string; url: string; contentType: string; fileName: string; sizeBytes: number;
 };
 const base = "/api/v1/chat";
 export function editChatMessage(input: { messageId: string; body: string }) {
@@ -25,10 +32,10 @@ export function markChatRead(input: { channelId: string; messageId: string }) {
     method: "POST", body: JSON.stringify({ messageId: input.messageId }),
   });
 }
-export function sendChatMessage(input: { channelId: string; parentMessageId: string | null; body: string; key: string }) {
+export function sendChatMessage(input: { channelId: string; parentMessageId: string | null; body: string; key: string; attachments: SendChatAttachment[] }) {
   return apiFetch<ChatMessage>(`${base}/channels/${encodeURIComponent(input.channelId)}/messages`, {
     method: "POST", headers: { "Idempotency-Key": input.key },
-    body: JSON.stringify({ body: input.body, parentMessageId: input.parentMessageId, attachments: [] }),
+    body: JSON.stringify({ body: input.body, parentMessageId: input.parentMessageId, attachments: input.attachments }),
   });
 }
 export function listChatChannels(page: number, signal?: AbortSignal) {
@@ -45,6 +52,14 @@ export function updateChatChannel(input: { channelId: string; name: string; desc
 }
 export function archiveChatChannel(channelId: string) {
   return apiFetch<void>(`${base}/channels/${encodeURIComponent(channelId)}`, { method: "DELETE" });
+}
+export function listArchivedChatChannels(search: string, page: number, signal?: AbortSignal) {
+  const query = new URLSearchParams({ pageNumber: String(page), pageSize: String(CHAT_PAGE_SIZE) });
+  if (search.trim()) query.set("search", search.trim());
+  return apiFetch<PagedResponse<ChatChannel>>(`${base}/channels/trash?${query}`, { signal });
+}
+export function restoreChatChannel(channelId: string) {
+  return apiFetch<void>(`${base}/channels/${encodeURIComponent(channelId)}/restore`, { method: "POST" });
 }
 export function addChatMembers(input: { channelId: string; userIds: string[] }) {
   return apiFetch<void>(`${base}/channels/${encodeURIComponent(input.channelId)}/members`, {

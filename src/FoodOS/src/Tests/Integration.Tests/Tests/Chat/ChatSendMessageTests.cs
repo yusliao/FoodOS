@@ -317,6 +317,42 @@ public sealed class ChatSendMessageTests
         send.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task SendMessage_Should_Not_Echo_Stored_Url_When_FileAsset_Cannot_Be_Authorized()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var channelId = await CreateChannelAsync(client, UniqueName("NoUrlFallback"));
+        var missingFileId = Guid.NewGuid();
+
+        using var response = await client.PostAsJsonAsync(
+            $"{ChatBasePath}/channels/{channelId}/messages",
+            new
+            {
+                body = "attachment with a missing file",
+                parentMessageId = (Guid?)null,
+                attachments = new[]
+                {
+                    new
+                    {
+                        fileAssetId = missingFileId,
+                        url = "https://untrusted.invalid/stale-credential",
+                        contentType = "application/pdf",
+                        fileName = "evidence.pdf",
+                        sizeBytes = 4L,
+                    },
+                },
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var sent = await response.DeserializeAsync<MessageDto>();
+        sent.Attachments.Single().Url.ShouldBe(string.Empty);
+
+        using var listResponse = await client.GetAsync($"{ChatBasePath}/channels/{channelId}/messages?pageSize=20");
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var listed = await listResponse.DeserializeAsync<List<MessageDto>>();
+        listed.Single(x => x.Id == sent.Id).Attachments.Single().Url.ShouldBe(string.Empty);
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────
 
     private static string UniqueName(string prefix) =>

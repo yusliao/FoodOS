@@ -2,6 +2,31 @@ import { expect, test } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installAdminShellMocks } from "../helpers/shell-mocks";
 const status = { mode: "externalWms", readiness: "notConfigured", acceptsOrders: false, acceptsOrderChanges: false, localWarehouseExecution: false };
+
+test("legacy warehouse routes stay absent from admin navigation and direct URLs", async ({ page }) => {
+  const permissions = [
+    "Permissions.Procurement.Quality.Pass",
+    "Permissions.Procurement.Quality.Fail",
+    "Permissions.Warehouse.Putaway.View",
+    "Permissions.Warehouse.Waves.View",
+    "Permissions.Warehouse.Picks.View",
+    "Permissions.Logistics.Shipments.View",
+  ];
+  await seedAuthedSession(page, { ...TEST_USER, permissions });
+  await installAdminShellMocks(page, permissions);
+  const business: string[] = [];
+  page.on("request", request => {
+    if (/\/api\/v1\/(procurement|inventory|warehouse|logistics)\//.test(request.url())) business.push(request.url());
+  });
+  await page.goto("/");
+  for (const path of ["qc", "putaway", "waves", "picks", "shipments"]) {
+    await expect(page.locator(`a[href="/ops/${path}"]`)).toHaveCount(0);
+    await page.goto(`/ops/${path}`);
+    await expect(page.getByRole("heading", { name: /page not found/i })).toBeVisible();
+  }
+  expect(business).toEqual([]);
+});
+
 test("QC stays unavailable through status failure and retry while procurement remains readable", async ({ page }) => {
   const permissions = ["Permissions.Procurement.Purchase.View", "Permissions.Procurement.Quality.Pass", "Permissions.Procurement.Quality.Fail"];
   await seedAuthedSession(page, { ...TEST_USER, permissions });

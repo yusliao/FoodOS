@@ -13,6 +13,7 @@ using FSH.Modules.Chat.Features.v1.Channels.DiscoverChannels;
 using FSH.Modules.Chat.Features.v1.Channels.FindOrCreateDm;
 using FSH.Modules.Chat.Features.v1.Channels.GetChannelById;
 using FSH.Modules.Chat.Features.v1.Channels.ListMyChannels;
+using FSH.Modules.Chat.Features.v1.Channels.ListArchivedChannels;
 using FSH.Modules.Chat.Features.v1.Channels.MarkChannelRead;
 using FSH.Modules.Chat.Features.v1.Channels.RemoveChannelMember;
 using FSH.Modules.Chat.Features.v1.Channels.RestoreChannel;
@@ -91,6 +92,7 @@ public sealed class ChatModule : IModule
         // Channel reads — literal routes first
         group.MapListMyChannelsEndpoint();           // GET /channels
         group.MapDiscoverChannelsEndpoint();         // GET /channels/discover
+        group.MapListArchivedChannelsEndpoint();     // GET /channels/trash
 
         // Channel lifecycle
         group.MapCreateChannelEndpoint();

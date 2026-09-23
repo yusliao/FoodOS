@@ -1,8 +1,11 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using Finbuckle.MultiTenant;
 using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Files.Contracts.v1.DTOs;
 using FSH.Modules.Identity.Domain;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
@@ -71,7 +74,7 @@ public sealed class ChatChannelFileAccessTests
         using var adminClient = await _auth.CreateRootAdminClientAsync();
         var channelId = await CreateChannelAsync(adminClient, Unique("Forbidden"));
 
-        var (bobEmail, bobPassword) = await RegisterAndConfirmAsync(adminClient, "bob");
+        var (_, bobEmail, bobPassword) = await RegisterAndConfirmAsync(adminClient, "bob");
         using var bobClient = await _auth.CreateAuthenticatedClientAsync(bobEmail, bobPassword);
 
         using var response = await bobClient.PostAsJsonAsync($"{FilesBasePath}/upload-url", new
@@ -108,6 +111,29 @@ public sealed class ChatChannelFileAccessTests
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
+    [Fact]
+    public async Task DownloadUrl_For_ChatAttachment_Should_Follow_Current_Channel_Membership()
+    {
+        using var adminClient = await _auth.CreateRootAdminClientAsync();
+        var channelId = await CreateChannelAsync(adminClient, Unique("ReadPolicy"));
+        var fileAssetId = await UploadAttachmentAsync(adminClient, channelId);
+        var (bobId, bobEmail, bobPassword) = await RegisterAndConfirmAsync(adminClient, "reader");
+        using var bobClient = await _auth.CreateAuthenticatedClientAsync(bobEmail, bobPassword);
+
+        using var beforeJoin = await bobClient.GetAsync($"{FilesBasePath}/{fileAssetId}/url");
+        beforeJoin.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        using var add = await adminClient.PostAsJsonAsync($"{ChatBasePath}/channels/{channelId}/members", new { userIds = new[] { bobId } });
+        add.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var joined = await bobClient.GetAsync($"{FilesBasePath}/{fileAssetId}/url");
+        joined.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var remove = await adminClient.DeleteAsync($"{ChatBasePath}/channels/{channelId}/members/{bobId}");
+        remove.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var afterRemoval = await bobClient.GetAsync($"{FilesBasePath}/{fileAssetId}/url");
+        afterRemoval.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────
 
     private static string Unique(string prefix) => $"chat-{prefix}-{Guid.NewGuid().ToString("N")[..8]}";
@@ -123,7 +149,33 @@ public sealed class ChatChannelFileAccessTests
         return await response.DeserializeAsync<Guid>();
     }
 
-    private async Task<(string email, string password)> RegisterAndConfirmAsync(HttpClient adminClient, string prefix)
+    private static async Task<Guid> UploadAttachmentAsync(HttpClient client, Guid channelId)
+    {
+        var bytes = new byte[32];
+        RandomNumberGenerator.Fill(bytes);
+        using var request = await client.PostAsJsonAsync($"{FilesBasePath}/upload-url", new
+        {
+            ownerType = "ChatChannel",
+            ownerId = channelId,
+            fileName = "note.txt",
+            contentType = "text/plain",
+            sizeBytes = bytes.Length,
+            visibility = 1,
+            category = "Document",
+        });
+        request.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var presigned = await request.DeserializeAsync<PresignedUploadResponse>();
+        using var raw = new HttpClient();
+        using var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+        using var put = await raw.PutAsync(presigned.UploadUrl, content);
+        put.EnsureSuccessStatusCode();
+        using var finalize = await client.PostAsync($"{FilesBasePath}/{presigned.FileAssetId}/finalize", null);
+        finalize.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return presigned.FileAssetId;
+    }
+
+    private async Task<(string id, string email, string password)> RegisterAndConfirmAsync(HttpClient adminClient, string prefix)
     {
         var unique = Guid.NewGuid().ToString("N")[..8];
         var email = $"{prefix}-{unique}@example.com";
@@ -156,6 +208,6 @@ public sealed class ChatChannelFileAccessTests
             (await userManager.UpdateAsync(user)).Succeeded.ShouldBeTrue();
         }
 
-        return (email, password);
+        return (registered.UserId, email, password);
     }
 }
