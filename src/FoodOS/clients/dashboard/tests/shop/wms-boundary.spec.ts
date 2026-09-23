@@ -22,9 +22,10 @@ for (const granted of [true, false]) test(`legacy execution is absent from navig
   }
 });
 test("existing order remains readable without amendment or cancellation", async ({ page }) => {
-  await page.route("**/api/v1/ordering/orders/order-1", route => route.fulfill({ json: { id: "order-1", number: "SO-WMS", status: "Reserved", cutoffAt: "2099-01-01T00:00:00Z", businessDate: "2026-09-17", lines: [] } }));
+  await page.route("**/api/v1/shop/stores**", route => route.fulfill({ json: [{ id: "store-1", name: "Kitchen", code: "S1", address: "1 Main St" }] }));
+  await page.route("**/api/v1/shop/orders/order-1", route => route.fulfill({ json: { id: "order-1", number: "SO-WMS", storeId: "store-1", status: "Reserved", cutoffAt: "2099-01-01T00:00:00Z", businessDate: "2026-09-17", revision: 1, lines: [] } }));
   const writes: string[] = [];
-  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/ordering/orders")) writes.push(request.url()); });
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/shop/orders")) writes.push(request.url()); });
   await page.goto("/shop/orders/order-1");
   await expect(page.getByRole("heading", { name: "SO-WMS" })).toBeVisible();
   await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
@@ -34,6 +35,9 @@ test("existing order remains readable without amendment or cancellation", async 
 test.beforeEach(async ({ page }) => {
   await seedAuthedSession(page, TEST_USER);
   await installShellMocks(page);
+  await page.route("**/api/v1/identity/permissions", route => route.fulfill({
+    json: ["Permissions.Ordering.Shop.View", "Permissions.Ordering.Shop.Order"],
+  }));
   await page.route("**/api/v1/fulfillment/capabilities", route => route.fulfill({ json: status }));
 });
 
@@ -60,15 +64,14 @@ test("Chinese mobile WMS error retries without enabling local work", async ({ pa
 });
 
 test("cart can be viewed but cannot place an order when WMS status is unknown", async ({ page }) => {
-  await page.route("**/api/v1/ordering/stores**", route => route.fulfill({ json: [{ id: "store-1", name: "Kitchen", code: "S1", customerOrgId: "customer-1" }] }));
-  await page.route("**/api/v1/ordering/carts/store-1", route => route.fulfill({ json: { storeId: "store-1", lines: [{ productId: "product-1", quantity: 2 }] } }));
-  await page.route("**/api/v1/catalog/products/product-1", route => route.fulfill({ json: { id: "product-1", name: "Apple", sku: "P1" } }));
-  await page.route("**/api/v1/catalog/quotes**", route => route.fulfill({ json: { productId: "product-1", unitPrice: 2, currency: "USD", source: "Base" } }));
+  await page.route("**/api/v1/shop/stores**", route => route.fulfill({ json: [{ id: "store-1", name: "Kitchen", code: "S1", address: "1 Main St" }] }));
+  await page.route("**/api/v1/shop/stores/store-1/cart", route => route.fulfill({ json: { storeId: "store-1", lines: [{ productId: "product-1", quantity: 2 }] } }));
+  await page.route("**/api/v1/shop/products/product-1**", route => route.fulfill({ json: { id: "product-1", name: "Apple", sku: "P1", unitPrice: 2, currency: "USD", priceSource: "Catalog", baseUom: "ea", isAvailable: true } }));
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
   await page.route("**/api/v1/fulfillment/capabilities", async route => { await pending; await route.fulfill({ status: 403, json: {} }); });
   const writes: string[] = [];
-  page.on("request", request => { if (request.method() === "POST" && request.url().includes("/ordering/orders")) writes.push(request.url()); });
+  page.on("request", request => { if (request.method() === "POST" && request.url().includes("/shop/orders")) writes.push(request.url()); });
   await page.goto("/shop/cart");
   await expect(page.getByText("Checking WMS readiness…")).toBeVisible();
   await expect(page.getByRole("button", { name: "Place order", exact: true })).toBeDisabled();

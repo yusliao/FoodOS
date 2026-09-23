@@ -1,111 +1,32 @@
-import { useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import {
-  getProductById,
-  quoteProductPrice,
-  type PriceQuoteDto,
-  type ProductDto,
-} from "@/api/catalog";
-import { getAvailableQty, type AvailableQtyDto } from "@/api/inventory";
+import { useQueries } from "@tanstack/react-query";
+import { getShopProductById, type ShopProductDto } from "@/api/shop";
 
-export function usePriceQuotes(
-  customerOrgId: string | undefined,
-  requests: ReadonlyArray<{ productId: string; quantity: number }>,
+export function useShopProducts(
+  storeId: string | undefined,
+  items: ReadonlyArray<{ productId: string; quantity: number }>,
 ) {
-  const query = useQuery({
-    queryKey: ["catalog", "quotes", customerOrgId, requests],
-    queryFn: async () => {
-      const quotes = await Promise.all(
-        requests.map((request) =>
-          quoteProductPrice({
-            customerOrgId: customerOrgId!,
-            productId: request.productId,
-            quantity: request.quantity,
-          }),
-        ),
-      );
-      return quotes;
-    },
-    enabled: !!customerOrgId && requests.length > 0,
-    staleTime: 15_000,
-  });
-
-  const byProductId = useMemo(() => {
-    const map = new Map<string, PriceQuoteDto>();
-    for (const quote of query.data ?? []) {
-      map.set(quote.productId, quote);
-    }
-    return map;
-  }, [query.data]);
-
-  return { byProductId, isLoading: query.isLoading, isError: query.isError };
-}
-
-export function useAvailableQty(
-  warehouseId: string | undefined,
-  productId: string | undefined,
-  zone: string | undefined,
-) {
-  return useQuery({
-    queryKey: ["inventory", "available", warehouseId, productId, zone],
-    queryFn: () =>
-      getAvailableQty({
-        warehouseId: warehouseId!,
-        productId: productId!,
-        zone: zone ?? null,
-      }),
-    enabled: !!warehouseId && !!productId,
-    staleTime: 10_000,
-  });
-}
-
-export function useAvailableQtys(
-  warehouseId: string | undefined,
-  items: ReadonlyArray<{ productId: string; zone?: string }>,
-) {
-  const query = useQuery({
-    queryKey: ["inventory", "available-batch", warehouseId, items],
-    queryFn: async () => {
-      const rows = await Promise.all(
-        items.map((item) =>
-          getAvailableQty({
-            warehouseId: warehouseId!,
-            productId: item.productId,
-            zone: item.zone ?? null,
-          }),
-        ),
-      );
-      return rows;
-    },
-    enabled: !!warehouseId && items.length > 0,
-    staleTime: 10_000,
-  });
-
-  const byProductId = useMemo(() => {
-    const map = new Map<string, AvailableQtyDto>();
-    for (const row of query.data ?? []) {
-      map.set(row.productId, row);
-    }
-    return map;
-  }, [query.data]);
-
-  return { byProductId, isLoading: query.isLoading };
-}
-
-export function useProductsById(ids: readonly string[]) {
-  const unique = [...new Set(ids.filter(Boolean))];
+  const unique = [
+    ...new Map(
+      items.filter((item) => item.productId).map((item) => [item.productId, item]),
+    ).values(),
+  ];
   const queries = useQueries({
-    queries: unique.map((id) => ({
-      queryKey: ["catalog", "products", id],
-      queryFn: () => getProductById(id),
+    queries: unique.map((item) => ({
+      queryKey: ["shop", "products", item.productId, storeId, item.quantity],
+      queryFn: () => getShopProductById(item.productId, storeId!, item.quantity),
+      enabled: !!storeId,
       staleTime: 60_000,
     })),
   });
 
-  const byId = new Map<string, ProductDto>();
-  queries.forEach((q, i) => {
-    if (q.data) byId.set(unique[i]!, q.data);
+  const byId = new Map<string, ShopProductDto>();
+  queries.forEach((query, index) => {
+    if (query.data) byId.set(unique[index]!.productId, query.data);
   });
 
-  return { byId, isLoading: queries.some((q) => q.isLoading) };
+  return {
+    byId,
+    isLoading: queries.some((query) => query.isLoading),
+    isError: queries.some((query) => query.isError),
+  };
 }

@@ -26,4 +26,17 @@ public static class SearchShopProductsEndpoint
             .WithSummary("Search products available to the current restaurant at its applicable price")
             .RequirePermission(OrderingPermissions.Shop.View);
     }
+
+    internal static RouteHandlerBuilder MapGetShopProductByIdEndpoint(this IEndpointRouteBuilder endpoints)
+    {
+        return endpoints.MapGet("/products/{productId:guid}",
+                (Guid productId, Guid? storeId, decimal? quantity, IMediator mediator, CancellationToken ct) =>
+                    mediator.Send(new GetShopProductByIdQuery(
+                        productId,
+                        storeId,
+                        quantity ?? 1m), ct))
+            .WithName("GetShopProductById")
+            .WithSummary("Get a product at the current restaurant's applicable price")
+            .RequirePermission(OrderingPermissions.Shop.View);
+    }
 }

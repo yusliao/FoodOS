@@ -340,6 +340,7 @@
     "addedToCart": "已加入购物车",
     "addFailed": "无法更新购物车",
     "outOfStock": "缺货",
+    "availableToOrder": "可订购",
     "priceUnavailable": "暂无报价",
     "colProduct": "商品",
     "colSku": "SKU",
@@ -353,6 +354,9 @@
     "quantity": "数量",
     "zone": "温区",
     "uom": "单位",
+    "unit": "单位",
+    "yes": "是",
+    "no": "否",
     "order": "订货",
     "details": "详情",
     "viewCart": "查看购物车",
@@ -413,7 +417,11 @@
     "filing": "正在提交…",
     "claims": "索赔单",
     "noClaims": "暂无索赔",
-    "noClaimsBody": "收货完成后可在此提交索赔。"
+    "noClaimsBody": "收货完成后可在此提交索赔。",
+    "viewAccessTitle": "需要订货门户访问权限",
+    "viewAccessBody": "当前账号无权查看饭店门店、商品或订单。",
+    "orderAccessTitle": "需要下单权限",
+    "orderAccessBody": "当前账号可以浏览客户商品与订单，但不能修改购物车、订单或售后申请。"
   },
   "ops": {
     "warehouse": "仓库",
@@ -1000,6 +1008,30 @@
       "noPublicUrl": "服务器未返回已上传图片的 publicUrl。",
       "close": "关闭"
     }
+  },
+  "customerHome": {
+    "portal": "饭店订货",
+    "welcome": "欢迎，{name}",
+    "customer": "客户",
+    "description": "选择已授权门店，按协议价订货，并在同一处跟踪配送进度。",
+    "noAccessTitle": "暂未开通订货权限",
+    "noAccessBody": "当前账号没有获授权的门店订货权限，请联系饭店管理员核对岗位。",
+    "retryStores": "重试门店",
+    "retryOrders": "重试订单",
+    "noStoresTitle": "没有已授权门店",
+    "selectedStore": "当前门店",
+    "cartLines": "购物车行数",
+    "orders": "订单",
+    "readyToReview": "可前往核对",
+    "readOnly": "仅查看权限",
+    "currentStore": "当前门店范围",
+    "browseProducts": "浏览商品",
+    "reviewCart": "查看购物车",
+    "trackOrders": "跟踪订单",
+    "afterSales": "售后",
+    "recentOrders": "最近订单",
+    "recentOrdersBody": "当前门店最新的订单。",
+    "viewAll": "查看全部"
   },
   "overview": {
     "goodMorning": "早上好",

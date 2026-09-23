@@ -42,7 +42,10 @@ const ConfirmEmailPage = lazyNamed(
   () => import("@/pages/auth/confirm-email"),
   "ConfirmEmailPage",
 );
-const OverviewPage = lazyNamed(() => import("@/pages/overview"), "OverviewPage");
+const OverviewPage = lazyNamed(
+  () => import("@/pages/customer-overview"),
+  "CustomerOverviewPage",
+);
 const ActivityPage = lazyNamed(() => import("@/pages/activity"), "ActivityPage");
 const InvoicesPage = lazyNamed(() => import("@/pages/invoices"), "InvoicesPage");
 const InvoiceDetailPage = lazyNamed(

@@ -340,6 +340,7 @@
     "addedToCart": "Added to cart",
     "addFailed": "Could not update cart",
     "outOfStock": "Out of stock",
+    "availableToOrder": "Available to order",
     "priceUnavailable": "Price unavailable",
     "colProduct": "Product",
     "colSku": "SKU",
@@ -353,6 +354,9 @@
     "quantity": "Qty",
     "zone": "Zone",
     "uom": "UOM",
+    "unit": "Unit",
+    "yes": "Yes",
+    "no": "No",
     "order": "Order",
     "details": "Details",
     "viewCart": "View cart",
@@ -413,7 +417,11 @@
     "filing": "Filing…",
     "claims": "Claims",
     "noClaims": "No claims yet",
-    "noClaimsBody": "Received orders can be claimed here after delivery."
+    "noClaimsBody": "Received orders can be claimed here after delivery.",
+    "viewAccessTitle": "Shop access required",
+    "viewAccessBody": "This account is not authorized to view restaurant stores, products, or orders.",
+    "orderAccessTitle": "Ordering access required",
+    "orderAccessBody": "Your account can browse the customer catalog and orders but cannot change carts, orders, or after-sales claims."
   },
   "ops": {
     "warehouse": "Warehouse",
@@ -1000,6 +1008,30 @@
       "noPublicUrl": "Server returned no publicUrl for the uploaded image.",
       "close": "Close"
     }
+  },
+  "customerHome": {
+    "portal": "Restaurant ordering",
+    "welcome": "Welcome, {name}",
+    "customer": "customer",
+    "description": "Choose an authorized store, order at your contract prices, and track delivery progress from one place.",
+    "noAccessTitle": "Ordering access isn't available",
+    "noAccessBody": "Your account has no authorized store ordering access. Ask your restaurant administrator to review your role.",
+    "retryStores": "Retry stores",
+    "retryOrders": "Retry orders",
+    "noStoresTitle": "No authorized stores",
+    "selectedStore": "Selected store",
+    "cartLines": "Cart lines",
+    "orders": "Orders",
+    "readyToReview": "Ready to review",
+    "readOnly": "View-only access",
+    "currentStore": "For this store",
+    "browseProducts": "Browse products",
+    "reviewCart": "Review cart",
+    "trackOrders": "Track orders",
+    "afterSales": "After-sales",
+    "recentOrders": "Recent orders",
+    "recentOrdersBody": "The latest orders for the selected store.",
+    "viewAll": "View all"
   },
   "overview": {
     "goodMorning": "Good morning",

@@ -4,12 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LifeBuoy } from "lucide-react";
 import { toast } from "sonner";
 import {
-  createAfterSalesTicket,
-  searchAfterSalesTickets,
-  searchOrders,
-  type AfterSalesTicketType,
-  type SalesOrderDto,
-} from "@/api/ordering";
+  createShopAfterSalesTicket,
+  searchShopAfterSalesTickets,
+  searchShopOrders,
+  type ShopAfterSalesTicketType,
+  type ShopOrderDto,
+} from "@/api/shop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,34 +23,43 @@ import {
 import { describe } from "@/lib/list-helpers";
 import { useT } from "@/i18n/locale-provider";
 import { useShopStore } from "./store-context";
-import { useProductsById } from "./use-shop-data";
+import { ShopOrderAccess } from "./order-access";
+import { useShopProducts } from "./use-shop-data";
 import { orderStatusTone } from "./shop-helpers";
 
-const TYPES: AfterSalesTicketType[] = ["Shortage", "Damage", "Return"];
+const TYPES: ShopAfterSalesTicketType[] = ["Shortage", "Damage", "Return"];
 
 function claimable(status: string): boolean {
   return status === "Received" || status === "Reconciled";
 }
 
 export function ShopAfterSalesPage() {
+  return (
+    <ShopOrderAccess>
+      <ShopAfterSalesBody />
+    </ShopOrderAccess>
+  );
+}
+
+function ShopAfterSalesBody() {
   const t = useT();
   const { store } = useShopStore();
   const queryClient = useQueryClient();
   const [orderId, setOrderId] = useState<string | null>(null);
   const [lineId, setLineId] = useState<string | null>(null);
-  const [type, setType] = useState<AfterSalesTicketType>("Shortage");
+  const [type, setType] = useState<ShopAfterSalesTicketType>("Shortage");
   const [quantity, setQuantity] = useState("1");
   const [reason, setReason] = useState("");
 
   const ordersQuery = useQuery({
-    queryKey: ["ordering", "orders", store?.id, "after-sales"],
-    queryFn: () => searchOrders({ storeId: store!.id, pageNumber: 1, pageSize: 50 }),
+    queryKey: ["shop", "orders", store?.id, "after-sales"],
+    queryFn: () => searchShopOrders({ storeId: store!.id, pageNumber: 1, pageSize: 50 }),
     enabled: !!store,
   });
 
   const ticketsQuery = useQuery({
-    queryKey: ["ordering", "after-sales", store?.id],
-    queryFn: () => searchAfterSalesTickets(store!.id),
+    queryKey: ["shop", "after-sales", store?.id],
+    queryFn: () => searchShopAfterSalesTickets(store!.id),
     enabled: !!store,
   });
 
@@ -58,13 +67,16 @@ export function ShopAfterSalesPage() {
     () => (ordersQuery.data?.items ?? []).filter((o) => claimable(o.status)),
     [ordersQuery.data],
   );
-  const selected: SalesOrderDto | undefined = orders.find((o) => o.id === orderId);
-  const products = useProductsById(selected?.lines.map((l) => l.productId) ?? []);
+  const selected: ShopOrderDto | undefined = orders.find((o) => o.id === orderId);
+  const products = useShopProducts(
+    store?.id,
+    selected?.lines.map((line) => ({ productId: line.productId, quantity: line.orderedQty })) ?? [],
+  );
   const selectedLine = selected?.lines.find((l) => l.id === lineId);
 
   const mutation = useMutation({
     mutationFn: () =>
-      createAfterSalesTicket(
+      createShopAfterSalesTicket(
         {
           orderId: orderId!,
           orderLineId: lineId!,
@@ -77,8 +89,8 @@ export function ShopAfterSalesPage() {
     onSuccess: async () => {
       toast.success(t("shop.afterSalesFiled", "Claim filed"));
       setReason("");
-      await queryClient.invalidateQueries({ queryKey: ["ordering", "after-sales", store?.id] });
-      await queryClient.invalidateQueries({ queryKey: ["ordering", "orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["shop", "after-sales", store?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["shop", "orders"] });
     },
     onError: (err) => toast.error(t("shop.afterSalesFailed", "Could not file claim"), { description: describe(err) }),
   });
@@ -152,7 +164,7 @@ export function ShopAfterSalesPage() {
               <Combobox
                 label={t("shop.claimType", "Type")}
                 value={type}
-                onChange={(v) => setType((v as AfterSalesTicketType) ?? "Shortage")}
+                onChange={(v) => setType((v as ShopAfterSalesTicketType) ?? "Shortage")}
                 options={TYPES.map((value) => ({ value, label: value }))}
               />
             </Field>

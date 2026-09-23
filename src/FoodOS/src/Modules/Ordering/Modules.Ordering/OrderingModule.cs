@@ -106,6 +106,7 @@ public sealed class OrderingModule : IModule
             .WithApiVersionSet(versionSet)
             .RequireAuthorization();
         shopGroup.MapSearchShopProductsEndpoint();
+        shopGroup.MapGetShopProductByIdEndpoint();
         shopGroup.MapGetMyStoresEndpoint();
         shopGroup.MapGetMyStoreByIdEndpoint();
         shopGroup.MapShopCartOrdersEndpoints();

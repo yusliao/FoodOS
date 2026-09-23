@@ -4,11 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  amendOrder,
-  cancelOrder,
-  getOrderById,
-  type AmendOrderLineInput,
-} from "@/api/ordering";
+  amendShopOrder,
+  cancelShopOrder,
+  getShopOrderById,
+  SHOP_PERMISSIONS,
+  type AmendShopOrderLineInput,
+} from "@/api/shop";
+import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,28 +39,38 @@ import { describe, formatDate, formatDateTimeMono, formatMoney } from "@/lib/lis
 import { useFulfillmentCapabilities } from "@/api/fulfillment";
 import { WmsStatusNotice } from "@/components/wms-status";
 import { useT } from "@/i18n/locale-provider";
-import { formatCountdown, isAmendable, orderStatusTone, zoneLabel } from "./shop-helpers";
-import { useProductsById } from "./use-shop-data";
+import { formatCountdown, isAmendable, orderStatusTone } from "./shop-helpers";
+import { useShopStore } from "./store-context";
+import { useShopProducts } from "./use-shop-data";
 
-const DESKTOP_GRID = "grid-cols-[1fr_90px_90px_110px_110px]";
+const DESKTOP_GRID = "grid-cols-[1fr_90px_110px_110px]";
 
 export function ShopOrderDetailPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canOrder = user?.permissions.includes(SHOP_PERMISSIONS.order) ?? false;
   const capabilities = useFulfillmentCapabilities();
-  const canChange = capabilities.isSuccess && capabilities.data.readiness === "ready" && capabilities.data.acceptsOrderChanges === true;
+  const fulfillmentCanChange = capabilities.isSuccess
+    && capabilities.data.readiness === "ready"
+    && capabilities.data.acceptsOrderChanges === true;
+  const canChange = canOrder && fulfillmentCanChange;
   const { orderId = "" } = useParams<{ orderId: string }>();
+  const { store } = useShopStore();
   const queryClient = useQueryClient();
   const [qtyDraft, setQtyDraft] = useState<Record<string, number>>({});
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const query = useQuery({
-    queryKey: ["ordering", "orders", orderId],
-    queryFn: () => getOrderById(orderId),
+    queryKey: ["shop", "orders", orderId],
+    queryFn: () => getShopOrderById(orderId),
     enabled: !!orderId,
   });
 
   const order = query.data;
-  const products = useProductsById(order?.lines.map((l) => l.productId) ?? []);
+  const products = useShopProducts(
+    store?.id,
+    order?.lines.map((line) => ({ productId: line.productId, quantity: line.orderedQty })) ?? [],
+  );
 
   useEffect(() => {
     if (!order) return;
@@ -70,12 +82,12 @@ export function ShopOrderDetailPage() {
   }, [order]);
 
   const amendMutation = useMutation({
-    mutationFn: (input: { orderId: string; lines: AmendOrderLineInput[]; idempotencyKey: string }) =>
-      amendOrder(input.orderId, input.lines, input.idempotencyKey),
+    mutationFn: (input: { orderId: string; lines: AmendShopOrderLineInput[]; idempotencyKey: string }) =>
+      amendShopOrder(input.orderId, input.lines, input.idempotencyKey),
     onSuccess: (_id, input) => {
       toast.success(t("shop.amended", "Order updated"));
-      queryClient.invalidateQueries({ queryKey: ["ordering", "orders", input.orderId] });
-      queryClient.invalidateQueries({ queryKey: ["ordering", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "orders", input.orderId] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "orders"] });
     },
     onError: (err) =>
       toast.error(t("shop.amendFailed", "Could not amend order"), { description: describe(err) }),
@@ -83,11 +95,11 @@ export function ShopOrderDetailPage() {
 
   const cancelMutation = useMutation({
     mutationFn: (input: { orderId: string; idempotencyKey: string }) =>
-      cancelOrder(input.orderId, input.idempotencyKey),
+      cancelShopOrder(input.orderId, input.idempotencyKey),
     onSuccess: (_id, input) => {
       toast.success(t("shop.cancelled", "Order cancelled"));
-      queryClient.invalidateQueries({ queryKey: ["ordering", "orders", input.orderId] });
-      queryClient.invalidateQueries({ queryKey: ["ordering", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "orders", input.orderId] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "orders"] });
       setConfirmCancel(false);
     },
     onError: (err) =>
@@ -117,7 +129,7 @@ export function ShopOrderDetailPage() {
 
   return (
     <div className="space-y-5">
-      {!canChange && <WmsStatusNotice />}
+      {canOrder && !fulfillmentCanChange ? <WmsStatusNotice /> : null}
       <EntityDetailBack to="/shop/orders" label={t("shop.backToOrders", "Back to orders")} />
 
       {query.isError ? <ErrorBand message={describe(query.error)} /> : null}
@@ -178,7 +190,9 @@ export function ShopOrderDetailPage() {
           <p className="text-[13px] text-[var(--color-muted-foreground)]">
             {canEdit
               ? t("shop.beforeCutoff", "You can amend or cancel until cutoff.")
-              : t("shop.afterCutoff", "This order is locked. Changes are no longer allowed.")}
+              : !canOrder
+                ? t("shop.orderAccessBody", "Your account can browse orders but cannot change them.")
+                : t("shop.afterCutoff", "This order is locked. Changes are no longer allowed.")}
           </p>
 
           <EntityDetailSection title={t("shop.lines", "Lines")} icon={ClipboardList} padded={false}>
@@ -186,7 +200,6 @@ export function ShopOrderDetailPage() {
               <EntityListHeader className={DESKTOP_GRID}>
                 <span>{t("shop.colProduct", "Product")}</span>
                 <span>{t("shop.quantity", "Qty")}</span>
-                <span>{t("shop.zone", "Zone")}</span>
                 <span>{t("shop.colPrice", "Your price")}</span>
                 <span>{t("shop.lineTotal", "Line total")}</span>
               </EntityListHeader>
@@ -230,7 +243,6 @@ export function ShopOrderDetailPage() {
                     ) : (
                       <span className="tabular-nums">{line.orderedQty}</span>
                     )}
-                    <span className="text-[12px]">{zoneLabel(line.zone)}</span>
                     <span data-testid="quoted-price" className="font-display text-[14px] font-semibold tabular-nums">
                       {formatMoney(line.unitPrice, line.currency)}
                     </span>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ClipboardList } from "lucide-react";
-import { searchOrders } from "@/api/ordering";
+import { searchShopOrders } from "@/api/shop";
 import { Button } from "@/components/ui/button";
 import {
   EntityEmpty,
@@ -29,8 +29,8 @@ export function ShopOrdersPage() {
   const [page, setPage] = useState(1);
 
   const query = useQuery({
-    queryKey: ["ordering", "orders", store?.id, page],
-    queryFn: () => searchOrders({ storeId: store!.id, pageNumber: page, pageSize: PAGE_SIZE }),
+    queryKey: ["shop", "orders", store?.id, page],
+    queryFn: () => searchShopOrders({ storeId: store!.id, pageNumber: page, pageSize: PAGE_SIZE }),
     enabled: !!store,
     placeholderData: keepPreviousData,
   });

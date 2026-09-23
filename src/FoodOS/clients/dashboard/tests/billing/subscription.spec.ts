@@ -206,7 +206,7 @@ test.describe("expiry banner", () => {
     await mockJsonResponse(page, "**/api/v1/tenants/me/status**", HEALTHY_STATUS);
     await page.goto("/");
     // Wait for the page to settle, then assert the bar never showed.
-    await expect(page.getByRole("heading", { name: /good (morning|afternoon|evening)/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /ordering access isn't available/i })).toBeVisible();
     await expect(page.getByText(/your subscription expire/i)).toHaveCount(0);
   });
 

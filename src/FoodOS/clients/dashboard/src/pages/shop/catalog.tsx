@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Plus, ShoppingCart, Snowflake, Thermometer } from "lucide-react";
+import { Package, Plus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
-import { searchCategories, searchProducts, type ProductDto } from "@/api/catalog";
-import { getCart, updateCart, type CartLineInput } from "@/api/ordering";
+import {
+  getShopCart,
+  searchShopProducts,
+  updateShopCart,
+  SHOP_PERMISSIONS,
+  type ShopCartLineInput,
+  type ShopProductDto,
+} from "@/api/shop";
+import { useAuth } from "@/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Combobox,
   EntityEmpty,
   EntityListCard,
   EntityListHeader,
@@ -17,27 +23,26 @@ import {
   EntityPageHeader,
   EntityPager,
   EntitySearch,
-  EntityStatusBadge,
   ErrorBand,
 } from "@/components/list";
 import { cn } from "@/lib/cn";
 import { describe, formatMoney } from "@/lib/list-helpers";
 import { useT } from "@/i18n/locale-provider";
 import { useShopStore } from "./store-context";
-import { quoteSourceLabel, zoneLabel } from "./shop-helpers";
-import { useAvailableQtys, usePriceQuotes } from "./use-shop-data";
+import { quoteSourceLabel } from "./shop-helpers";
 
 const PAGE_SIZE = 20;
 const DESKTOP_GRID =
-  "grid-cols-[1fr_110px_120px_100px_120px] lg:grid-cols-[1fr_130px_140px_110px_140px]";
+  "grid-cols-[1fr_110px_130px_130px_110px] lg:grid-cols-[1fr_140px_160px_150px_130px]";
 
 export function ShopCatalogPage() {
   const t = useT();
+  const { user } = useAuth();
+  const canOrder = user?.permissions.includes(SHOP_PERMISSIONS.order) ?? false;
   const { store } = useShopStore();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -47,70 +52,50 @@ export function ShopCatalogPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [categoryId]);
-
   const productsQuery = useQuery({
     queryKey: [
-      "catalog",
+      "shop",
       "products",
       "shop",
-      { search: debouncedSearch, categoryId, pageNumber: page, pageSize: PAGE_SIZE },
+      store?.id,
+      { search: debouncedSearch, pageNumber: page, pageSize: PAGE_SIZE },
     ],
     queryFn: () =>
-      searchProducts({
+      searchShopProducts({
+        storeId: store!.id,
         search: debouncedSearch || undefined,
-        categoryId,
-        isActive: true,
         pageNumber: page,
         pageSize: PAGE_SIZE,
-        sortBy: "name",
-        sortDir: "asc",
       }),
+    enabled: !!store,
     placeholderData: keepPreviousData,
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: ["catalog", "categories", "shop-filter"],
-    queryFn: () => searchCategories({ pageSize: 200 }),
-    staleTime: 60_000,
-  });
-
   const items = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data]);
-  const quoteRequests = useMemo(
-    () => items.map((p) => ({ productId: p.id, quantity: 1 })),
-    [items],
-  );
-  const quotes = usePriceQuotes(store?.customerOrgId, quoteRequests);
-  const availability = useAvailableQtys(
-    store?.defaultWarehouseId,
-    items.map((p) => ({ productId: p.id, zone: p.temperatureZone })),
-  );
 
   const cartQuery = useQuery({
-    queryKey: ["ordering", "cart", store?.id],
-    queryFn: () => getCart(store!.id),
-    enabled: !!store,
+    queryKey: ["shop", "cart", store?.id],
+    queryFn: () => getShopCart(store!.id),
+    enabled: canOrder && !!store,
   });
 
   const queryClient = useQueryClient();
   const addMutation = useMutation({
-    mutationFn: (input: { storeId: string; lines: CartLineInput[] }) =>
-      updateCart(input.storeId, input.lines),
+    mutationFn: (input: { storeId: string; lines: ShopCartLineInput[] }) =>
+      updateShopCart(input.storeId, input.lines),
     onSuccess: (_id, input) => {
       toast.success(t("shop.addedToCart", "Added to cart"));
-      queryClient.invalidateQueries({ queryKey: ["ordering", "cart", input.storeId] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "cart", input.storeId] });
     },
     onError: (err) =>
       toast.error(t("shop.addFailed", "Could not update cart"), { description: describe(err) }),
   });
 
-  const onAdd = (product: ProductDto) => {
+  const onAdd = (product: ShopProductDto) => {
     if (!store) return;
     const current = cartQuery.data?.lines ?? [];
     const existing = current.find((l) => l.productId === product.id);
-    const lines: CartLineInput[] = existing
+    const lines: ShopCartLineInput[] = existing
       ? current.map((l) =>
           l.productId === product.id
             ? { productId: l.productId, quantity: l.quantity + 1 }
@@ -123,7 +108,7 @@ export function ShopCatalogPage() {
     addMutation.mutate({ storeId: store.id, lines });
   };
 
-  const searchActive = debouncedSearch.length > 0 || categoryId !== null;
+  const searchActive = debouncedSearch.length > 0;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -137,31 +122,23 @@ export function ShopCatalogPage() {
           "Prices are quoted for the selected store. Catalog list prices are never shown here.",
         )}
       >
-        <Button asChild variant="outline" className="h-9 flex-1 rounded-lg px-4 text-[13px] sm:flex-none">
-          <Link to="/shop/cart">
-            <ShoppingCart className="size-4" />
-            {t("shop.cartTitle", "Cart")}
-            {cartQuery.data && cartQuery.data.lines.length > 0 ? (
-              <span className="font-mono text-[11px]">({cartQuery.data.lines.length})</span>
-            ) : null}
-          </Link>
-        </Button>
+        {canOrder ? (
+          <Button asChild variant="outline" className="h-9 flex-1 rounded-lg px-4 text-[13px] sm:flex-none">
+            <Link to="/shop/cart">
+              <ShoppingCart className="size-4" />
+              {t("shop.cartTitle", "Cart")}
+              {cartQuery.data && cartQuery.data.lines.length > 0 ? (
+                <span className="font-mono text-[11px]">({cartQuery.data.lines.length})</span>
+              ) : null}
+            </Link>
+          </Button>
+        ) : null}
       </EntityPageHeader>
 
       <EntitySearch
         value={search}
         onChange={setSearch}
         placeholder={t("shop.searchPlaceholder", "Search products…")}
-      />
-
-      <Combobox
-        label={t("shop.category", "Category")}
-        variant="filter"
-        searchable
-        clearable
-        value={categoryId}
-        onChange={setCategoryId}
-        options={(categoriesQuery.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }))}
       />
 
       {productsQuery.isError ? <ErrorBand message={describe(productsQuery.error)} /> : null}
@@ -187,7 +164,6 @@ export function ShopCatalogPage() {
                 variant="outline"
                 onClick={() => {
                   setSearch("");
-                  setCategoryId(null);
                 }}
               >
                 {t("shop.clearFilters", "Clear filters")}
@@ -203,9 +179,7 @@ export function ShopCatalogPage() {
 
           <div className="space-y-2 md:hidden">
             {items.map((product) => {
-              const quote = quotes.byProductId.get(product.id);
-              const available = availability.byProductId.get(product.id)?.available;
-              const out = available !== undefined && available <= 0;
+              const out = !product.isAvailable;
               return (
                 <EntityMobileCard
                   key={product.id}
@@ -220,15 +194,14 @@ export function ShopCatalogPage() {
                         {product.sku}
                       </code>
                     </div>
-                    <QuotedPrice quoteLoading={!quote && quotes.isLoading} quote={quote} />
+                    <QuotedPrice product={product} />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <ZoneChip zone={product.temperatureZone} />
-                    <AvailabilityChip available={available} loading={availability.isLoading} out={out} />
+                    <AvailabilityChip available={product.isAvailable} />
                     <Button
                       size="sm"
                       className="ml-auto h-8"
-                      disabled={!store || out || addMutation.isPending}
+                      disabled={!canOrder || !store || out || addMutation.isPending}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -253,9 +226,7 @@ export function ShopCatalogPage() {
               <span />
             </EntityListHeader>
             {items.map((product, i) => {
-              const quote = quotes.byProductId.get(product.id);
-              const available = availability.byProductId.get(product.id)?.available;
-              const out = available !== undefined && available <= 0;
+              const out = !product.isAvailable;
               return (
                 <EntityListRow
                   key={product.id}
@@ -267,20 +238,20 @@ export function ShopCatalogPage() {
                     <p className="truncate text-[14px] font-medium text-[var(--color-foreground)] group-hover:text-[var(--color-primary)]">
                       {product.name}
                     </p>
-                    <div className="mt-0.5">
-                      <ZoneChip zone={product.temperatureZone} />
+                    <div className="mt-0.5 text-[11px] text-[var(--color-muted-foreground)]">
+                      {product.baseUom}
                     </div>
                   </Link>
                   <code className="truncate font-mono text-[12px] text-[var(--color-muted-foreground)]">
                     {product.sku}
                   </code>
-                  <QuotedPrice quoteLoading={!quote && quotes.isLoading} quote={quote} />
-                  <AvailabilityChip available={available} loading={availability.isLoading} out={out} />
+                  <QuotedPrice product={product} />
+                  <AvailabilityChip available={product.isAvailable} />
                   <div className="flex justify-end">
                     <Button
                       size="sm"
                       className="h-8"
-                      disabled={!store || out || addMutation.isPending}
+                      disabled={!canOrder || !store || out || addMutation.isPending}
                       onClick={() => onAdd(product)}
                     >
                       <Plus className="size-3.5" />
@@ -306,70 +277,34 @@ export function ShopCatalogPage() {
   );
 }
 
-function QuotedPrice({
-  quote,
-  quoteLoading,
-}: {
-  quote: { unitPrice: number; currency: string; source: string } | undefined;
-  quoteLoading: boolean;
-}) {
-  const t = useT();
-  if (quoteLoading) {
-    return <Skeleton className="h-5 w-16" />;
-  }
-  if (!quote) {
-    return (
-      <span className="text-[12px] text-[var(--color-muted-foreground)]">
-        {t("shop.priceUnavailable", "Price unavailable")}
-      </span>
-    );
-  }
+function QuotedPrice({ product }: { product: ShopProductDto }) {
   return (
     <div>
       <div
         data-testid="quoted-price"
         className="font-display text-[14px] font-semibold tabular-nums text-[var(--color-foreground)]"
       >
-        {formatMoney(quote.unitPrice, quote.currency)}
+        {formatMoney(product.unitPrice, product.currency)}
       </div>
       <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-        {quoteSourceLabel(quote.source)}
+        {quoteSourceLabel(product.priceSource)}
       </span>
     </div>
   );
 }
 
-function ZoneChip({ zone }: { zone?: string }) {
-  const Icon = (zone ?? "").toLowerCase() === "frozen" ? Snowflake : Thermometer;
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-secondary-foreground)]">
-      <Icon className="size-3" aria-hidden />
-      {zoneLabel(zone)}
-    </span>
-  );
-}
-
-function AvailabilityChip({
-  available,
-  loading,
-  out,
-}: {
-  available: number | undefined;
-  loading: boolean;
-  out: boolean;
-}) {
+function AvailabilityChip({ available }: { available: boolean }) {
   const t = useT();
-  if (loading && available === undefined) return <Skeleton className="h-5 w-12" />;
-  if (available === undefined) {
-    return <span className="text-[12px] text-[var(--color-muted-foreground)]">—</span>;
-  }
-  if (out) {
-    return <EntityStatusBadge tone="danger">{t("shop.outOfStock", "Out of stock")}</EntityStatusBadge>;
+  if (!available) {
+    return (
+      <span className="text-[12px] text-[var(--color-destructive)]">
+        {t("shop.outOfStock", "Out of stock")}
+      </span>
+    );
   }
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-[12px] tabular-nums text-[var(--color-muted-foreground)]">
-      <Package className="size-3" />
-      {available}
+    <span className="text-[12px] text-[var(--color-muted-foreground)]">
+      {t("shop.availableToOrder", "Available to order")}
     </span>
   );
 }
@@ -395,7 +330,7 @@ function EntityListLoadingGrid() {
               <Skeleton className="h-4 w-48" />
               <Skeleton className="h-3 w-20" />
               <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-12" />
+              <Skeleton className="h-4 w-20" />
               <Skeleton className="ml-auto h-8 w-16" />
             </div>
           ))}

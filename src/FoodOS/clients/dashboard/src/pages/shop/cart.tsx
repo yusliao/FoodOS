@@ -2,7 +2,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { getCart, placeOrder, updateCart, type CartLineInput } from "@/api/ordering";
+import {
+  getShopCart,
+  placeShopOrder,
+  updateShopCart,
+  type ShopCartLineInput,
+} from "@/api/shop";
 import { useFulfillmentCapabilities } from "@/api/fulfillment";
 import { WmsStatusNotice } from "@/components/wms-status";
 import { Button } from "@/components/ui/button";
@@ -19,12 +24,21 @@ import {
 import { describe, formatMoney } from "@/lib/list-helpers";
 import { useT } from "@/i18n/locale-provider";
 import { useShopStore } from "./store-context";
+import { ShopOrderAccess } from "./order-access";
 import { quoteSourceLabel } from "./shop-helpers";
-import { usePriceQuotes, useProductsById } from "./use-shop-data";
+import { useShopProducts } from "./use-shop-data";
 
 const DESKTOP_GRID = "grid-cols-[1fr_90px_120px_110px_40px]";
 
 export function ShopCartPage() {
+  return (
+    <ShopOrderAccess>
+      <ShopCartBody />
+    </ShopOrderAccess>
+  );
+}
+
+function ShopCartBody() {
   const t = useT();
   const capabilities = useFulfillmentCapabilities();
   const canPlace = capabilities.isSuccess && capabilities.data.readiness === "ready" && capabilities.data.acceptsOrders === true;
@@ -33,23 +47,22 @@ export function ShopCartPage() {
   const queryClient = useQueryClient();
 
   const cartQuery = useQuery({
-    queryKey: ["ordering", "cart", store?.id],
-    queryFn: () => getCart(store!.id),
+    queryKey: ["shop", "cart", store?.id],
+    queryFn: () => getShopCart(store!.id),
     enabled: !!store,
   });
 
   const lines = cartQuery.data?.lines ?? [];
-  const products = useProductsById(lines.map((l) => l.productId));
-  const quotes = usePriceQuotes(
-    store?.customerOrgId,
-    lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+  const products = useShopProducts(
+    store?.id,
+    lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
   );
 
   const saveMutation = useMutation({
-    mutationFn: (input: { storeId: string; lines: CartLineInput[] }) =>
-      updateCart(input.storeId, input.lines),
+    mutationFn: (input: { storeId: string; lines: ShopCartLineInput[] }) =>
+      updateShopCart(input.storeId, input.lines),
     onSuccess: (_id, input) => {
-      queryClient.invalidateQueries({ queryKey: ["ordering", "cart", input.storeId] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "cart", input.storeId] });
     },
     onError: (err) =>
       toast.error(t("shop.updateFailed", "Could not update cart"), { description: describe(err) }),
@@ -57,18 +70,18 @@ export function ShopCartPage() {
 
   const placeMutation = useMutation({
     mutationFn: (input: { storeId: string; idempotencyKey: string }) =>
-      placeOrder(input.storeId, input.idempotencyKey),
+      placeShopOrder(input.storeId, input.idempotencyKey),
     onSuccess: (orderId, input) => {
       toast.success(t("shop.placed", "Order placed"));
-      queryClient.invalidateQueries({ queryKey: ["ordering", "cart", input.storeId] });
-      queryClient.invalidateQueries({ queryKey: ["ordering", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "cart", input.storeId] });
+      queryClient.invalidateQueries({ queryKey: ["shop", "orders"] });
       navigate(`/shop/orders/${orderId}`);
     },
     onError: (err) =>
       toast.error(t("shop.placeFailed", "Could not place order"), { description: describe(err) }),
   });
 
-  const replaceLines = (next: CartLineInput[]) => {
+  const replaceLines = (next: ShopCartLineInput[]) => {
     if (!store) return;
     saveMutation.mutate({ storeId: store.id, lines: next.filter((l) => l.quantity > 0) });
   };
@@ -86,10 +99,10 @@ export function ShopCartPage() {
   };
 
   const subtotal = lines.reduce((sum, line) => {
-    const quote = quotes.byProductId.get(line.productId);
-    return quote ? sum + quote.unitPrice * line.quantity : sum;
+    const product = products.byId.get(line.productId);
+    return product ? sum + product.unitPrice * line.quantity : sum;
   }, 0);
-  const currency = quotes.byProductId.values().next().value?.currency ?? "USD";
+  const currency = products.byId.values().next().value?.currency ?? "USD";
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -133,9 +146,9 @@ export function ShopCartPage() {
             </EntityListHeader>
             {lines.map((line, i) => {
               const product = products.byId.get(line.productId);
-              const quote = quotes.byProductId.get(line.productId);
+              const pricedProduct = products.byId.get(line.productId);
               return (
-                <EntityListRow key={line.id || line.productId} className={DESKTOP_GRID} isLast={i === lines.length - 1}>
+                <EntityListRow key={line.productId} className={DESKTOP_GRID} isLast={i === lines.length - 1}>
                   <div className="min-w-0">
                     <Link
                       to={`/shop/products/${line.productId}`}
@@ -180,13 +193,13 @@ export function ShopCartPage() {
                     </Button>
                   </div>
                   <div>
-                    {quote ? (
+                    {pricedProduct ? (
                       <>
                         <div data-testid="quoted-price" className="font-display text-[14px] font-semibold tabular-nums">
-                          {formatMoney(quote.unitPrice, quote.currency)}
+                          {formatMoney(pricedProduct.unitPrice, pricedProduct.currency)}
                         </div>
                         <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                          {quoteSourceLabel(quote.source)}
+                          {quoteSourceLabel(pricedProduct.priceSource)}
                         </div>
                       </>
                     ) : (
@@ -194,7 +207,9 @@ export function ShopCartPage() {
                     )}
                   </div>
                   <div className="font-display text-[14px] font-semibold tabular-nums">
-                    {quote ? formatMoney(quote.unitPrice * line.quantity, quote.currency) : "—"}
+                    {pricedProduct
+                      ? formatMoney(pricedProduct.unitPrice * line.quantity, pricedProduct.currency)
+                      : "—"}
                   </div>
                   <button
                     type="button"

@@ -11,3 +11,8 @@ public sealed record SearchShopProductsQuery(
     Guid? CategoryId = null,
     int PageNumber = 1,
     int PageSize = 20) : IQuery<PagedResponse<ShopProductDto>>;
+
+public sealed record GetShopProductByIdQuery(
+    Guid ProductId,
+    Guid? StoreId = null,
+    decimal Quantity = 1m) : IQuery<ShopProductDto>;

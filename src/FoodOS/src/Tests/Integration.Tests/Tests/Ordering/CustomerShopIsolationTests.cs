@@ -65,6 +65,28 @@ public sealed partial class CustomerShopIsolationTests
         product.UnitPrice.ShouldBe(9.5m);
         product.IsAvailable.ShouldBeTrue();
 
+        using var productDetailResponse = await clientA.GetAsync(
+            $"{TestConstants.ShopBasePath}/products/{productId}?storeId={storeA}&quantity=3");
+        productDetailResponse.StatusCode.ShouldBe(
+            HttpStatusCode.OK,
+            await productDetailResponse.Content.ReadAsStringAsync());
+        var productDetail = await productDetailResponse.DeserializeAsync<ShopProductDto>();
+        productDetail.Id.ShouldBe(productId);
+        productDetail.UnitPrice.ShouldBe(9.5m);
+        productDetail.PriceSource.ShouldBe("Catalog");
+
+        using var foreignStoreProductResponse = await clientA.GetAsync(
+            $"{TestConstants.ShopBasePath}/products/{productId}?storeId={storeB}&quantity=1");
+        foreignStoreProductResponse.StatusCode.ShouldBe(
+            HttpStatusCode.NotFound,
+            await foreignStoreProductResponse.Content.ReadAsStringAsync());
+
+        using var invalidQuantityResponse = await clientA.GetAsync(
+            $"{TestConstants.ShopBasePath}/products/{productId}?storeId={storeA}&quantity=0");
+        invalidQuantityResponse.StatusCode.ShouldBe(
+            HttpStatusCode.BadRequest,
+            await invalidQuantityResponse.Content.ReadAsStringAsync());
+
         foreach (string path in new[]
         {
             $"{TestConstants.CatalogBasePath}/products?pageNumber=1&pageSize=20",

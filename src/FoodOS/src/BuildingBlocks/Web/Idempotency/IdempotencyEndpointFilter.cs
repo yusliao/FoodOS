@@ -5,7 +5,6 @@ using FSH.Framework.Caching;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,16 +17,12 @@ namespace FSH.Framework.Web.Idempotency;
 /// for subsequent requests with the same key.
 /// </summary>
 /// <remarks>
-/// Uses <see cref="IDistributedCache"/> directly for the probe read (bypassing
-/// <see cref="HybridCache"/>'s factory-mandatory API) and <see cref="HybridCache.SetAsync"/>
-/// for the write path so replays benefit from L1 and the regular tag invalidation story.
-/// Using <c>HybridCache</c> with <c>DisableUnderlyingData</c> as a "get-only probe" is a
-/// known anti-pattern tracked at dotnet/aspnetcore#57191.
+/// Uses <see cref="IDistributedCache"/> for both reads and writes. HybridCache stores an
+/// implementation-specific envelope and may transform the underlying key, so its entries cannot
+/// be probed as raw JSON through <see cref="IDistributedCache"/>.
 /// </remarks>
 public sealed class IdempotencyEndpointFilter : IEndpointFilter
 {
-    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -49,20 +44,19 @@ public sealed class IdempotencyEndpointFilter : IEndpointFilter
         }
 
         var distributedCache = httpContext.RequestServices.GetRequiredService<IDistributedCache>();
-        var hybridCache = httpContext.RequestServices.GetRequiredService<HybridCache>();
         var logger = httpContext.RequestServices.GetRequiredService<ILogger<IdempotencyEndpointFilter>>();
+        var jsonOptions = httpContext.RequestServices
+            .GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
+            .Value.SerializerOptions;
 
         // Include tenant context in cache key for isolation
         var tenantId = httpContext.User.FindFirst("tenant")?.Value ?? "global";
         var cacheKey = CacheKeys.IdempotencyEntry(tenantId, idempotencyKey);
-        var tags = new[] { CacheKeys.Tags.Idempotency, CacheKeys.Tags.Tenant(tenantId) };
 
-        // Probe-only read via IDistributedCache (real GetAsync, null on miss — unlike HybridCache's
-        // factory). Bypasses L1: replays are rare vs first-calls, so L1 warmth has little value.
         var cachedBytes = await distributedCache.GetAsync(cacheKey, httpContext.RequestAborted).ConfigureAwait(false);
         if (cachedBytes is not null && cachedBytes.Length > 0)
         {
-            var cached = JsonSerializer.Deserialize<CachedIdempotentResponse>(cachedBytes, JsonOpts);
+            var cached = JsonSerializer.Deserialize<CachedIdempotentResponse>(cachedBytes, jsonOptions);
             if (cached is not null)
             {
                 if (logger.IsEnabled(LogLevel.Debug))
@@ -81,30 +75,43 @@ public sealed class IdempotencyEndpointFilter : IEndpointFilter
                     await httpContext.Response.Body.WriteAsync(cached.Body, httpContext.RequestAborted).ConfigureAwait(false);
                 }
 
-                return null; // Response already written
+                return TypedResults.Empty; // Response already written
             }
         }
 
         // Execute the handler
         var result = await next(context).ConfigureAwait(false);
 
-        // Cache the response through HybridCache so the tag invalidation path works for purges.
         try
         {
-            var body = result is not null ? JsonSerializer.SerializeToUtf8Bytes(result, JsonOpts) : [];
+            var responseValue = result switch
+            {
+                IValueHttpResult valueResult => valueResult.Value,
+                IResult => null,
+                _ => result,
+            };
+            var body = responseValue is not null
+                ? JsonSerializer.SerializeToUtf8Bytes(responseValue, responseValue.GetType(), jsonOptions)
+                : [];
+            var statusCode = result is IStatusCodeHttpResult statusCodeResult
+                ? statusCodeResult.StatusCode
+                : httpContext.Response.StatusCode;
+            var contentType = result is IContentTypeHttpResult contentTypeResult
+                ? contentTypeResult.ContentType
+                : httpContext.Response.ContentType;
             var responseToCache = new CachedIdempotentResponse
             {
-                StatusCode = httpContext.Response.StatusCode is > 0 and < 600 ? httpContext.Response.StatusCode : 200,
-                ContentType = "application/json",
+                StatusCode = statusCode is > 0 and < 600 ? statusCode.Value : StatusCodes.Status200OK,
+                ContentType = contentType ?? "application/json",
                 Body = body
             };
 
-            var setOptions = new HybridCacheEntryOptions
+            var cacheEntryOptions = new DistributedCacheEntryOptions
             {
-                Expiration = options.DefaultTtl,
-                LocalCacheExpiration = options.DefaultTtl < TimeSpan.FromMinutes(2) ? options.DefaultTtl : TimeSpan.FromMinutes(2),
+                AbsoluteExpirationRelativeToNow = options.DefaultTtl,
             };
-            await hybridCache.SetAsync(cacheKey, responseToCache, setOptions, tags, httpContext.RequestAborted).ConfigureAwait(false);
+            var responseBytes = JsonSerializer.SerializeToUtf8Bytes(responseToCache, jsonOptions);
+            await distributedCache.SetAsync(cacheKey, responseBytes, cacheEntryOptions, httpContext.RequestAborted).ConfigureAwait(false);
         }
         // Best-effort caching: idempotency replay is a convenience, not a correctness requirement
         catch (Exception ex) when (ex is not OperationCanceledException)

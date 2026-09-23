@@ -1,11 +1,34 @@
 import { Outlet } from "react-router-dom";
-import { Store } from "lucide-react";
-import { Combobox, ErrorBand } from "@/components/list";
+import { ShieldOff, Store } from "lucide-react";
+import { SHOP_PERMISSIONS } from "@/api/shop";
+import { useAuth } from "@/auth/use-auth";
+import { Combobox, EntityEmpty, ErrorBand } from "@/components/list";
+import { Skeleton } from "@/components/ui/skeleton";
 import { describe } from "@/lib/list-helpers";
 import { useT } from "@/i18n/locale-provider";
 import { ShopStoreProvider, useShopStore } from "./store-context";
 
 export function ShopLayout() {
+  const t = useT();
+  const { user, permissionsHydrated } = useAuth();
+
+  if (!permissionsHydrated) {
+    return <Skeleton className="h-40 w-full rounded-xl" />;
+  }
+
+  if (!user?.permissions.includes(SHOP_PERMISSIONS.view)) {
+    return (
+      <EntityEmpty
+        icon={ShieldOff}
+        title={t("shop.viewAccessTitle", "Shop access required")}
+        body={t(
+          "shop.viewAccessBody",
+          "This account is not authorized to view restaurant stores, products, or orders.",
+        )}
+      />
+    );
+  }
+
   return (
     <ShopStoreProvider>
       <ShopLayoutBody />

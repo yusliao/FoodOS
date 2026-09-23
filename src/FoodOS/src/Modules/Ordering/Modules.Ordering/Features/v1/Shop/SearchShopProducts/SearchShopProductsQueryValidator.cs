@@ -11,3 +11,12 @@ public sealed class SearchShopProductsQueryValidator : AbstractValidator<SearchS
         RuleFor(query => query.PageSize).InclusiveBetween(1, 100);
     }
 }
+
+public sealed class GetShopProductByIdQueryValidator : AbstractValidator<GetShopProductByIdQuery>
+{
+    public GetShopProductByIdQueryValidator()
+    {
+        RuleFor(query => query.ProductId).NotEmpty();
+        RuleFor(query => query.Quantity).GreaterThan(0);
+    }
+}

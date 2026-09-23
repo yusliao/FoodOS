@@ -196,8 +196,3 @@ export function createAfterSalesTicket(
     body: JSON.stringify(input),
   });
 }
-
-export const SHOP_PERMISSIONS = {
-  view: "Permissions.Ordering.Shop.View",
-  order: "Permissions.Ordering.Shop.Order",
-} as const;

@@ -23,7 +23,7 @@ import {
   UsersRound,
   Wifi,
 } from "lucide-react";
-import { SHOP_PERMISSIONS } from "@/api/ordering";
+import { SHOP_PERMISSIONS } from "@/api/shop";
 import { PROCUREMENT_PERMISSIONS } from "@/api/procurement";
 import { ALL_TRASH_PERMISSIONS } from "@/lib/trash-permissions";
 
