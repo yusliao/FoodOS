@@ -29,6 +29,7 @@ public sealed class Ticket : AggregateRoot<Guid>, ISoftDeletable, IGlobalEntity
     public DateTime? UpdatedAtUtc { get; private set; }
     public DateTime? ResolvedAtUtc { get; private set; }
     public DateTime? ClosedAtUtc { get; private set; }
+    public uint Version { get; internal set; }
 
     public bool IsDeleted { get; private set; }
     public DateTimeOffset? DeletedOnUtc { get; private set; }

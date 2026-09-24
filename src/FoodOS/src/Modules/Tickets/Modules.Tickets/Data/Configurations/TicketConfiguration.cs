@@ -25,6 +25,7 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
 
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
         builder.Property(x => x.Priority).HasConversion<string>().HasMaxLength(16);
+        builder.Property(x => x.Version).IsRowVersion();
 
         builder.HasIndex(x => x.Status);
         builder.HasIndex(x => x.AssignedToUserId);

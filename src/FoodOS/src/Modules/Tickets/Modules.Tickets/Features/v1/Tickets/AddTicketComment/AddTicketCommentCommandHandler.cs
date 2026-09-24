@@ -38,7 +38,7 @@ public sealed class AddTicketCommentCommandHandler(
         ticket.RequireParticipant(currentUser);
 
         var commentId = ticket.AddComment(authorId, command.Body);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return commentId;
     }
 }

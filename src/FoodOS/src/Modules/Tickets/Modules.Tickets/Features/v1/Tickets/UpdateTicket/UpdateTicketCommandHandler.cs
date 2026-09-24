@@ -23,7 +23,7 @@ public sealed class UpdateTicketCommandHandler(TicketsDbContext dbContext, ICurr
         ticket.RequireParticipant(currentUser);
 
         ticket.UpdateDetails(command.Title, command.Description, command.Priority);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return ticket.Id;
     }
 }

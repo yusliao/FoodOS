@@ -24,7 +24,7 @@ public sealed class AssignTicketCommandHandler(TicketsDbContext dbContext, ICurr
 
         ticket.Assign(command.AssigneeUserId);
         await TicketAccess.RequireAssigneeAsync(users, command.AssigneeUserId, cancellationToken).ConfigureAwait(false);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return ticket.Id;
     }
 }

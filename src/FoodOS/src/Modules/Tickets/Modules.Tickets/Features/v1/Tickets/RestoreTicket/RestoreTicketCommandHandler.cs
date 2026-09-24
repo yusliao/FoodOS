@@ -25,7 +25,7 @@ public sealed class RestoreTicketCommandHandler(TicketsDbContext dbContext, ICur
         ticket.RequireParticipant(currentUser);
 
         ticket.Restore();
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return ticket.Id;
     }
 }

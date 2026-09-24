@@ -25,7 +25,7 @@ public sealed class DeleteTicketCommandHandler(TicketsDbContext dbContext, ICurr
         // Soft delete: the audit interceptor converts the EF Delete into an IsDeleted flip.
         // Comments are not auto-included, so they are left untouched and survive a Restore.
         dbContext.Tickets.Remove(ticket);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return Unit.Value;
     }
 }

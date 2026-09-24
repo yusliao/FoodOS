@@ -22,7 +22,7 @@ public sealed class ResolveTicketCommandHandler(TicketsDbContext dbContext, ICur
             ?? throw new NotFoundException($"Ticket {command.TicketId} not found.");
 
         ticket.Resolve(command.ResolutionNote);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return ticket.Id;
     }
 }

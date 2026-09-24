@@ -316,14 +316,15 @@ test("operator uploads, sends, and downloads a chat attachment through real obje
       && response.request().method() === "POST");
     await form.getByRole("button", { name: "Send message", exact: true }).click();
     expect((await sendResponse).status()).toBe(200);
-    await expect(page.getByText(fileName, { exact: true })).toBeVisible();
+    const messagesRegion = page.getByRole("region", { name: "Channel messages" });
+    await expect(messagesRegion.getByText(fileName, { exact: true })).toBeVisible();
 
     const downloadUrlResponse = page.waitForResponse(response =>
       response.url().endsWith(`/api/v1/files/${fileAssetId}/url`)
       && response.request().method() === "GET");
-    await page.getByRole("button", { name: "Prepare download", exact: true }).click();
+    await messagesRegion.getByRole("button", { name: "Prepare download", exact: true }).click();
     expect((await downloadUrlResponse).status()).toBe(200);
-    const downloadLink = page.getByRole("link", { name: "Download attachment", exact: true });
+    const downloadLink = messagesRegion.getByRole("link", { name: "Download attachment", exact: true });
     const href = await downloadLink.getAttribute("href");
     const downloadUrl = new URL(href!);
     expect(["http:", "https:"]).toContain(downloadUrl.protocol);
@@ -342,6 +343,104 @@ test("operator uploads, sends, and downloads a chat attachment through real obje
       await request.delete(`${apiBase}/api/v1/chat/channels/${channelId}`, {
         headers: { tenant, Authorization: `Bearer ${accessToken}` },
       });
+    }
+  }
+});
+
+test("operator completes a real root ticket workflow with a private attachment", async ({ page, request }) => {
+  let accessToken = "";
+  let ticketId = "";
+  let fileAssetId = "";
+  const suffix = randomUUID().slice(0, 8);
+  const title = `Real ticket ${suffix}`;
+  const comment = `Verified by operator ${suffix}`;
+  const fileName = `ticket-evidence-${suffix}.txt`;
+  const contents = Buffer.from(`FoodOS ticket evidence ${randomUUID()}\n`, "utf8");
+
+  try {
+    await signIn(page);
+    accessToken = await page.evaluate(() => localStorage.getItem("fsh.admin.accessToken") ?? "");
+    expect(accessToken).not.toBe("");
+
+    await page.goto("/tickets");
+    await page.getByRole("button", { name: "New ticket", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "New ticket" });
+    await editor.getByLabel("Subject").fill(title);
+    await editor.getByLabel("Description").fill("Disposable real-browser ticket verification");
+    await editor.getByLabel("Priority").selectOption("High");
+    const createResponse = page.waitForResponse(response =>
+      response.url().endsWith("/api/v1/tickets")
+      && response.request().method() === "POST");
+    await editor.getByRole("button", { name: "Save ticket", exact: true }).click();
+    const created = await createResponse;
+    expect(created.status()).toBe(200);
+    ticketId = await created.json() as string;
+    await expect(page).toHaveURL(new RegExp(`/tickets/${ticketId}$`, "u"));
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+
+    const reply = page.locator("#ticket-reply");
+    const sendReply = page.getByRole("button", { name: "Send reply", exact: true });
+    await expect(reply).toBeEditable();
+    await reply.fill(comment);
+    await expect(reply).toHaveValue(comment);
+    await expect(sendReply).toBeEnabled();
+    const commentResponse = page.waitForResponse(response =>
+      response.url().endsWith(`/api/v1/tickets/${ticketId}/comments`)
+      && response.request().method() === "POST");
+    await sendReply.click();
+    expect((await commentResponse).status()).toBe(200);
+    await expect(page.getByRole("region", { name: "Comments" }).getByText(comment, { exact: true })).toBeVisible();
+
+    const attachments = page.getByRole("region", { name: "Private attachments" });
+    const uploadUrlResponse = page.waitForResponse(response =>
+      response.url().endsWith("/api/v1/files/upload-url")
+      && response.request().method() === "POST");
+    const storagePutResponse = page.waitForResponse(response =>
+      response.request().method() === "PUT"
+      && decodeURIComponent(new URL(response.url()).pathname).endsWith(`/${fileName}`));
+    const finalizeResponse = page.waitForResponse(response =>
+      response.url().includes("/api/v1/files/")
+      && response.url().endsWith("/finalize")
+      && response.request().method() === "POST");
+    await attachments.getByLabel("Choose attachment").setInputFiles({
+      name: fileName,
+      mimeType: "text/plain",
+      buffer: contents,
+    });
+    await attachments.getByRole("button", { name: "Upload private attachment", exact: true }).click();
+    const uploadUrl = await uploadUrlResponse;
+    expect(uploadUrl.status()).toBe(200);
+    fileAssetId = (await uploadUrl.json() as { fileAssetId: string }).fileAssetId;
+    expect((await storagePutResponse).status()).toBe(200);
+    expect((await finalizeResponse).status()).toBe(200);
+    await expect(attachments.getByRole("heading", { name: fileName, exact: true })).toBeVisible();
+
+    const downloadUrlResponse = page.waitForResponse(response =>
+      response.url().endsWith(`/api/v1/files/${fileAssetId}/url`)
+      && response.request().method() === "GET");
+    await attachments.getByRole("button", { name: "Get download link", exact: true }).click();
+    expect((await downloadUrlResponse).status()).toBe(200);
+    const href = await attachments.getByRole("link", { name: "Download attachment", exact: true }).getAttribute("href");
+    const downloaded = await request.get(href!);
+    expect(downloaded.status()).toBe(200);
+    expect(await downloaded.body()).toEqual(contents);
+
+    await page.getByRole("button", { name: "Resolve ticket", exact: true }).click();
+    const resolveDialog = page.getByRole("dialog", { name: "Resolve ticket" });
+    await resolveDialog.getByLabel("Resolution note").fill("Real workflow verified");
+    const resolveResponse = page.waitForResponse(response =>
+      response.url().endsWith(`/api/v1/tickets/${ticketId}/resolve`)
+      && response.request().method() === "POST");
+    await resolveDialog.getByRole("button", { name: "Confirm", exact: true }).click();
+    expect((await resolveResponse).status()).toBe(200);
+    await expect(page.getByRole("definition").filter({ hasText: /^Resolved$/u })).toBeVisible();
+  } finally {
+    const headers = { tenant, Authorization: `Bearer ${accessToken}` };
+    if (accessToken && fileAssetId) {
+      await request.delete(`${apiBase}/api/v1/files/${fileAssetId}`, { headers });
+    }
+    if (accessToken && ticketId) {
+      await request.delete(`${apiBase}/api/v1/tickets/${ticketId}`, { headers });
     }
   }
 });

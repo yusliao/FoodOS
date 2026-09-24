@@ -23,7 +23,7 @@ public sealed class ReopenTicketCommandHandler(TicketsDbContext dbContext, ICurr
         ticket.RequireParticipant(currentUser);
 
         ticket.Reopen();
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return ticket.Id;
     }
 }

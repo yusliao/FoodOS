@@ -1,5 +1,12 @@
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Tickets.Data;
+using FSH.Modules.Tickets.Features.v1.Internal;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
+using Microsoft.EntityFrameworkCore;
 
 namespace Integration.Tests.Tests.Tickets;
 
@@ -12,10 +19,12 @@ namespace Integration.Tests.Tests.Tickets;
 public sealed class TicketSearchAndLifecycleTests
 {
     private readonly AuthHelper _auth;
+    private readonly FshWebApplicationFactory _factory;
 
     public TicketSearchAndLifecycleTests(FshWebApplicationFactory factory)
     {
         _auth = new AuthHelper(factory);
+        _factory = factory;
     }
 
     // ─── search filters ──────────────────────────────────────────────
@@ -326,6 +335,39 @@ public sealed class TicketSearchAndLifecycleTests
         #endregion
     }
 
+    [Fact]
+    public async Task ConcurrentTicketChanges_Should_RejectStaleWrite_With409()
+    {
+        #region Arrange
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var originalTitle = UniqueTitle("Concurrent");
+        var ticketId = await CreateAsync(client, originalTitle);
+
+        using var firstScope = _factory.Services.CreateScope();
+        using var staleScope = _factory.Services.CreateScope();
+        var firstDb = await GetRootTicketDbAsync(firstScope);
+        var staleDb = await GetRootTicketDbAsync(staleScope);
+        var firstCopy = await firstDb.Tickets.SingleAsync(ticket => ticket.Id == ticketId);
+        var staleCopy = await staleDb.Tickets.SingleAsync(ticket => ticket.Id == ticketId);
+        #endregion
+
+        #region Act
+        firstCopy.Resolve("authoritative resolution");
+        await TicketPersistence.SaveChangesAsync(firstDb, CancellationToken.None);
+
+        staleCopy.UpdateDetails("stale title", null, staleCopy.Priority);
+        var exception = await Should.ThrowAsync<CustomException>(
+            () => TicketPersistence.SaveChangesAsync(staleDb, CancellationToken.None));
+        #endregion
+
+        #region Assert
+        exception.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var fetched = await GetAsync(client, ticketId);
+        fetched.Status.ShouldBe("Resolved");
+        fetched.Title.ShouldBe(originalTitle, "the stale editor must not overwrite the committed row");
+        #endregion
+    }
+
     // ─── create validation ───────────────────────────────────────────
 
     [Fact]
@@ -410,5 +452,14 @@ public sealed class TicketSearchAndLifecycleTests
             $"{TestConstants.TicketsBasePath}/tickets/{ticketId}/resolve",
             new { resolutionNote });
         response.EnsureSuccessStatusCode();
+    }
+
+    private static async Task<TicketsDbContext> GetRootTicketDbAsync(IServiceScope scope)
+    {
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        return scope.ServiceProvider.GetRequiredService<TicketsDbContext>();
     }
 }

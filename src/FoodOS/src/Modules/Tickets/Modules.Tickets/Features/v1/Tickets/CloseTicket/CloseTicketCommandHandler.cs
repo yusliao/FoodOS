@@ -23,7 +23,7 @@ public sealed class CloseTicketCommandHandler(TicketsDbContext dbContext, ICurre
         ticket.RequireParticipant(currentUser);
 
         ticket.Close();
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await TicketPersistence.SaveChangesAsync(dbContext, cancellationToken).ConfigureAwait(false);
         return ticket.Id;
     }
 }
