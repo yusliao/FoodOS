@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using FSH.Framework.Core.Exceptions;
@@ -12,7 +11,6 @@ using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Contracts.v1.Shop;
 using FSH.Modules.Ordering.Data;
 using FSH.Modules.Ordering.Domain;
-using FSH.Modules.WmsIntegration.Contracts.v1;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,7 +19,6 @@ namespace FSH.Modules.Ordering.Features.v1.Shop.ShopCartOrders;
 public sealed class ShopCartOrdersHandler(
     OrderingDbContext dbContext,
     ICustomerAccessScopeResolver accessScopeResolver,
-    IWmsReservationGateway reservationGateway,
     IMediator mediator,
     TimeProvider clock)
     : IQueryHandler<GetShopCartQuery, ShopCartDto>,
@@ -112,26 +109,20 @@ public sealed class ShopCartOrdersHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
         var access = await RequireStoreAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
-        var existingReservation = await reservationGateway.FindAsync(command.IdempotencyKey, cancellationToken)
+        var existingOrder = await dbContext.SalesOrders.AsNoTracking()
+            .SingleOrDefaultAsync(order =>
+                order.CustomerTenantId == access.CustomerTenantId
+                && order.PlacementIdempotencyKey == command.IdempotencyKey,
+                cancellationToken)
             .ConfigureAwait(false);
-        if (existingReservation?.Status == "completed")
+        if (existingOrder is not null)
         {
-            var existingOrder = await dbContext.SalesOrders.AsNoTracking()
-                .SingleOrDefaultAsync(order =>
-                    order.Id == existingReservation.OperationId
-                    && order.CustomerTenantId == access.CustomerTenantId
-                    && order.CustomerOrgId == access.CustomerOrgId,
-                    cancellationToken)
-                .ConfigureAwait(false);
-            if (existingOrder is not null)
+            if (existingOrder.StoreId != command.StoreId || existingOrder.CustomerOrgId != access.CustomerOrgId)
             {
-                if (existingOrder.StoreId != command.StoreId)
-                {
-                    throw Conflict("The idempotency key was already used for another store order.");
-                }
-
-                return existingOrder.Id;
+                throw Conflict("The idempotency key was already used for another store order.");
             }
+
+            return existingOrder.Id;
         }
 
         var store = await dbContext.Stores
@@ -193,49 +184,11 @@ public sealed class ShopCartOrdersHandler(
                 cancellationToken)
             .ConfigureAwait(false);
         var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
-        var reservationLines = new List<WmsReservationLine>();
         foreach (var line in cart.Lines)
         {
-            var (product, zone) = products[line.ProductId];
+            var (_, zone) = products[line.ProductId];
             var quote = quotes[line.ProductId];
             draftLines.Add((line.ProductId, zone.ToString(), line.Quantity, quote.UnitPrice, quote.Currency));
-            reservationLines.Add(new(
-                line.ProductId.ToString("N", CultureInfo.InvariantCulture),
-                product.Sku,
-                product.BaseUom,
-                line.Quantity));
-        }
-
-        string correlationId = Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
-        var reservation = await reservationGateway.ReserveAsync(
-                command.IdempotencyKey,
-                correlationId,
-                new WmsReserveOrderRequest(warehouse.Code, "root", reservationLines),
-                cancellationToken)
-            .ConfigureAwait(false);
-        if (reservation.Status == "rejected")
-        {
-            throw Conflict($"WMS rejected the reservation ({reservation.ErrorCode ?? "rejected"}).");
-        }
-
-        if (reservation.Status != "completed")
-        {
-            throw Conflict(
-                "WMS reservation is pending or its result is unknown. Retry with the same Idempotency-Key.");
-        }
-
-        var orderAlreadySaved = await dbContext.SalesOrders.AsNoTracking()
-            .SingleOrDefaultAsync(order => order.Id == reservation.OperationId, cancellationToken)
-            .ConfigureAwait(false);
-        if (orderAlreadySaved is not null)
-        {
-            if (orderAlreadySaved.StoreId != command.StoreId
-                || orderAlreadySaved.CustomerTenantId != access.CustomerTenantId)
-            {
-                throw Conflict("The idempotency key was already used for another store order.");
-            }
-
-            return orderAlreadySaved.Id;
         }
 
         string number = await OrderNumbers.NextAsync(dbContext, businessDate, cancellationToken).ConfigureAwait(false);
@@ -247,14 +200,8 @@ public sealed class ShopCartOrdersHandler(
             businessDate,
             cutoffAt,
             draftLines,
-            store.CustomerTenantId,
-            reservation.OperationId);
-        foreach (var line in order.Lines)
-        {
-            line.BindReservation(reservation.OperationId, line.OrderedQty);
-        }
-
-        order.Place(utcNow);
+            store.CustomerTenantId);
+        order.PlaceWithPlatformCommitment(command.IdempotencyKey, utcNow);
         dbContext.SalesOrders.Add(order);
         dbContext.CartLines.RemoveRange(cart.Lines);
         cart.Clear();

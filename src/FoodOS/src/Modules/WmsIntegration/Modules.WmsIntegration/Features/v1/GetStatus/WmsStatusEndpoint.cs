@@ -11,7 +11,8 @@ public static class GetWmsIntegrationStatusEndpoint
 {
     internal static RouteHandlerBuilder MapWmsStatusEndpoint(this IEndpointRouteBuilder endpoints)
     {
-        return endpoints.MapGet("/status", (IWmsReadiness readiness) => Results.Ok(readiness.GetSnapshot()))
+        return endpoints.MapGet("/status", async (IWmsReadiness readiness, CancellationToken ct) =>
+                Results.Ok(await readiness.GetSnapshotAsync(ct).ConfigureAwait(false)))
             .WithName("GetWmsIntegrationStatus")
             .WithSummary("Get the configured FoodOS WMS standard connection status")
             .RequirePermission(WmsIntegrationPermissions.Integration.View);

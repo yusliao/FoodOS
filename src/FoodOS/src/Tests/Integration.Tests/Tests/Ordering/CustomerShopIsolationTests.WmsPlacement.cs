@@ -59,6 +59,7 @@ public sealed partial class CustomerShopIsolationTests
 
         foreach (var mapping in new[]
         {
+            new UpsertWmsMappingCommand(WmsMappingKinds.Warehouse, "configured-by-mapping", "EXT-CONFIGURED"),
             new UpsertWmsMappingCommand(WmsMappingKinds.Warehouse, warehouse.Code, $"EXT-{warehouse.Code}"),
             new UpsertWmsMappingCommand(WmsMappingKinds.Owner, "root", "EXT-ROOT"),
             new UpsertWmsMappingCommand(WmsMappingKinds.Sku, product.Sku, $"EXT-{product.Sku}"),
@@ -71,6 +72,13 @@ public sealed partial class CustomerShopIsolationTests
 
         using var customer = await CreateDashboardClientAsync(email, tenantId, configured);
         await GrantSelfStoreAccessAsync(customer, storeId);
+        using var capabilitiesResponse = await customer.GetAsync("/api/v1/fulfillment/capabilities");
+        capabilitiesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await capabilitiesResponse.Content.ReadAsStringAsync());
+        var capabilities = await capabilitiesResponse.DeserializeAsync<WmsReadinessSnapshot>();
+        capabilities.Readiness.ShouldBe("ready");
+        capabilities.AcceptsOrders.ShouldBeTrue();
+        capabilities.AcceptsOrderChanges.ShouldBeFalse();
+        capabilities.BlockingReasons.ShouldBeEmpty();
         using var updateCart = await customer.PutAsJsonAsync(
             $"{TestConstants.ShopBasePath}/stores/{storeId}/cart",
             new { lines = new[] { new { productId, quantity = 3m } } });
@@ -122,6 +130,8 @@ public sealed partial class CustomerShopIsolationTests
     private sealed class SequencedReservationClient : IWmsStandardClient
     {
         public List<WmsOperationRequest> Requests { get; } = [];
+
+        public Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
 
         public Task<WmsOperationResponse> ExecuteAsync(
             WmsOperationRequest request,

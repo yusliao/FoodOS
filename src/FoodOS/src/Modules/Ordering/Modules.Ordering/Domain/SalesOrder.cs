@@ -20,6 +20,10 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
     public DateTimeOffset? PlacedAt { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public int Revision { get; private set; }
+    public string? PlacementIdempotencyKey { get; private set; }
+    public WarehouseConfirmationStatus WarehouseConfirmationStatus { get; private set; }
+    public string? WarehouseConfirmationDetail { get; private set; }
+    public DateTimeOffset? WarehouseConfirmationUpdatedAt { get; private set; }
 
     public IReadOnlyList<SalesOrderLine> Lines => _lines;
 
@@ -101,6 +105,40 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
         PlacedAt = utcNow;
         AddDomainEvent(DomainEvent.Create((id, ts) =>
             new SalesOrderPlacedDomainEvent(Id, Number, StoreId, WarehouseId, id, ts)));
+    }
+
+    public void PlaceWithPlatformCommitment(string idempotencyKey, DateTimeOffset utcNow)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        PlacementIdempotencyKey = idempotencyKey.Trim();
+        foreach (var line in _lines)
+        {
+            line.BindReservation(Id, line.OrderedQty);
+        }
+
+        Place(utcNow);
+        MarkWarehouseNotificationPending("Order accepted by FoodOS; warehouse confirmation is pending.", utcNow);
+    }
+
+    public void MarkWarehouseNotificationPending(string? detail, DateTimeOffset utcNow)
+    {
+        WarehouseConfirmationStatus = WarehouseConfirmationStatus.Pending;
+        WarehouseConfirmationDetail = NormalizeDetail(detail);
+        WarehouseConfirmationUpdatedAt = utcNow;
+    }
+
+    public void MarkWarehouseConfirmed(string? detail, DateTimeOffset utcNow)
+    {
+        WarehouseConfirmationStatus = WarehouseConfirmationStatus.Confirmed;
+        WarehouseConfirmationDetail = NormalizeDetail(detail);
+        WarehouseConfirmationUpdatedAt = utcNow;
+    }
+
+    public void MarkWarehouseException(string? detail, DateTimeOffset utcNow)
+    {
+        WarehouseConfirmationStatus = WarehouseConfirmationStatus.Exception;
+        WarehouseConfirmationDetail = NormalizeDetail(detail);
+        WarehouseConfirmationUpdatedAt = utcNow;
     }
 
     public void BeginAmend(DateTimeOffset utcNow)
@@ -332,4 +370,7 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
                 HttpStatusCode.Conflict);
         }
     }
+
+    private static string? NormalizeDetail(string? detail) =>
+        string.IsNullOrWhiteSpace(detail) ? null : detail.Trim()[..Math.Min(detail.Trim().Length, 1000)];
 }

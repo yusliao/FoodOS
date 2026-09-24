@@ -11,6 +11,31 @@ public sealed class WmsStandardClient(HttpClient httpClient, IOptions<WmsIntegra
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    public async Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default)
+    {
+        if (!options.Value.IsConfigured)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var response = await httpClient.GetAsync(
+                    new Uri("api/v1/health", UriKind.Relative),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+    }
+
     public async Task<WmsOperationResponse> ExecuteAsync(WmsOperationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

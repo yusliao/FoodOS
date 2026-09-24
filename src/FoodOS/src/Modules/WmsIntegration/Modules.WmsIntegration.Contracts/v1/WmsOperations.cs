@@ -27,5 +27,7 @@ public sealed record WmsOperationResponse(
 
 public interface IWmsStandardClient
 {
+    Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default);
+
     Task<WmsOperationResponse> ExecuteAsync(WmsOperationRequest request, CancellationToken cancellationToken = default);
 }

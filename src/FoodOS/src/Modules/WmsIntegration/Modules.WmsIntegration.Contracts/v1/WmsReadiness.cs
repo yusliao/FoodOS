@@ -9,9 +9,10 @@ public sealed record WmsReadinessSnapshot(
     bool LocalWarehouseExecution,
     string? Provider,
     string? ConnectionId,
-    string? WarehouseId);
+    string? WarehouseId,
+    IReadOnlyList<string> BlockingReasons);
 
 public interface IWmsReadiness
 {
-    WmsReadinessSnapshot GetSnapshot();
+    Task<WmsReadinessSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
 }

@@ -48,6 +48,22 @@ public sealed class WmsStandardClientTests
         result.ErrorCode.ShouldBe("timeout");
     }
 
+    [Fact]
+    public async Task IsHealthyAsync_Should_Require_A_Successful_Standard_Health_Response()
+    {
+        var healthyTransport = new CaptureHandler(new HttpResponseMessage(HttpStatusCode.OK));
+        using var healthyHttp = new HttpClient(healthyTransport) { BaseAddress = new Uri("https://wms.example/") };
+        var healthyClient = new WmsStandardClient(healthyHttp, Options.Create(CreateOptions()));
+        (await healthyClient.IsHealthyAsync()).ShouldBeTrue();
+        healthyTransport.Path.ShouldBe("/api/v1/health");
+
+        using var failedHttp = new HttpClient(new CaptureHandler(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)))
+        {
+            BaseAddress = new Uri("https://wms.example/"),
+        };
+        (await new WmsStandardClient(failedHttp, Options.Create(CreateOptions())).IsHealthyAsync()).ShouldBeFalse();
+    }
+
     private static WmsIntegrationOptions CreateOptions() => new()
     {
         Enabled = true,
@@ -69,10 +85,16 @@ public sealed class WmsStandardClientTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Path = request.RequestUri?.AbsolutePath;
-            IdempotencyKey = request.Headers.GetValues("Idempotency-Key").Single();
-            Timestamp = request.Headers.GetValues("X-FoodOS-WMS-Timestamp").Single();
-            Signature = request.Headers.GetValues("X-FoodOS-WMS-Signature").Single();
-            Body = await request.Content!.ReadAsByteArrayAsync(cancellationToken);
+            IdempotencyKey = request.Headers.TryGetValues("Idempotency-Key", out var idempotencyKeys)
+                ? idempotencyKeys.Single()
+                : null;
+            Timestamp = request.Headers.TryGetValues("X-FoodOS-WMS-Timestamp", out var timestamps)
+                ? timestamps.Single()
+                : null;
+            Signature = request.Headers.TryGetValues("X-FoodOS-WMS-Signature", out var signatures)
+                ? signatures.Single()
+                : null;
+            Body = request.Content is null ? null : await request.Content.ReadAsByteArrayAsync(cancellationToken);
             return response;
         }
     }

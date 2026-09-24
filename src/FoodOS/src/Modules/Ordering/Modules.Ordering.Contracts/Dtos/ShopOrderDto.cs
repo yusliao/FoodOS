@@ -20,4 +20,7 @@ public sealed record ShopOrderDto(
     DateTimeOffset CutoffAt,
     DateTimeOffset? PlacedAt,
     int Revision,
+    string WarehouseConfirmationStatus,
+    string? WarehouseConfirmationDetail,
+    DateTimeOffset? WarehouseConfirmationUpdatedAt,
     IReadOnlyList<ShopOrderLineDto> Lines);

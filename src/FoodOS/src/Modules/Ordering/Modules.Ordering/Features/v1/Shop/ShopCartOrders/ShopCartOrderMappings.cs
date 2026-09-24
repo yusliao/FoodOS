@@ -22,6 +22,9 @@ internal static class ShopCartOrderMappings
             order.CutoffAt,
             order.PlacedAt,
             order.Revision,
+            order.WarehouseConfirmationStatus.ToString(),
+            order.WarehouseConfirmationDetail,
+            order.WarehouseConfirmationUpdatedAt,
             order.Lines.Select(line => new ShopOrderLineDto(
                 line.Id,
                 line.ProductId,

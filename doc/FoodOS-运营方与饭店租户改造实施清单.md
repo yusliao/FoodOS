@@ -1360,3 +1360,11 @@
 - WMS 返回 `accepted / unknown`、超时或暂时性错误时，不创建销售订单、不清空购物车；调用方使用原键重试后，FoodOS 改走标准结果查询。只有 WMS 明确返回 `completed` 且带预占标识，才使用稳定操作 ID 创建 `Reserved` 订单、绑定行预占并原子清空购物车；同键不同请求返回 409。`rejected` 和 `completed` 缺失预占标识均不会承诺供货。
 - 新增 `AddWmsOutboundOperations` PostgreSQL 迁移及租户幂等索引补充迁移，仅新增 WMS 出站操作日志表并将唯一键限定为租户＋连接＋幂等键，无删除、重命名或业务数据回填。集成验收覆盖“第一次未知保留购物车、第二次同键查询成功、订单 Reserved、购物车清空”，并验证 WMS 端只收到一次 Reserve 和一次 Query、两次键一致；WMS 网关及客户 Shop 定向回归分别 7/7、5/5 通过。两项迁移已通过正式 DbMigrator 应用到 `foodos-wms-dev`，租户唯一索引存在，重建后的 API ready 返回 200；未连接生产数据库。
 - 本切片不宣称 5.4d 完成：改单仍需释放旧预占并按新版本重新确认，取消仍需 WMS 释放确认，订单状态事件尚未驱动后续履约投影；这些入口继续由总闸失败关闭。Shop 前端的“可下单”就绪判断也仍需接入 WMS 健康/能力探测后再开放。
+
+### 2026-09-24：5.4d Shop 下单就绪门禁
+
+- `/api/v1/fulfillment/capabilities` 与 WMS 管理状态不再固定返回不可下单，现按连接配置、试点仓库映射、运营货主映射和仓库适配器 `GET /api/v1/health` 的实际结果计算。只有全部通过才返回 `readiness=ready / acceptsOrders=true`；未配置、仓库映射缺失、货主映射缺失和 WMS 不可达分别返回稳定阻断原因。健康探测最多等待 3 秒，探针自身超时会稳定转换为 `wmsUnreachable`，真实客户端取消仍向上传递；失败关闭不影响商品、订单读取和购物车维护。
+- dashboard 购物车沿用既有能力查询，但现在能在真实就绪时开放提交按钮；未就绪时显示具体双语原因并允许重新检测。新订单继续携带随机 `Idempotency-Key`，改单和取消因 WMS 释放/重预占尚未实现仍保持 `acceptsOrderChanges=false`。admin 同步识别新状态字段，避免类型和提示口径漂移。
+- 验证覆盖 WMS 健康 2xx/非 2xx、基础映射与健康均满足时能力返回 ready、首次预占未知后的同键恢复，以及前端 ready 时按钮开放并实际发送幂等键。Release 全解决方案构建 0 警告/错误；Architecture 53/53、WMS 客户端 3/3、客户 Shop 5/5、dashboard WMS 门禁 Playwright 11/11；dashboard 与 admin 生产构建均通过，保留既有 SignalR PURE 注释和大包提示。
+- 按开发环境授权将本轮本机发布产物装入现有 `fsh/*:local` 运行镜像并强制重建 `foodos-wms-dev` 的 API、admin、dashboard，没有依赖故障中的公共镜像代理，也没有重建或修改数据库服务。`http://localhost:18080/health/ready`、`http://localhost:18081`、`http://localhost:18082` 均返回 200；生产未发布。
+- 开发 Docker 配置指向的 `wms-adapter` 当前尚未部署，因此开发环境应报告 `wmsUnreachable` 并保持提交按钮关闭，这是预期失败关闭行为。仓库方适配器加入同一网络并通过健康检查后，新订单入口会自动开放；5.4d 仍未完成改单、取消和订单状态事件消费。

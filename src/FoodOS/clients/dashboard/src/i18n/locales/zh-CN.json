@@ -15,7 +15,7 @@
     "endedTitle": "模拟登录已结束",
     "endedBody": "操作人员对此会话的访问权限已被撤销或已过期。请使用您自己的账号登录后继续。"
   },
-  "wms": {"title":"仓储系统对接","loading":"正在核对 WMS 就绪状态…","failed":"无法确认 WMS 状态，执行操作继续禁用。","unavailable":"WMS 对接尚未就绪，暂不能确认库存及配送承诺。","boundary":"可继续浏览、保存购物车和维护档案。仓内执行由 WMS 负责，禁止本地重复执行。","retry":"重试 WMS 状态"},
+  "wms": {"title":"仓储系统对接","loading":"正在核对 WMS 就绪状态…","failed":"无法确认 WMS 状态，执行操作继续禁用。","unavailable":"WMS 对接尚未就绪，暂不能确认库存及配送承诺。","notConfigured":"尚未配置 WMS 连接。","warehouseMappingMissing":"配置仓库的映射缺失或已停用。","ownerMappingMissing":"运营货主映射缺失或已停用。","wmsUnreachable":"当前无法通过 WMS 健康检查。","boundary":"可继续浏览、保存购物车和维护档案。仓内执行由 WMS 负责，禁止本地重复执行。","retry":"重试 WMS 状态"},
   "chrome": {
     "skipToMain": "跳到主要内容",
     "search": "搜索",

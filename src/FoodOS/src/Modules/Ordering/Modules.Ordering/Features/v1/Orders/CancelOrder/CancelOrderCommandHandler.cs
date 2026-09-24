@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Ordering.Features.v1.Orders.CancelOrder;
 
-public sealed class CancelOrderCommandHandler(OrderingDbContext dbContext, IMediator mediator, TimeProvider clock)
+public sealed class CancelOrderCommandHandler(OrderingDbContext dbContext, TimeProvider clock)
     : ICommandHandler<CancelOrderCommand, Guid>
 {
     public async ValueTask<Guid> Handle(CancelOrderCommand command, CancellationToken cancellationToken)
@@ -18,28 +18,9 @@ public sealed class CancelOrderCommandHandler(OrderingDbContext dbContext, IMedi
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Order {command.OrderId} not found.");
 
-        var holds = order.Lines
-            .Where(l => l.ReservationId is not null)
-            .Select(l => (l.Id, ReservationId: l.ReservationId!.Value))
-            .ToList();
-        int revision = order.Revision;
-
-        // Validate cutoff and state before any independently committed inventory release.
-        // Reservation identifiers were captured above; persist the order only after releases succeed.
-        order.Cancel(clock.GetUtcNow());
-
-        foreach (var (lineId, reservationId) in holds)
-        {
-            await InventoryStockOps.UnreserveAsync(
-                    mediator,
-                    reservationId,
-                    order.Id,
-                    lineId,
-                    revision,
-                    "cancel",
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
+        DateTimeOffset utcNow = clock.GetUtcNow();
+        order.Cancel(utcNow);
+        order.MarkWarehouseNotificationPending("Order cancellation accepted by FoodOS; warehouse confirmation is pending.", utcNow);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return order.Id;

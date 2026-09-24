@@ -469,6 +469,8 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
     {
         public List<WmsOperationRequest> Requests { get; } = [];
 
+        public Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+
         public Task<WmsOperationResponse> ExecuteAsync(
             WmsOperationRequest request,
             CancellationToken cancellationToken = default)

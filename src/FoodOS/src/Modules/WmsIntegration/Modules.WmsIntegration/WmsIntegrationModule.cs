@@ -38,7 +38,7 @@ public sealed class WmsIntegrationModule : IModule
         builder.Services.AddScoped<WmsInboxService>();
         builder.Services.AddScoped<IWmsAvailabilityReader, WmsAvailabilityReader>();
         builder.Services.AddScoped<IWmsReservationGateway, WmsReservationGateway>();
-        builder.Services.AddSingleton<IWmsReadiness, WmsReadiness>();
+        builder.Services.AddScoped<IWmsReadiness, WmsReadiness>();
         builder.Services.AddHttpClient<IWmsStandardClient, WmsStandardClient>((services, client) =>
         {
             var options = services.GetRequiredService<IOptions<WmsIntegrationOptions>>().Value;

@@ -143,9 +143,12 @@ app.UseHeroPlatform(p =>
 app.MapGet("/", () => Results.Ok(new { message = "hello world!" }))
    .WithTags("PlayGround")
    .AllowAnonymous();
-app.MapGet("/api/v1/fulfillment/capabilities", (HttpContext context, IWmsReadiness readiness) =>
+app.MapGet("/api/v1/fulfillment/capabilities", async (
+    HttpContext context,
+    IWmsReadiness readiness,
+    CancellationToken cancellationToken) =>
 {
     context.Response.Headers.CacheControl = "no-store";
-    return Results.Ok(readiness.GetSnapshot());
+    return Results.Ok(await readiness.GetSnapshotAsync(cancellationToken).ConfigureAwait(false));
 }).RequireAuthorization().WithName("GetFulfillmentCapabilities").WithTags("Fulfillment");
 await app.RunAsync();

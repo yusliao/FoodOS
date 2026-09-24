@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installShellMocks } from "../helpers/shell-mocks";
-const status = { mode: "externalWms", readiness: "notConfigured", acceptsOrders: false, acceptsOrderChanges: false, localWarehouseExecution: false };
+const status = { mode: "externalWms", readiness: "notConfigured", acceptsOrders: false, acceptsOrderChanges: false, localWarehouseExecution: false, blockingReasons: ["notConfigured"] };
 for (const granted of [true, false]) test(`legacy execution is absent from navigation and commands (grants=${granted})`, async ({ page }) => {
   const permissions = granted ? ["Permissions.Procurement.Purchase.View", "Permissions.Warehouse.Putaway.View", "Permissions.Warehouse.Waves.View", "Permissions.Warehouse.Picks.View", "Permissions.Logistics.Shipments.View"] : [];
   await page.route("**/api/v1/identity/permissions", route => route.fulfill({ json: permissions }));
@@ -25,6 +25,7 @@ test("existing order remains readable without amendment or cancellation", async 
   await page.goto("/shop/orders/order-1");
   await expect(page.getByRole("heading", { name: "SO-WMS" })).toBeVisible();
   await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Save changes|Cancel order/ })).toHaveCount(0);
   expect(writes).toEqual([]);
 });
@@ -71,4 +72,25 @@ test("cart can be viewed but cannot place an order when WMS status is unknown", 
   await expect(page.getByText("WMS status could not be verified. Execution remains disabled.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Place order", exact: true })).toBeDisabled();
   expect(writes).toEqual([]);
+});
+
+test("cart places an order when WMS health and base mappings are ready", async ({ page }) => {
+  await page.unroute("**/api/v1/fulfillment/capabilities");
+  await page.route("**/api/v1/fulfillment/capabilities", route => route.fulfill({
+    json: { ...status, readiness: "ready", acceptsOrders: true, blockingReasons: [] },
+  }));
+  await page.route("**/api/v1/shop/stores**", route => route.fulfill({ json: [{ id: "store-1", name: "Kitchen", code: "S1", address: "1 Main St" }] }));
+  await page.route("**/api/v1/shop/stores/store-1/cart", route => route.fulfill({ json: { storeId: "store-1", lines: [{ productId: "product-1", quantity: 2 }] } }));
+  await page.route("**/api/v1/shop/products/product-1**", route => route.fulfill({ json: { id: "product-1", name: "Apple", sku: "P1", unitPrice: 2, currency: "USD", priceSource: "Catalog", baseUom: "EA", isAvailable: true } }));
+  let idempotencyKey = "";
+  await page.route("**/api/v1/shop/orders", async route => {
+    idempotencyKey = route.request().headers()["idempotency-key"] ?? "";
+    await route.fulfill({ json: "order-1" });
+  });
+
+  await page.goto("/shop/cart");
+  const place = page.getByRole("button", { name: "Place order", exact: true });
+  await expect(place).toBeEnabled();
+  await place.click();
+  await expect.poll(() => idempotencyKey).not.toBe("");
 });
