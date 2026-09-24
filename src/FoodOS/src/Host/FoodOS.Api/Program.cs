@@ -15,6 +15,8 @@ using FSH.Modules.Procurement;
 using FSH.Modules.Warehouse;
 using FSH.Modules.Logistics;
 using FSH.Modules.Ops;
+using FSH.Modules.WmsIntegration;
+using FSH.Modules.WmsIntegration.Contracts.v1;
 using FSH.Modules.Tickets;
 using FSH.Modules.Multitenancy.Features.v1.GetTenantStatus;
 using System.Reflection;
@@ -98,6 +100,7 @@ var moduleAssemblies = new Assembly[]
     typeof(WarehouseModule).Assembly,
     typeof(LogisticsModule).Assembly,
     typeof(OpsModule).Assembly,
+    typeof(WmsIntegrationModule).Assembly,
     typeof(TicketsModule).Assembly,
     typeof(FSH.Modules.Chat.ChatModule).Assembly,
     typeof(FSH.Modules.Notifications.NotificationsModule).Assembly,
@@ -138,13 +141,9 @@ app.UseHeroPlatform(p =>
 app.MapGet("/", () => Results.Ok(new { message = "hello world!" }))
    .WithTags("PlayGround")
    .AllowAnonymous();
-app.MapGet("/api/v1/fulfillment/capabilities", (HttpContext context) =>
+app.MapGet("/api/v1/fulfillment/capabilities", (HttpContext context, IWmsReadiness readiness) =>
 {
     context.Response.Headers.CacheControl = "no-store";
-    return Results.Ok(new
-    {
-        mode = "externalWms", readiness = "notConfigured",
-        acceptsOrders = false, acceptsOrderChanges = false, localWarehouseExecution = false,
-    });
+    return Results.Ok(readiness.GetSnapshot());
 }).RequireAuthorization().WithName("GetFulfillmentCapabilities").WithTags("Fulfillment");
 await app.RunAsync();

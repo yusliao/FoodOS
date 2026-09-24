@@ -13,6 +13,7 @@ using FSH.Modules.Procurement;
 using FSH.Modules.Warehouse;
 using FSH.Modules.Logistics;
 using FSH.Modules.Ops;
+using FSH.Modules.WmsIntegration;
 using FSH.Modules.Identity;
 using FSH.Modules.Identity.Contracts.v1.Tokens.TokenGeneration;
 using FSH.Modules.Identity.Features.v1.Tokens.TokenGeneration;
@@ -139,6 +140,7 @@ var moduleAssemblies = new Assembly[]
     typeof(WarehouseModule).Assembly,
     typeof(LogisticsModule).Assembly,
     typeof(OpsModule).Assembly,
+    typeof(WmsIntegrationModule).Assembly,
     typeof(TicketsModule).Assembly,
     typeof(FSH.Modules.Chat.ChatModule).Assembly,
     typeof(FSH.Modules.Notifications.NotificationsModule).Assembly,

@@ -24,6 +24,7 @@ public class ContractsPurityTests
         typeof(FSH.Modules.Tickets.Contracts.TicketsContractsMarker).Assembly,
         typeof(FSH.Modules.Notifications.Contracts.NotificationsContractsMarker).Assembly,
         typeof(FSH.Modules.Ordering.Contracts.OrderingContractsMarker).Assembly
+        ,typeof(FSH.Modules.WmsIntegration.Contracts.WmsIntegrationContractsMarker).Assembly
     ];
 
     [Fact]

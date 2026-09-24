@@ -50,6 +50,8 @@
     <ProjectReference Include="..\..\Modules\Logistics\Modules.Logistics.Contracts\Modules.Logistics.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Ops\Modules.Ops\Modules.Ops.csproj" />
     <ProjectReference Include="..\..\Modules\Ops\Modules.Ops.Contracts\Modules.Ops.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\WmsIntegration\Modules.WmsIntegration\Modules.WmsIntegration.csproj" />
+    <ProjectReference Include="..\..\Modules\WmsIntegration\Modules.WmsIntegration.Contracts\Modules.WmsIntegration.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Tickets\Modules.Tickets\Modules.Tickets.csproj" />
     <ProjectReference Include="..\..\Modules\Tickets\Modules.Tickets.Contracts\Modules.Tickets.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Files\Modules.Files\Modules.Files.csproj" />

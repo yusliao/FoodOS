@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>FSH.Modules.WmsIntegration</RootNamespace>
+    <AssemblyName>FSH.Modules.WmsIntegration</AssemblyName>
+    <NoWarn>$(NoWarn);CA1031;CA1812;CA1859;S3267</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Persistence\Persistence.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Web\Web.csproj" />
+    <ProjectReference Include="..\Modules.WmsIntegration.Contracts\Modules.WmsIntegration.Contracts.csproj" />
+  </ItemGroup>
+</Project>
