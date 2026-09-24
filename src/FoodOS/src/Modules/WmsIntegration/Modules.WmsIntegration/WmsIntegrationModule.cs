@@ -7,6 +7,9 @@ using FSH.Modules.WmsIntegration.Contracts.Authorization;
 using FSH.Modules.WmsIntegration.Contracts.v1;
 using FSH.Modules.WmsIntegration.Data;
 using FSH.Modules.WmsIntegration.Features.v1.GetStatus;
+using FSH.Modules.WmsIntegration.Features.v1.Mappings.SearchMappings;
+using FSH.Modules.WmsIntegration.Features.v1.Mappings.UpsertMapping;
+using FSH.Modules.WmsIntegration.Features.v1.Mappings.ValidateMappings;
 using FSH.Modules.WmsIntegration.Features.v1.ReceiveEvent;
 using FSH.Modules.WmsIntegration.Services;
 using Microsoft.AspNetCore.Builder;
@@ -62,10 +65,13 @@ public sealed class WmsIntegrationModule : IModule
             .WithApiVersionSet(versionSet)
             .MapWmsEventEndpoint();
 
-        endpoints.MapGroup("api/v{version:apiVersion}/wms")
+        var management = endpoints.MapGroup("api/v{version:apiVersion}/wms")
             .WithTags("WMS Integration")
             .WithApiVersionSet(versionSet)
-            .RequireAuthorization()
-            .MapWmsStatusEndpoint();
+            .RequireAuthorization();
+        management.MapWmsStatusEndpoint();
+        management.MapUpsertWmsMappingEndpoint();
+        management.MapSearchWmsMappingsEndpoint();
+        management.MapValidateWmsMappingsEndpoint();
     }
 }

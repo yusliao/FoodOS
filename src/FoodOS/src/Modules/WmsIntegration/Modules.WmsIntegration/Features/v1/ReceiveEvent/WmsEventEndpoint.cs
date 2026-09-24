@@ -82,6 +82,10 @@ public static class ReceiveWmsEventEndpoint
         {
             return Results.Unauthorized();
         }
+        if (!WmsEventPayloadValidator.TryValidate(envelope, out string payloadError))
+        {
+            return Results.BadRequest(new { error = "invalid_event_payload", detail = payloadError });
+        }
 
         var receipt = await inbox.ReceiveAsync(envelope, Encoding.UTF8.GetString(body), cancellationToken).ConfigureAwait(false);
         return receipt.Status == "awaitingGap" ? Results.Accepted(value: receipt) : Results.Ok(receipt);

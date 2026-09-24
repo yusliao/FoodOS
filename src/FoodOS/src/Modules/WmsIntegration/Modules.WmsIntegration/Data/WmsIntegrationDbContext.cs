@@ -21,6 +21,7 @@ public sealed class WmsIntegrationDbContext : BaseDbContext
 
     public DbSet<WmsInboxMessage> InboxMessages => Set<WmsInboxMessage>();
     public DbSet<WmsObjectCursor> ObjectCursors => Set<WmsObjectCursor>();
+    public DbSet<WmsMapping> Mappings => Set<WmsMapping>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

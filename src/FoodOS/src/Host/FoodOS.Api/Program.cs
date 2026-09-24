@@ -75,6 +75,8 @@ builder.Services.AddMediator(o =>
         typeof(FSH.Modules.Logistics.LogisticsModule),
         typeof(FSH.Modules.Ops.Contracts.OpsContractsMarker),
         typeof(FSH.Modules.Ops.OpsModule),
+        typeof(FSH.Modules.WmsIntegration.Contracts.WmsIntegrationContractsMarker),
+        typeof(FSH.Modules.WmsIntegration.WmsIntegrationModule),
         typeof(FSH.Modules.Tickets.Contracts.TicketsContractsMarker),
         typeof(FSH.Modules.Tickets.TicketsModule),
         typeof(FSH.Modules.Files.Contracts.v1.Commands.RequestUploadUrlCommand),

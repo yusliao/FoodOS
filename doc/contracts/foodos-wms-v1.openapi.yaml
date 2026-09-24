@@ -4,7 +4,9 @@ info:
   version: 1.0.0
   description: >-
     FoodOS 制定的仓储适配标准。仓库方实现出站操作接口；FoodOS 实现入站事件接口。
-    WMS 是实物库存、正式预占、质检与仓内执行的唯一权威。
+    WMS 是实物库存、正式预占、质检与仓内执行的唯一权威。FoodOS ID/代码为业务主键，
+    仓库外部值通过 warehouse、owner、sku、supplier、store、unit 六类映射维护；单位换算定义为
+    foodOsQuantityPerExternalUnit（一个外部单位包含的 FoodOS 基础单位数量）。
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -220,18 +222,23 @@ components:
       properties:
         lineId: {type: string, maxLength: 80}
         sku: {type: string, maxLength: 100}
+        externalSku: {type: [string, 'null'], maxLength: 160}
         uom: {type: string, maxLength: 30}
+        externalUom: {type: [string, 'null'], maxLength: 160}
         quantity: {type: number, exclusiveMinimum: 0}
         lotNumber: {type: [string, 'null'], maxLength: 100}
         expiryDate: {type: [string, 'null'], format: date}
     ReserveRequest:
       type: object
       additionalProperties: false
-      required: [operationId, orderId, warehouseId, lines]
+      required: [operationId, orderId, warehouseId, ownerId, lines]
       properties:
         operationId: {type: string, format: uuid}
         orderId: {type: string, format: uuid}
         warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
         expiresAt: {type: [string, 'null'], format: date-time}
         lines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/QuantityLine'}}
     ReleaseRequest:
@@ -251,22 +258,29 @@ components:
     InboundOrder:
       type: object
       additionalProperties: false
-      required: [inboundOrderId, purchaseOrderNumber, warehouseId, supplierCode, lines]
+      required: [inboundOrderId, purchaseOrderNumber, warehouseId, ownerId, supplierCode, lines]
       properties:
         inboundOrderId: {type: string, format: uuid}
         purchaseOrderNumber: {type: string, maxLength: 100}
         warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
         supplierCode: {type: string, maxLength: 100}
+        externalSupplierCode: {type: [string, 'null'], maxLength: 160}
         appointmentAt: {type: [string, 'null'], format: date-time}
         lines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/QuantityLine'}}
     OutboundOrder:
       type: object
       additionalProperties: false
-      required: [outboundOrderId, orderNumber, warehouseId, shipBy, consignee, lines]
+      required: [outboundOrderId, orderNumber, warehouseId, ownerId, shipBy, consignee, lines]
       properties:
         outboundOrderId: {type: string, format: uuid}
         orderNumber: {type: string, maxLength: 100}
         warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
         shipBy: {type: string, format: date-time}
         consignee: {$ref: '#/components/schemas/Consignee'}
         lines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/QuantityLine'}}
@@ -276,6 +290,7 @@ components:
       required: [storeId, name, address]
       properties:
         storeId: {type: string, format: uuid}
+        externalStoreId: {type: [string, 'null'], maxLength: 160}
         name: {type: string, maxLength: 200}
         address: {type: string, maxLength: 500}
     CancelOutboundOrder:
@@ -317,7 +332,181 @@ components:
         correlationId: {type: string, maxLength: 160}
         causationId: {type: [string, 'null'], maxLength: 160}
         idempotencyKey: {type: string, maxLength: 200}
-        payload: {type: object, additionalProperties: true}
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/InventoryBalanceEventPayload'
+            - $ref: '#/components/schemas/InboundReceiptEventPayload'
+            - $ref: '#/components/schemas/InboundQualityEventPayload'
+            - $ref: '#/components/schemas/InboundPutawayEventPayload'
+            - $ref: '#/components/schemas/OutboundProgressEventPayload'
+            - $ref: '#/components/schemas/OutboundShortageEventPayload'
+            - $ref: '#/components/schemas/ReturnReceivedEventPayload'
+    EventQuantityLine:
+      type: object
+      additionalProperties: false
+      required: [lineId, sku, uom, quantity]
+      properties:
+        lineId: {type: string, maxLength: 80}
+        sku: {type: string, maxLength: 100}
+        externalSku: {type: [string, 'null'], maxLength: 160}
+        uom: {type: string, maxLength: 30}
+        externalUom: {type: [string, 'null'], maxLength: 160}
+        quantity: {type: number, exclusiveMinimum: 0}
+        lotNumber: {type: [string, 'null'], maxLength: 100}
+        expiryDate: {type: [string, 'null'], format: date}
+        locationCode: {type: [string, 'null'], maxLength: 100}
+    PutawayEventLine:
+      type: object
+      additionalProperties: false
+      required: [lineId, sku, uom, quantity, locationCode]
+      properties:
+        lineId: {type: string, maxLength: 80}
+        sku: {type: string, maxLength: 100}
+        externalSku: {type: [string, 'null'], maxLength: 160}
+        uom: {type: string, maxLength: 30}
+        externalUom: {type: [string, 'null'], maxLength: 160}
+        quantity: {type: number, exclusiveMinimum: 0}
+        lotNumber: {type: [string, 'null'], maxLength: 100}
+        expiryDate: {type: [string, 'null'], format: date}
+        locationCode: {type: string, maxLength: 100}
+    ReturnEventLine:
+      type: object
+      additionalProperties: false
+      required: [lineId, sku, uom, quantity, disposition]
+      properties:
+        lineId: {type: string, maxLength: 80}
+        sku: {type: string, maxLength: 100}
+        externalSku: {type: [string, 'null'], maxLength: 160}
+        uom: {type: string, maxLength: 30}
+        externalUom: {type: [string, 'null'], maxLength: 160}
+        quantity: {type: number, exclusiveMinimum: 0}
+        lotNumber: {type: [string, 'null'], maxLength: 100}
+        expiryDate: {type: [string, 'null'], format: date}
+        disposition: {type: string, enum: [quarantine, accepted, rejected]}
+    InventoryBalanceEventPayload:
+      type: object
+      additionalProperties: false
+      required: [warehouseId, ownerId, sku, uom, onHandQuantity, allocatedQuantity, availableQuantity, quarantinedQuantity]
+      properties:
+        warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
+        sku: {type: string, maxLength: 100}
+        externalSku: {type: [string, 'null'], maxLength: 160}
+        uom: {type: string, maxLength: 30}
+        externalUom: {type: [string, 'null'], maxLength: 160}
+        lotNumber: {type: [string, 'null'], maxLength: 100}
+        expiryDate: {type: [string, 'null'], format: date}
+        onHandQuantity: {type: number, minimum: 0}
+        allocatedQuantity: {type: number, minimum: 0}
+        availableQuantity: {type: number, minimum: 0}
+        quarantinedQuantity: {type: number, minimum: 0}
+        reasonCode: {type: [string, 'null'], maxLength: 100}
+    InboundReceiptEventPayload:
+      type: object
+      additionalProperties: false
+      required: [inboundOrderId, warehouseId, ownerId, receivedAt, lines]
+      properties:
+        inboundOrderId: {type: string, maxLength: 160}
+        receiptId: {type: [string, 'null'], maxLength: 160}
+        warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
+        receivedAt: {type: string, format: date-time}
+        lines: {type: array, minItems: 1, maxItems: 500, items: {$ref: '#/components/schemas/EventQuantityLine'}}
+    InboundQualityEventPayload:
+      type: object
+      additionalProperties: false
+      required: [inboundOrderId, warehouseId, ownerId, completedAt, lines]
+      properties:
+        inboundOrderId: {type: string, maxLength: 160}
+        inspectionId: {type: [string, 'null'], maxLength: 160}
+        warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
+        completedAt: {type: string, format: date-time}
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [lineId, sku, uom, acceptedQuantity, rejectedQuantity]
+            properties:
+              lineId: {type: string, maxLength: 80}
+              sku: {type: string, maxLength: 100}
+              externalSku: {type: [string, 'null'], maxLength: 160}
+              uom: {type: string, maxLength: 30}
+              externalUom: {type: [string, 'null'], maxLength: 160}
+              acceptedQuantity: {type: number, minimum: 0}
+              rejectedQuantity: {type: number, minimum: 0}
+              reasonCode: {type: [string, 'null'], maxLength: 100}
+              lotNumber: {type: [string, 'null'], maxLength: 100}
+              expiryDate: {type: [string, 'null'], format: date}
+    InboundPutawayEventPayload:
+      type: object
+      additionalProperties: false
+      required: [inboundOrderId, warehouseId, ownerId, completedAt, lines]
+      properties:
+        inboundOrderId: {type: string, maxLength: 160}
+        warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
+        completedAt: {type: string, format: date-time}
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: {$ref: '#/components/schemas/PutawayEventLine'}
+    OutboundProgressEventPayload:
+      type: object
+      additionalProperties: false
+      required: [outboundOrderId, warehouseId, ownerId, occurredAt, lines]
+      properties:
+        outboundOrderId: {type: string, maxLength: 160}
+        shipmentId: {type: [string, 'null'], maxLength: 160}
+        warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
+        occurredAt: {type: string, format: date-time}
+        vehiclePlate: {type: [string, 'null'], maxLength: 40}
+        lines: {type: array, minItems: 1, maxItems: 500, items: {$ref: '#/components/schemas/EventQuantityLine'}}
+    OutboundShortageEventPayload:
+      type: object
+      additionalProperties: false
+      required: [outboundOrderId, warehouseId, ownerId, occurredAt, reasonCode, lines]
+      properties:
+        outboundOrderId: {type: string, maxLength: 160}
+        warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
+        occurredAt: {type: string, format: date-time}
+        reasonCode: {type: string, maxLength: 100}
+        lines: {type: array, minItems: 1, maxItems: 500, items: {$ref: '#/components/schemas/EventQuantityLine'}}
+    ReturnReceivedEventPayload:
+      type: object
+      additionalProperties: false
+      required: [returnId, outboundOrderId, warehouseId, ownerId, receivedAt, lines]
+      properties:
+        returnId: {type: string, maxLength: 160}
+        outboundOrderId: {type: string, maxLength: 160}
+        warehouseId: {type: string, maxLength: 100}
+        externalWarehouseId: {type: [string, 'null'], maxLength: 160}
+        ownerId: {type: string, maxLength: 160}
+        externalOwnerId: {type: [string, 'null'], maxLength: 160}
+        receivedAt: {type: string, format: date-time}
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: {$ref: '#/components/schemas/ReturnEventLine'}
     EventReceipt:
       type: object
       additionalProperties: false

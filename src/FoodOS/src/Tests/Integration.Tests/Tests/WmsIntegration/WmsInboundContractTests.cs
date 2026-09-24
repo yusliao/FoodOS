@@ -2,9 +2,12 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using FSH.Framework.Shared.Persistence;
 using FSH.Modules.WmsIntegration.Contracts.v1;
+using FSH.Modules.WmsIntegration.Contracts.v1.Mappings;
 using FSH.Modules.WmsIntegration.Services;
 using Integration.Tests.Infrastructure;
+using Integration.Tests.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -66,6 +69,158 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
         (await SendAsync(client, wrongConnection)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task Inbound_Endpoint_Should_Reject_Unknown_Or_Incomplete_Event_Payloads()
+    {
+        using var configured = CreateConfiguredFactory(factory);
+        using var client = configured.CreateClient();
+        var envelope = CreateEnvelope($"OUT-{Guid.NewGuid():N}", $"event-{Guid.NewGuid():N}", 1);
+
+        var unknown = envelope with
+        {
+            EventType = "outbound.unknown",
+            ExternalEventId = $"event-{Guid.NewGuid():N}",
+        };
+        (await SendAsync(client, unknown)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var incomplete = envelope with
+        {
+            ExternalEventId = $"event-{Guid.NewGuid():N}",
+            Payload = JsonSerializer.SerializeToElement(new { outboundOrderId = envelope.ExternalObjectId }),
+        };
+        (await SendAsync(client, incomplete)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Mapping_Api_Should_Upsert_Search_Validate_And_Deactivate_Connection_Values()
+    {
+        using var configured = CreateConfiguredFactory(factory);
+        var token = await new AuthHelper(factory).GetRootAdminTokenAsync();
+        using var client = configured.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        client.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string sku = $"SKU-{suffix}";
+        string externalSku = $"EXT-{suffix}";
+
+        using var createSku = await PutMappingAsync(client, new(
+            WmsMappingKinds.Sku, sku, externalSku));
+        createSku.StatusCode.ShouldBe(HttpStatusCode.OK, await createSku.Content.ReadAsStringAsync());
+        var createdSku = await createSku.DeserializeAsync<WmsMappingDto>();
+        createdSku.Provider.ShouldBe("reference-wms");
+        createdSku.ConnectionId.ShouldBe("dev-primary");
+
+        using var createUnit = await PutMappingAsync(client, new(
+            WmsMappingKinds.Unit, "EA", $"CASE-{suffix}", 12));
+        createUnit.StatusCode.ShouldBe(HttpStatusCode.OK, await createUnit.Content.ReadAsStringAsync());
+
+        using var duplicateExternal = await PutMappingAsync(client, new(
+            WmsMappingKinds.Sku, $"SKU-OTHER-{suffix}", externalSku));
+        duplicateExternal.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        using var search = await client.GetAsync(
+            $"/api/v1/wms/mappings?search={suffix}&pageNumber=1&pageSize=20");
+        search.StatusCode.ShouldBe(HttpStatusCode.OK, await search.Content.ReadAsStringAsync());
+        (await search.DeserializeAsync<PagedResponse<WmsMappingDto>>()).TotalCount.ShouldBe(2);
+
+        using var validation = await client.PostAsJsonAsync("/api/v1/wms/mappings/validate", new
+        {
+            requirements = new[]
+            {
+                new { kind = WmsMappingKinds.Sku, foodOsValue = sku },
+                new { kind = WmsMappingKinds.Unit, foodOsValue = "EA" },
+                new { kind = WmsMappingKinds.Owner, foodOsValue = "root" },
+            },
+        });
+        validation.StatusCode.ShouldBe(HttpStatusCode.OK, await validation.Content.ReadAsStringAsync());
+        var validationResult = await validation.DeserializeAsync<WmsMappingValidationResult>();
+        validationResult.IsValid.ShouldBeFalse();
+        validationResult.Resolved.Count.ShouldBe(2);
+        validationResult.Missing.ShouldHaveSingleItem().Reason.ShouldBe("missing");
+
+        using var deactivate = await PutMappingAsync(client, new(
+            WmsMappingKinds.Sku, sku, externalSku, IsActive: false));
+        deactivate.StatusCode.ShouldBe(HttpStatusCode.OK, await deactivate.Content.ReadAsStringAsync());
+        (await deactivate.DeserializeAsync<WmsMappingDto>()).IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task All_Standard_Event_Payload_Families_Should_Be_Accepted_With_Their_Entity_Type()
+    {
+        using var configured = CreateConfiguredFactory(factory);
+        using var client = configured.CreateClient();
+        DateTimeOffset occurredAt = DateTimeOffset.UtcNow;
+        object quantityLine = new { lineId = "line-1", sku = "SKU-001", uom = "EA", quantity = 1m };
+        var cases = new (string EventType, string EntityType, object Payload)[]
+        {
+            (WmsEventTypes.InventorySnapshot, WmsEntityTypes.Inventory, new
+            {
+                warehouseId = "DC-01", ownerId = "root", sku = "SKU-001", uom = "EA",
+                onHandQuantity = 10m, allocatedQuantity = 2m, availableQuantity = 8m, quarantinedQuantity = 0m,
+            }),
+            (WmsEventTypes.InventoryChanged, WmsEntityTypes.Inventory, new
+            {
+                warehouseId = "DC-01", ownerId = "root", sku = "SKU-001", uom = "EA",
+                onHandQuantity = 9m, allocatedQuantity = 2m, availableQuantity = 7m, quarantinedQuantity = 0m,
+            }),
+            (WmsEventTypes.InventoryAdjusted, WmsEntityTypes.Inventory, new
+            {
+                warehouseId = "DC-01", ownerId = "root", sku = "SKU-001", uom = "EA",
+                onHandQuantity = 8m, allocatedQuantity = 2m, availableQuantity = 6m, quarantinedQuantity = 0m,
+            }),
+            (WmsEventTypes.InboundReceived, WmsEntityTypes.InboundOrder, new
+            {
+                inboundOrderId = "IN-001", warehouseId = "DC-01", ownerId = "root", receivedAt = occurredAt,
+                lines = new[] { quantityLine },
+            }),
+            (WmsEventTypes.InboundQualityCompleted, WmsEntityTypes.InboundOrder, new
+            {
+                inboundOrderId = "IN-001", warehouseId = "DC-01", ownerId = "root", completedAt = occurredAt,
+                lines = new[] { new { lineId = "line-1", sku = "SKU-001", uom = "EA", acceptedQuantity = 1m, rejectedQuantity = 0m } },
+            }),
+            (WmsEventTypes.InboundPutawayCompleted, WmsEntityTypes.InboundOrder, new
+            {
+                inboundOrderId = "IN-001", warehouseId = "DC-01", ownerId = "root", completedAt = occurredAt,
+                lines = new[] { new { lineId = "line-1", sku = "SKU-001", uom = "EA", quantity = 1m, locationCode = "A-01" } },
+            }),
+            (WmsEventTypes.OutboundAllocated, WmsEntityTypes.OutboundOrder, OutboundPayload("OUT-001", occurredAt, quantityLine)),
+            (WmsEventTypes.OutboundPicked, WmsEntityTypes.OutboundOrder, OutboundPayload("OUT-002", occurredAt, quantityLine)),
+            (WmsEventTypes.OutboundLoaded, WmsEntityTypes.OutboundOrder, OutboundPayload("OUT-003", occurredAt, quantityLine)),
+            (WmsEventTypes.OutboundShipped, WmsEntityTypes.OutboundOrder, OutboundPayload("OUT-004", occurredAt, quantityLine)),
+            (WmsEventTypes.OutboundShortage, WmsEntityTypes.OutboundOrder, new
+            {
+                outboundOrderId = "OUT-005", warehouseId = "DC-01", ownerId = "root", occurredAt,
+                reasonCode = "insufficient_stock", lines = new[] { quantityLine },
+            }),
+            (WmsEventTypes.ReturnReceived, WmsEntityTypes.Return, new
+            {
+                returnId = "RET-001", outboundOrderId = "OUT-001", warehouseId = "DC-01", ownerId = "root", receivedAt = occurredAt,
+                lines = new[] { new { lineId = "line-1", sku = "SKU-001", uom = "EA", quantity = 1m, disposition = "quarantine" } },
+            }),
+        };
+
+        foreach (var testCase in cases)
+        {
+            string objectId = $"OBJ-{Guid.NewGuid():N}";
+            var envelope = CreateEnvelope(objectId, $"event-{Guid.NewGuid():N}", 1) with
+            {
+                EventType = testCase.EventType,
+                EntityType = testCase.EntityType,
+                Payload = JsonSerializer.SerializeToElement(testCase.Payload),
+            };
+            using var response = await SendAsync(client, envelope);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, $"{testCase.EventType}: {await response.Content.ReadAsStringAsync()}");
+        }
+
+        var wrongEntity = CreateEnvelope($"OBJ-{Guid.NewGuid():N}", $"event-{Guid.NewGuid():N}", 1) with
+        {
+            EventType = WmsEventTypes.InventoryChanged,
+            EntityType = WmsEntityTypes.OutboundOrder,
+            Payload = JsonSerializer.SerializeToElement(cases[0].Payload),
+        };
+        (await SendAsync(client, wrongEntity)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     private static WebApplicationFactory<Program> CreateConfiguredFactory(FshWebApplicationFactory factory) =>
         factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -95,7 +250,17 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
         $"corr-{objectId}",
         null,
         $"reference-wms:dev-primary:{eventId}",
-        JsonSerializer.SerializeToElement(new { outboundOrderId = objectId, pickedQuantity = 1 }));
+        JsonSerializer.SerializeToElement(new
+        {
+            outboundOrderId = objectId,
+            warehouseId = "DC-01",
+            ownerId = "root",
+            occurredAt = DateTimeOffset.UtcNow,
+            lines = new[]
+            {
+                new { lineId = "line-1", sku = "SKU-001", uom = "EA", quantity = 1m },
+            },
+        }));
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, WmsEventEnvelope envelope)
     {
@@ -117,6 +282,27 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
         request.Headers.Add("X-FoodOS-WMS-Signature", signature);
         return request;
     }
+
+    private static Task<HttpResponseMessage> PutMappingAsync(
+        HttpClient client,
+        UpsertWmsMappingCommand command)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, "/api/v1/wms/mappings")
+        {
+            Content = JsonContent.Create(command),
+        };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+        return client.SendAsync(request);
+    }
+
+    private static object OutboundPayload(string outboundOrderId, DateTimeOffset occurredAt, object line) => new
+    {
+        outboundOrderId,
+        warehouseId = "DC-01",
+        ownerId = "root",
+        occurredAt,
+        lines = new[] { line },
+    };
 
     private static async Task<WmsEventReceipt> ReadReceiptAsync(HttpResponseMessage response) =>
         JsonSerializer.Deserialize<WmsEventReceipt>(await response.Content.ReadAsByteArrayAsync(), JsonOptions)
