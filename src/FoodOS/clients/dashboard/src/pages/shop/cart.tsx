@@ -41,7 +41,7 @@ export function ShopCartPage() {
 function ShopCartBody() {
   const t = useT();
   const capabilities = useFulfillmentCapabilities();
-  const canPlace = capabilities.isSuccess && capabilities.data.acceptsOrders === true;
+  const canPlace = capabilities.data?.acceptsOrders !== false;
   const navigate = useNavigate();
   const { store } = useShopStore();
   const queryClient = useQueryClient();

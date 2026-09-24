@@ -56,22 +56,21 @@ test("Chinese mobile legacy route shows a stable retired result", async ({ page 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
-test("cart can be viewed but cannot place an order when WMS status is unknown", async ({ page }) => {
+test("unavailable WMS status does not block the FoodOS platform commitment", async ({ page }) => {
   await page.route("**/api/v1/shop/stores**", route => route.fulfill({ json: [{ id: "store-1", name: "Kitchen", code: "S1", address: "1 Main St" }] }));
   await page.route("**/api/v1/shop/stores/store-1/cart", route => route.fulfill({ json: { storeId: "store-1", lines: [{ productId: "product-1", quantity: 2 }] } }));
   await page.route("**/api/v1/shop/products/product-1**", route => route.fulfill({ json: { id: "product-1", name: "Apple", sku: "P1", unitPrice: 2, currency: "USD", priceSource: "Catalog", baseUom: "ea", isAvailable: true } }));
-  let release!: () => void;
-  const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route("**/api/v1/fulfillment/capabilities", async route => { await pending; await route.fulfill({ status: 403, json: {} }); });
-  const writes: string[] = [];
-  page.on("request", request => { if (request.method() === "POST" && request.url().includes("/shop/orders")) writes.push(request.url()); });
+  await page.route("**/api/v1/fulfillment/capabilities", route => route.fulfill({ status: 503, json: {} }));
+  let idempotencyKey = "";
+  await page.route("**/api/v1/shop/orders", async route => {
+    idempotencyKey = route.request().headers()["idempotency-key"] ?? "";
+    await route.fulfill({ json: "order-1" });
+  });
   await page.goto("/shop/cart");
-  await expect(page.getByText("Checking WMS readiness…")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Place order", exact: true })).toBeDisabled();
-  release();
-  await expect(page.getByText("WMS status could not be verified. Execution remains disabled.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Place order", exact: true })).toBeDisabled();
-  expect(writes).toEqual([]);
+  const place = page.getByRole("button", { name: "Place order", exact: true });
+  await expect(place).toBeEnabled();
+  await place.click();
+  await expect.poll(() => idempotencyKey).not.toBe("");
 });
 
 test("cart places an order when WMS health and base mappings are ready", async ({ page }) => {

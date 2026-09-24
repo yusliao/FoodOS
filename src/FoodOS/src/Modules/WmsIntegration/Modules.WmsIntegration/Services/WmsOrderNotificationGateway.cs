@@ -67,7 +67,7 @@ public sealed class WmsOrderNotificationGateway(
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
         JsonElement payload = JsonSerializer.SerializeToElement(new
         {
-            operationId = Guid.CreateVersion7(),
+            operationId = orderId,
             outboundOrderId = orderId,
             reason = reason.Trim(),
         }, JsonOptions);

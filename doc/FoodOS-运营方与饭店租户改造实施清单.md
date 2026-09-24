@@ -1377,3 +1377,4 @@
 - 外部 WMS 总闸继续阻止本地质检、库存、仓储、拣货、发运和 POD 执行；仅放开已改为平台业务处理的 Shop 下单、订单改单及取消。跨客户详情和取消均保持 404，不泄露订单存在性。
 - dashboard 购物车不再因 WMS 未配置或不可达而禁用提交；订单列表和详情显示平台承诺及仓库确认状态，明确提示实物库存仍以 WMS 为准。`FoodOS WMS Standard v1` 将销售出库/取消及回传作为一期最小能力，预占、释放和结果查询保留为可选增强能力。
 - 新增 Ordering PostgreSQL 迁移，仅增加下单幂等键、仓库确认状态/说明/更新时间和租户范围唯一索引，无库存数量变更。真实 PostgreSQL 专项已覆盖同键下单、无同步 WMS 请求、异步出库确认、短配异常、改单新修订、取消通知及零本地库存预占；完整验证与开发容器发布结果在本轮完成记录中更新。生产未发布。
+- 本轮最终验证：全解决方案构建 0 警告/0 错误；外部 WMS、Shop、客户隔离及入站事件 PostgreSQL 定向 59/59，Architecture 53/53，Ordering 36/36，dashboard WMS 浏览器回归 11/11，dashboard 生产构建均通过；Ordering 模型无待生成迁移。正式 DbMigrator 已在 `foodos-wms-dev` 应用 `AddWarehouseOrderConfirmation`，API、admin、dashboard 的 18080/18081/18082 均返回 200，API 与 dashboard 已使用本轮镜像重建并保持运行。仅发布开发环境，未调用真实 WMS、未发布生产。

@@ -50,8 +50,7 @@ export function ShopOrderDetailPage() {
   const { user } = useAuth();
   const canOrder = user?.permissions.includes(SHOP_PERMISSIONS.order) ?? false;
   const capabilities = useFulfillmentCapabilities();
-  const fulfillmentCanChange = capabilities.isSuccess
-    && capabilities.data.acceptsOrderChanges === true;
+  const fulfillmentCanChange = capabilities.data?.acceptsOrderChanges !== false;
   const canChange = canOrder && fulfillmentCanChange;
   const { orderId = "" } = useParams<{ orderId: string }>();
   const { store } = useShopStore();

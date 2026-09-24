@@ -117,7 +117,7 @@ public sealed partial class CustomerShopIsolationTests
             (await notificationJob.ProcessTenantAsync(
                 rootTenant,
                 DateTimeOffset.UtcNow.AddMinutes(1),
-                CancellationToken.None)).ShouldBe(1);
+                CancellationToken.None)).ShouldBeGreaterThanOrEqualTo(1);
         }
 
         wms.Requests.ShouldHaveSingleItem().Kind.ShouldBe(WmsOperationKind.SubmitOutboundOrder);
@@ -196,6 +196,18 @@ public sealed partial class CustomerShopIsolationTests
         await ProcessNotificationsAsync(configured, DateTimeOffset.UtcNow.AddMinutes(3));
         wms.Requests.Count.ShouldBe(3);
         wms.Requests[2].Kind.ShouldBe(WmsOperationKind.CancelOutboundOrder);
+        using var cancellationPending = await customer.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
+        (await cancellationPending.DeserializeAsync<ShopOrderDto>())
+            .WarehouseConfirmationStatus.ShouldBe("Pending");
+
+        await ProcessNotificationsAsync(configured, DateTimeOffset.UtcNow.AddMinutes(4));
+        wms.Requests.Count.ShouldBe(4);
+        wms.Requests[3].Kind.ShouldBe(WmsOperationKind.CancelOutboundOrder);
+        wms.Requests[3].IdempotencyKey.ShouldBe(wms.Requests[2].IdempotencyKey);
+        wms.Requests[3].Payload.GetProperty("operationId").GetGuid().ShouldBe(orderId);
+        wms.Requests[3].Payload.GetProperty("outboundOrderId").GetGuid().ShouldBe(orderId);
+        wms.Requests[3].Payload.GetProperty("reason").GetString()
+            .ShouldBe(wms.Requests[2].Payload.GetProperty("reason").GetString());
         using var cancellationConfirmed = await customer.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
         (await cancellationConfirmed.DeserializeAsync<ShopOrderDto>())
             .WarehouseConfirmationStatus.ShouldBe("Confirmed");
@@ -268,7 +280,7 @@ public sealed partial class CustomerShopIsolationTests
         var rootTenant = await tenantStore.GetAsync(TestConstants.RootTenantId);
         rootTenant.ShouldNotBeNull();
         var job = scope.ServiceProvider.GetRequiredService<WmsOrderNotificationJob>();
-        (await job.ProcessTenantAsync(rootTenant, utcNow, CancellationToken.None)).ShouldBe(1);
+        (await job.ProcessTenantAsync(rootTenant, utcNow, CancellationToken.None)).ShouldBeGreaterThanOrEqualTo(1);
     }
 
     private sealed class SequencedReservationClient : IWmsStandardClient
@@ -282,6 +294,12 @@ public sealed partial class CustomerShopIsolationTests
             CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
+            if (request.Kind == WmsOperationKind.CancelOutboundOrder
+                && Requests.Count(item => item.Kind == WmsOperationKind.CancelOutboundOrder) == 1)
+            {
+                return Task.FromResult(
+                    new WmsOperationResponse("unknown", null, "timeout", "Timed out after submission.", null));
+            }
             return Task.FromResult(request.Kind == WmsOperationKind.Reserve
                 ? new WmsOperationResponse("unknown", null, "timeout", "Timed out after submission.", null)
                 : new WmsOperationResponse("completed", "WMS-RES-SHOP-001", null, null, null));

@@ -26,7 +26,7 @@ public sealed partial class CustomerShopIsolationTests
     }
 
     [Fact]
-    public async Task RestaurantCustomers_Should_ShareCatalogAndKeepCartsIsolated_WhenWmsIsUnavailable()
+    public async Task RestaurantCustomers_Should_ShareCatalog_AndCommitSeparateOrders_WhenWmsIsUnavailable()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -111,23 +111,39 @@ public sealed partial class CustomerShopIsolationTests
             new { lines = new[] { new { productId, quantity = 4m } } });
         updateCartB.StatusCode.ShouldBe(HttpStatusCode.OK, await updateCartB.Content.ReadAsStringAsync());
 
+        var placedOrderIds = new List<Guid>();
         foreach (var (client, storeId) in new[] { (clientA, storeA), (clientB, storeB) })
         {
             using var place = await PostShopOrderAsync(client, storeId);
-            place.StatusCode.ShouldBe(HttpStatusCode.Conflict, await place.Content.ReadAsStringAsync());
-            (await place.Content.ReadAsStringAsync()).ShouldContain("pending or its result is unknown");
+            place.StatusCode.ShouldBe(HttpStatusCode.OK, await place.Content.ReadAsStringAsync());
+            placedOrderIds.Add(await place.DeserializeAsync<Guid>());
         }
 
-        await AssertCartPreservedAsync(clientA, storeA, productId, 3m);
-        await AssertCartPreservedAsync(clientB, storeB, productId, 4m);
+        foreach (var (client, storeId, orderId) in new[]
+        {
+            (clientA, storeA, placedOrderIds[0]),
+            (clientB, storeB, placedOrderIds[1]),
+        })
+        {
+            using var cart = await client.GetAsync($"{TestConstants.ShopBasePath}/stores/{storeId}/cart");
+            (await cart.DeserializeAsync<ShopCartDto>()).Lines.ShouldBeEmpty();
+            using var orderResponse = await client.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
+            var order = await orderResponse.DeserializeAsync<ShopOrderDto>();
+            order.WarehouseConfirmationStatus.ShouldBe("Pending");
+        }
         await AssertForeignStoreHiddenAsync(clientA, storeB, productId);
         await AssertForeignStoreHiddenAsync(clientB, storeA, productId);
 
-        foreach (var client in new[] { clientA, clientB })
+        foreach (var (client, orderId) in new[]
+        {
+            (clientA, placedOrderIds[0]),
+            (clientB, placedOrderIds[1]),
+        })
         {
             using var orders = await client.GetAsync($"{TestConstants.ShopBasePath}/orders?pageNumber=1&pageSize=20");
             orders.StatusCode.ShouldBe(HttpStatusCode.OK, await orders.Content.ReadAsStringAsync());
-            (await orders.DeserializeAsync<PagedResult<ShopOrderDto>>()).Items.ShouldBeEmpty();
+            (await orders.DeserializeAsync<PagedResult<ShopOrderDto>>()).Items
+                .ShouldHaveSingleItem().Id.ShouldBe(orderId);
             using var deliveries = await client.GetAsync($"{TestConstants.ShopBasePath}/deliveries");
             deliveries.StatusCode.ShouldBe(HttpStatusCode.OK, await deliveries.Content.ReadAsStringAsync());
             (await deliveries.DeserializeAsync<IReadOnlyList<ShopDeliveryDto>>()).ShouldBeEmpty();
@@ -137,7 +153,7 @@ public sealed partial class CustomerShopIsolationTests
             $"{TestConstants.OrderingBasePath}/orders?pageNumber=1&pageSize=200");
         operatorOrders.StatusCode.ShouldBe(HttpStatusCode.OK, await operatorOrders.Content.ReadAsStringAsync());
         var allOrders = (await operatorOrders.DeserializeAsync<PagedResult<SalesOrderDto>>()).Items;
-        allOrders.ShouldNotContain(order => order.StoreId == storeA || order.StoreId == storeB);
+        allOrders.Count(order => order.StoreId == storeA || order.StoreId == storeB).ShouldBe(2);
     }
 
     private static async Task AssertForeignStoreHiddenAsync(HttpClient client, Guid storeId, Guid productId)
