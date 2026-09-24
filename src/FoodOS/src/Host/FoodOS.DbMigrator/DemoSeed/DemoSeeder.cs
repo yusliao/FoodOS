@@ -9,6 +9,7 @@ using FSH.Modules.Billing.Data;
 using FSH.Modules.Billing.Domain;
 using FSH.Modules.Catalog.Contracts.Authorization;
 using FSH.Modules.Catalog.Data;
+using FSH.Modules.Inventory.Contracts.Authorization;
 using FSH.Modules.Procurement.Contracts.Authorization;
 using FSH.Modules.Warehouse.Contracts.Authorization;
 using FSH.Modules.Logistics.Contracts.Authorization;
@@ -334,13 +335,25 @@ internal sealed class DemoSeeder
                     _logger.LogInformation("[demo-seed] [{Tenant}] created custom role '{Role}'", tenant.Id, demoRole.Name);
                 }
             }
+            role.Description = demoRole.Description;
 
             var existingClaims = await roleManager.GetClaimsAsync(role).ConfigureAwait(false);
             var allowedCustomerPermissions = PermissionConstants.CustomerAdmin
                 .Select(permission => permission.Name)
                 .ToHashSet(StringComparer.Ordinal);
-            foreach (var permission in demoRole.Permissions.Where(permission =>
-                         tenant.Id == MultitenancyConstants.Root.Id || allowedCustomerPermissions.Contains(permission)))
+            var desiredPermissions = demoRole.Permissions.Where(permission =>
+                    tenant.Id == MultitenancyConstants.Root.Id || allowedCustomerPermissions.Contains(permission))
+                .ToHashSet(StringComparer.Ordinal);
+            var obsoleteSeedClaims = await context.RoleClaims
+                .Where(claim => claim.RoleId == role.Id
+                    && claim.ClaimType == ClaimConstants.Permission
+                    && claim.CreatedBy == "DemoSeeder"
+                    && (claim.ClaimValue == null || !desiredPermissions.Contains(claim.ClaimValue)))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            context.RoleClaims.RemoveRange(obsoleteSeedClaims);
+
+            foreach (var permission in desiredPermissions)
             {
                 if (existingClaims.Any(c => c.Type == ClaimConstants.Permission && c.Value == permission))
                 {
@@ -907,45 +920,39 @@ internal sealed class DemoSeeder
                 ProcurementPermissions.Suppliers.Update,
                 ProcurementPermissions.Purchase.View,
                 ProcurementPermissions.Purchase.Create,
+                InventoryPermissions.Warehouses.View,
+                CatalogPermissions.Products.View,
             ]),
 
         new(
             "QcInspector",
-            "Records inbound quality checks. Cannot create purchase orders.",
+            "Reviews external WMS quality results. Local quality decisions remain disabled.",
             [
                 ProcurementPermissions.Suppliers.View,
                 ProcurementPermissions.Purchase.View,
                 ProcurementPermissions.Quality.View,
-                ProcurementPermissions.Quality.Pass,
-                ProcurementPermissions.Quality.Fail,
             ]),
 
         new(
             "WarehouseLead",
-            "Triggers cutoff, generates and releases waves. Does not confirm PDA picks.",
+            "Monitors external WMS warehouse progress. Local wave execution remains disabled.",
             [
                 WarehousePermissions.Locations.View,
-                WarehousePermissions.Locations.Create,
                 WarehousePermissions.Waves.View,
-                WarehousePermissions.Waves.Cutoff,
-                WarehousePermissions.Waves.Generate,
-                WarehousePermissions.Waves.Release,
-                WarehousePermissions.Waves.Assign,
                 WarehousePermissions.Picks.View,
             ]),
 
         new(
             "WarehousePicker",
-            "Confirms PDA pick tasks. Cannot generate or release waves.",
+            "Views external WMS picking progress. Local pick confirmation remains disabled.",
             [
                 WarehousePermissions.Waves.View,
                 WarehousePermissions.Picks.View,
-                WarehousePermissions.Picks.Confirm,
             ]),
 
         new(
             "Dispatcher",
-            "Builds routes and trucks, loads packed orders, and departs shipments. Does not sign POD.",
+            "Maintains FoodOS delivery resources and views WMS shipment progress. Local loading and departure remain disabled.",
             [
                 LogisticsPermissions.Vehicles.View,
                 LogisticsPermissions.Vehicles.Create,
@@ -953,24 +960,24 @@ internal sealed class DemoSeeder
                 LogisticsPermissions.Drivers.Create,
                 LogisticsPermissions.Routes.View,
                 LogisticsPermissions.Routes.Create,
+                IdentityPermissions.Users.View,
+                InventoryPermissions.Warehouses.View,
+                OrderingPermissions.Stores.View,
                 LogisticsPermissions.Shipments.View,
-                LogisticsPermissions.Shipments.Create,
-                LogisticsPermissions.Shipments.Load,
-                LogisticsPermissions.Shipments.Depart,
             ]),
 
         new(
             "Driver",
-            "Confirms electronic proof of delivery. Cannot create or depart shipments.",
+            "Views assigned delivery work. POD confirmation remains disabled until WMS-backed delivery tasks are available.",
             [
                 LogisticsPermissions.Shipments.ViewAssigned,
-                LogisticsPermissions.ProofOfDelivery.Confirm,
             ]),
 
         new(
             "FinanceClerk",
             "Closes received orders after operational reconcile.",
             [
+                OrderingPermissions.Orders.View,
                 OrderingPermissions.Orders.Reconcile,
                 OrderingPermissions.Shop.View,
             ]),

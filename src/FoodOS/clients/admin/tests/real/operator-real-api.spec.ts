@@ -15,6 +15,16 @@ async function signIn(page: Page, userEmail = email) {
   await expect(page).toHaveURL(/\/$/);
 }
 
+async function signInAndReadPermissions(page: Page, userEmail: string) {
+  const permissionsResponse = page.waitForResponse(response =>
+    response.url().includes("/api/v1/identity/permissions")
+    && response.request().method() === "GET");
+  await signIn(page, userEmail);
+  const response = await permissionsResponse;
+  expect(response.status()).toBe(200);
+  return new Set(await response.json() as string[]);
+}
+
 function createTotp(sharedKey: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   const normalized = sharedKey.replace(/=+$/u, "").replace(/\s/gu, "").toUpperCase();
@@ -62,6 +72,101 @@ test("operator signs in and loads the workbench with real permissions", async ({
   expect((await permissions.json() as string[]).length).toBeGreaterThan(0);
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("main").getByRole("heading", { name: "Operator workbench" })).toBeVisible();
+});
+
+test("purchaser creates a purchase order with real role lookups", async ({ page }) => {
+  await signIn(page, "purchaser@root.com");
+  await page.goto("/procurement/purchase-orders");
+  await expect(page.getByRole("heading", { name: "Purchase orders", exact: true })).toBeVisible();
+
+  const open = page.getByRole("button", { name: "Create purchase order", exact: true });
+  await expect(open).toBeEnabled();
+  await open.click();
+
+  const dialog = page.getByRole("dialog", { name: "Create purchase order" });
+  const supplier = dialog.getByRole("region", { name: "Supplier" });
+  const warehouse = dialog.getByRole("region", { name: "Warehouse" });
+  const product = dialog.getByRole("region", { name: "Add product" });
+  await supplier.getByRole("button").first().click();
+  await warehouse.getByRole("button").first().click();
+  await product.getByRole("button").first().click();
+
+  const expectedAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString().slice(0, 16);
+  await dialog.getByLabel("Expected arrival").fill(expectedAt);
+  const created = page.waitForResponse(response =>
+    response.url().endsWith("/api/v1/procurement/purchase-orders")
+    && response.request().method() === "POST");
+  await dialog.getByRole("button", { name: "Create purchase order", exact: true }).click();
+  expect((await created).status()).toBe(200);
+  await expect(dialog).toHaveCount(0);
+});
+
+test("finance clerk reaches the real order center through its own role", async ({ page }) => {
+  await signIn(page, "finance@root.com");
+  const orders = page.waitForResponse(response =>
+    response.url().includes("/api/v1/ordering/orders?")
+    && response.request().method() === "GET");
+  await page.goto("/orders");
+  expect((await orders).status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Order center", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Purchase orders", exact: true })).toHaveCount(0);
+});
+
+test("external WMS operator roles do not retain disabled local execution permissions", async ({ browser }) => {
+  const cases = [
+    {
+      account: "qc@root.com",
+      allowed: ["Permissions.Procurement.Quality.View"],
+      denied: ["Permissions.Procurement.Quality.Pass", "Permissions.Procurement.Quality.Fail"],
+    },
+    {
+      account: "whlead@root.com",
+      allowed: ["Permissions.Warehouse.Waves.View", "Permissions.Warehouse.Picks.View"],
+      denied: [
+        "Permissions.Warehouse.Locations.Create",
+        "Permissions.Warehouse.Waves.Cutoff",
+        "Permissions.Warehouse.Waves.Generate",
+        "Permissions.Warehouse.Waves.Release",
+        "Permissions.Warehouse.Waves.Assign",
+      ],
+    },
+    {
+      account: "picker@root.com",
+      allowed: ["Permissions.Warehouse.Picks.View"],
+      denied: ["Permissions.Warehouse.Picks.Confirm"],
+    },
+    {
+      account: "dispatch@root.com",
+      allowed: [
+        "Permissions.Logistics.Routes.Create",
+        "Permissions.Logistics.Shipments.View",
+        "Permissions.Inventory.Warehouses.View",
+        "Permissions.Ordering.Stores.View",
+      ],
+      denied: [
+        "Permissions.Logistics.Shipments.Create",
+        "Permissions.Logistics.Shipments.Load",
+        "Permissions.Logistics.Shipments.Depart",
+      ],
+    },
+    {
+      account: "driver@root.com",
+      allowed: ["Permissions.Logistics.Shipments.ViewAssigned"],
+      denied: ["Permissions.Logistics.POD.Confirm", "Permissions.Logistics.Shipments.View"],
+    },
+  ];
+
+  for (const roleCase of cases) {
+    const context = await browser.newContext({ baseURL: "http://localhost:5273", locale: "en-US" });
+    try {
+      const page = await context.newPage();
+      const permissions = await signInAndReadPermissions(page, roleCase.account);
+      for (const permission of roleCase.allowed) expect(permissions.has(permission), roleCase.account).toBe(true);
+      for (const permission of roleCase.denied) expect(permissions.has(permission), roleCase.account).toBe(false);
+    } finally {
+      await context.close();
+    }
+  }
 });
 
 test("operator completes a real authenticator challenge and can disable it again", async ({ page, request }) => {
