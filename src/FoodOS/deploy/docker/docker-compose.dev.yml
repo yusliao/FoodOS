@@ -20,6 +20,8 @@ services:
   api:
     container_name: foodos-wms-dev-api
     restart: "no"
+    ports: !override
+      - "18080:8080"
     environment:
       DOTNET_ENVIRONMENT: Development
       WmsIntegration__Enabled: "true"
@@ -32,6 +34,10 @@ services:
   admin:
     container_name: foodos-wms-dev-admin
     restart: "no"
+    ports: !override
+      - "18081:80"
   dashboard:
     container_name: foodos-wms-dev-dashboard
     restart: "no"
+    ports: !override
+      - "18082:80"

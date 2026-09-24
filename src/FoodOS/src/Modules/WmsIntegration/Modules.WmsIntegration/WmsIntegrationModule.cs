@@ -72,6 +72,6 @@ public sealed class WmsIntegrationModule : IModule
         management.MapWmsStatusEndpoint();
         management.MapUpsertWmsMappingEndpoint();
         management.MapSearchWmsMappingsEndpoint();
-        management.MapValidateWmsMappingsEndpoint();
+        management.MapResolveWmsMappingsEndpoint();
     }
 }

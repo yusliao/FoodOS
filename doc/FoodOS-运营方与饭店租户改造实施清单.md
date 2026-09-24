@@ -1336,3 +1336,12 @@
 - 生成并审查 `InitialWmsIntegration` PostgreSQL 迁移，仅新增 `wms` schema、收件箱、对象游标和对应唯一/状态索引，无删除、重命名或业务数据回填。Release 全解决方案构建 0 警告/0 错误，Architecture.Tests 53/53；WMS 新增签名、超时、幂等、旧序列、跳号及补齐恢复 4/4，与原外部 WMS 总闸/调度合并回归 53/53，均 0 失败、0 跳过。
 - 按用户授权使用独立 Compose 项目 `foodos-wms-dev`、独立容器名、网络、卷和端口发布到 Docker Desktop 开发环境，没有覆盖原 `fsh-*` 停止容器。DbMigrator `apply --seed` 退出码 0，迁移历史包含 `InitialWmsIntegration`；API `http://localhost:18080/health/ready`、admin `http://localhost:18081`、dashboard `http://localhost:18082` 均返回 200。真实签名事件在约 0.24 秒返回 `accepted`，同报文重放返回 `duplicate`；数据库收件箱/游标均有对应记录。开发栈保持运行供后续切片使用。
 - 5.4a 由“全局防线但无配置”推进为“单仓标准配置＋仍失败关闭”并勾选完成。5.4b 仍需补外部 ID/单位/货主映射管理、具体事件 payload 业务字段和仓库方实现样例/测试环境；5.4c—5.4f、真实岗位正向闭环及生产发布均未完成。文件清理未获具体删除范围授权，本轮未删除任何文件。
+
+### 2026-09-24：5.4b 映射管理与事件载荷定稿
+
+- 新增 WMS 连接级映射管理，固定 `warehouse / owner / sku / supplier / store / unit` 六类。`PUT /api/v1/wms/mappings` 按类型和 FoodOS 值幂等新增、修改、启停，`GET /api/v1/wms/mappings` 分页查询，`POST /api/v1/wms/mappings/validate` 批量返回已解析、缺失或停用项；仓库外部值在同连接同类型内唯一。单位换算固定为“一个外部单位包含的 FoodOS 基础单位数量”，非单位映射只能为 1；停用代替物理删除。
+- 新增 `wms.Mappings` 迁移，保存 provider、connection、类型、双方值、单位换算、启用状态和时间戳，保持租户过滤；只新增表和索引，不修改库存、采购、订单或仓内执行表。WMS 映射命令/查询已补 API 与 DbMigrator 的 Mediator 注册，修复此前只有模块加载、没有消息处理器注册的遗漏。
+- OpenAPI 已将仓库、货主和外部编码口径补入预占、采购入库与销售出库报文，并把 12 类事件的 payload 从自由对象收紧为库存余额、收货、质检、上架、出库进度、短配和退货七类具体结构。服务端现在校验事件类型与实体类型组合、必填主键/时间、明细、正数或非负数量；未知类型、错误实体或残缺 payload 返回 400，仍不会写 Inventory/LotBalance 或调用旧自执行命令。
+- 新增可直接交仓库方的《FoodOS WMS Standard v1 接入指南》，包含权威边界、映射表、单位公式、签名、游标、错误语义和联调顺序；OpenAPI lint 无警告。Release 全解决方案构建 0 警告/0 错误，Architecture.Tests 53/53；隔离 PostgreSQL WMS 定向 7/7、连同原外部 WMS 总闸和调度组合回归 54/54，均 0 失败、0 跳过。迁移模型检查确认无未生成变化。
+- 按既有开发环境授权重新构建 `foodos-wms-dev` API 与 migrator，`AddWmsMappings` 已由正式 DbMigrator 应用，`wms.Mappings` 表存在；修正开发 Compose 端口依赖临时环境变量的问题，将 API/admin/dashboard 固定为 18080/18081/18082。migrator 退出码 0，三个 HTTP 健康检查均为 200；实际 API 已维护 `DC-01 / root / EA` 三项开发映射并批量校验 `resolved=3, missing=0`，符合新结构的签名 `outbound.picked` 事件以约 0.27 秒返回 200/accepted。生产未发布。
+- 5.4b 保持未勾选：FoodOS 侧标准与映射基础已具备，但仍需仓库方提交实现样例、可访问测试环境和真实映射数据，随后完成双方签名、幂等、事件及乱序补发联调。未恢复本地仓内执行，也未开始 5.4c 的采购与库存投影写入。

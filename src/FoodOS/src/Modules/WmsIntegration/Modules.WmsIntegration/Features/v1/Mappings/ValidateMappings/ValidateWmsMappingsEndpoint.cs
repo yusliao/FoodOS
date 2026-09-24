@@ -8,14 +8,14 @@ using Microsoft.AspNetCore.Routing;
 
 namespace FSH.Modules.WmsIntegration.Features.v1.Mappings.ValidateMappings;
 
-public static class ValidateWmsMappingsEndpoint
+public static class ResolveWmsMappingsEndpoint
 {
-    internal static RouteHandlerBuilder MapValidateWmsMappingsEndpoint(this IEndpointRouteBuilder endpoints)
+    internal static RouteHandlerBuilder MapResolveWmsMappingsEndpoint(this IEndpointRouteBuilder endpoints)
     {
         return endpoints.MapPost("/mappings/validate",
                 async (ValidateWmsMappingsQuery query, IMediator mediator, CancellationToken ct) =>
                     Results.Ok(await mediator.Send(query, ct).ConfigureAwait(false)))
-            .WithName("ValidateWmsMappings")
+            .WithName("ResolveWmsMappings")
             .WithSummary("Resolve required mappings and report missing or inactive values")
             .RequirePermission(WmsIntegrationPermissions.Integration.View);
     }
