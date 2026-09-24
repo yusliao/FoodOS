@@ -175,9 +175,9 @@
   - [x] 供应商现有查询、新建能力接入 admin，具备岗位权限、中英文与失败重试验证。
   - [x] 原实现记录：采购单查询、标记发送、到货预约及质检通过/不通过已接入 admin，前端模拟 API 权限场景通过；不等于已发送 WMS 或获准在对接仓库继续本地质检，后续按下列防线调整。
   - [x] 采购草稿创建接入 admin：按权限选择供应商/仓库/商品，支持查询、分页、多行、温区和预计到货；前端模拟 API 验证通过。
-  - [ ] 5.4a 自执行防线：明确试点仓库标识与配置，保留既有代码但阻断对接仓库的本地质检放行、库存调整、分配、上架、组波派工、拣货和装托执行；覆盖 UI、直接 API、Mediator/后台及间接调用，不能只隐藏按钮，不建设双执行模式。
+  - [x] 5.4a 自执行防线：明确试点仓库标识与配置，保留既有代码但阻断对接仓库的本地质检放行、库存调整、分配、上架、组波派工、拣货和装托执行；覆盖 UI、直接 API、Mediator/后台及间接调用，不能只隐藏按钮，不建设双执行模式。
     - 2026-09-24：当前单一外部 WMS 模式的技术防线已实际覆盖 API、无 HTTP 上下文的内部 Mediator、旧截单作业及 admin 退役入口，最新 PostgreSQL/作业定向回归 49/49 通过。演示 QcInspector、WarehouseLead、WarehousePicker、Dispatcher、Driver 不再持有必然被总闸拒绝的本地质检、库位创建、组波、拣货确认、装车发运或 POD 写权限；岗位仅保留外部结果查看和 FoodOS 自有配送资源维护。试点仓库标识与配置仍未取得，故 5.4a 不勾选。
-  - [ ] 5.4b 接口核实与映射：取得 WMS 预占/释放/结果查询、质检放行、履约下发/取消和库存事件契约、样例及测试环境；冻结可售口径、外部 ID、单位/货主、版本/游标和预约/月台边界。接口缺失需提交替代方案，不自造能力。
+  - [ ] 5.4b 标准契约与映射：由 FoodOS 制定 WMS 预占/释放/结果查询、质检放行、履约下发/取消和库存事件标准并交仓库方适配；继续冻结可售口径、外部 ID、单位/货主、版本/游标和预约/月台边界，取得仓库实现样例及测试环境。仓库能力缺失需提交替代方案，不静默恢复本地执行。
   - [ ] 5.4c 采购与库存投影：保留供应商/采购管理，接入 WMS 采购入库及质检/放行事实、仓储进度和可售库存视图，配置权限、异常重试与对账；不重复调用原入库/上架命令。标记发送与 WMS 接单确认须区分。
   - [ ] 5.4d 下单及变更适配：WMS 正式预占确认后才承诺供货；断连仅浏览、购物车或待确认需求，不承诺库存配送。交仓后改单取消与已有预占释放须 WMS 确认；超时查询最终结果，预占转分配不重复扣减，已出库走退货拒收。
   - [ ] 5.4e FoodOS 配送：车辆、司机、路线、配送任务和签收；接收 WMS 实际批次/装车/出库，与 FoodOS 发车和签收分开。检查发车本地扣库、POD 库存调用及拒收自动返仓/上架路径，返仓须 WMS 实收/复检，不凭签收登记增加可售库存。
@@ -257,6 +257,7 @@
   - 后端恢复默认 NuGet 审计并移除 CI 的禁用参数；Microsoft.AspNetCore.OpenApi 由 10.0.8 升至 10.0.12，传递依赖 Microsoft.OpenApi 由 2.0.0 升至 2.12.0，并以中央传递依赖钉住 SSH.NET 2026.0.0、System.Security.Cryptography.Xml 10.0.12。开启审计的全解决方案还原通过，Release 构建 0 警告/0 错误；非集成测试、Integration.Tests 905/905、Integration.Middleware.Tests 5/5 均通过。
   - 默认 Playwright 配置已显式排除 `tests/real`，真实 API 场景只由独立配置运行；清单复核为 admin 模拟 572 项/真实 1 项、dashboard 模拟 172 项/真实 1 项。本轮依赖升级后模拟套件 admin 572/572、dashboard 172/172 通过；采购创建场景另以 4 workers 重复 3 轮，24/24 通过。
 - [ ] 8.3 按授权执行发布并记录版本、迁移结果和业务核对结果。
+  - 2026-09-24：已按用户授权发布到隔离的 Docker Desktop 开发环境，生产发布仍未授权，故本项保持未完成；详细证据见末尾 `5.4a FoodOS WMS Standard v1` 执行记录。
 - [ ] 8.4 确认无使用方后清理旧页面、失效 API、旧字段及兼容代码；文件删除按项目规则取得授权。
   - 2026-09-24：完成 dashboard 静态使用方审计并形成[清理候选清单](FoodOS-运营方与饭店租户清理候选清单.md)。已确认一批旧运营页面和仅供其使用的前端 API 为候选，但退役路由及其回归测试必须保留；通用分页类型已从旧 `catalog` API 解耦，billing、sessions、files、fulfillment、后端运营 API、`TenantId` 与 `CustomerTenantId` 仍有活动依赖。尚未取得文件删除授权，未删除文件，8.4 保持未完成。
 - [x] 8.5 更新 README、业务规范、设计、API说明、岗位账号和故障排查指引。
@@ -1326,3 +1327,12 @@
 - 修正演示岗位语义：QcInspector、WarehouseLead、WarehousePicker、Dispatcher、Driver 不再宣称或获得当前必然 409 的本地执行权限；分别保留采购/质检结果查看、波次/拣货进度查看、FoodOS 车辆/司机/路线维护、发运结果查看和本人配送任务查看。调度员仍有完成自身表单所需的员工、仓库和门店辅助查询权限。
 - `seed-demo` 现在同步撤销由 DemoSeeder 自己创建、但已从岗位定义删除的权限声明，并更新岗位描述；管理员或其他来源后续手工授予的声明不会被该清理误删。一次性 PostgreSQL 17 中先注入一个旧 DemoSeeder 质检放行权限及一个手工来源探针，再幂等重跑正式 `seed-demo`：旧声明归零、手工探针保留，验证了收敛边界。
 - 实际 FoodOS.Api 与无接口 Mock 的 Chromium 使用五个岗位账号核对权限集，连同采购创建和财务订单中心场景共 3/3 通过；真实测试文件 ESLint、DbMigrator Release 构建均通过，构建 0 警告/0 错误。5.4a 仍因试点仓库标识/配置缺失保持未完成；本轮未伪造 WMS 投影、出库事实或正向仓内任务。
+
+### 2026-09-24：5.4a FoodOS WMS Standard v1 与开发发布
+
+- 按用户决定不再等待仓库方先给协议，由 FoodOS 冻结 `FoodOS WMS Standard v1`。新增可直接交付仓库方的 OpenAPI，规定健康、正式预占、释放、同幂等键结果查询、采购入库任务、销售出库任务/取消，以及 FoodOS 入站事件接口；HMAC-SHA256 签名覆盖时间戳和原始请求体，密钥至少 32 字节，默认重放窗口正负 300 秒。HTTP 超时、429 和 5xx 均保持 `unknown`，不得换键重下。
+- 新增独立 `WmsIntegration` 运行时与 Contracts 项目并完成 API、DbMigrator、迁移程序集、解决方案和架构测试注册。单仓配置包含 Provider、ConnectionId、WarehouseId、Tenant、BaseUrl 和密钥；开发试点固定为 `reference-wms / docker-dev-primary / DC-01 / root`，仓库方适配时保持 FoodOS ID 并建立自身外部 ID 映射。
+- 入站事件原始报文进入 `wms.InboxMessages`，按 provider＋connection＋externalEventId 去重；`wms.ObjectCursors` 按对象维护序列。重复返回 `duplicate`，旧版本返回 `stale`，跳号返回 `awaitingGap`，补齐后以同事件重放可推进；当前只形成可靠接入边界，不把事件直接写入 Inventory/LotBalance，也未恢复任何本地质检、库存或仓内执行命令。出站标准客户端统一路由、幂等/关联头、签名与未知结果语义；业务模块接线留在 5.4c—5.4e。
+- 生成并审查 `InitialWmsIntegration` PostgreSQL 迁移，仅新增 `wms` schema、收件箱、对象游标和对应唯一/状态索引，无删除、重命名或业务数据回填。Release 全解决方案构建 0 警告/0 错误，Architecture.Tests 53/53；WMS 新增签名、超时、幂等、旧序列、跳号及补齐恢复 4/4，与原外部 WMS 总闸/调度合并回归 53/53，均 0 失败、0 跳过。
+- 按用户授权使用独立 Compose 项目 `foodos-wms-dev`、独立容器名、网络、卷和端口发布到 Docker Desktop 开发环境，没有覆盖原 `fsh-*` 停止容器。DbMigrator `apply --seed` 退出码 0，迁移历史包含 `InitialWmsIntegration`；API `http://localhost:18080/health/ready`、admin `http://localhost:18081`、dashboard `http://localhost:18082` 均返回 200。真实签名事件在约 0.24 秒返回 `accepted`，同报文重放返回 `duplicate`；数据库收件箱/游标均有对应记录。开发栈保持运行供后续切片使用。
+- 5.4a 由“全局防线但无配置”推进为“单仓标准配置＋仍失败关闭”并勾选完成。5.4b 仍需补外部 ID/单位/货主映射管理、具体事件 payload 业务字段和仓库方实现样例/测试环境；5.4c—5.4f、真实岗位正向闭环及生产发布均未完成。文件清理未获具体删除范围授权，本轮未删除任何文件。

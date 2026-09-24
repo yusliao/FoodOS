@@ -61,6 +61,9 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
             .ToString(CultureInfo.InvariantCulture);
         using var expired = CreateRequest(body, expiredTimestamp, WmsSignature.Sign(expiredTimestamp, body, Secret));
         (await client.SendAsync(expired)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        var wrongConnection = envelope with { Provider = "another-wms", ExternalEventId = $"event-{Guid.NewGuid():N}" };
+        (await SendAsync(client, wrongConnection)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     private static WebApplicationFactory<Program> CreateConfiguredFactory(FshWebApplicationFactory factory) =>

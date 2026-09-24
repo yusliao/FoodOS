@@ -5,9 +5,17 @@ info:
   description: >-
     FoodOS 制定的仓储适配标准。仓库方实现出站操作接口；FoodOS 实现入站事件接口。
     WMS 是实物库存、正式预占、质检与仓内执行的唯一权威。
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
 servers:
-  - url: https://wms-adapter.example.com
+  - url: https://{wmsHost}
     description: 仓库方适配器（由仓库方提供）
+    variables:
+      wmsHost:
+        default: wms.invalid
+security:
+  - HmacSignature: []
 tags:
   - name: Warehouse adapter
     description: 仓库方必须实现，供 FoodOS 调用。
@@ -16,13 +24,16 @@ tags:
 paths:
   /api/v1/health:
     get:
+      summary: 检查仓库适配器健康状态
       tags: [Warehouse adapter]
       operationId: getWmsHealth
       responses:
         '200':
           description: 适配器可接收请求。
+        '401': {description: 签名或连接无效。}
   /api/v1/reservations:
     post:
+      summary: 正式预占库存
       tags: [Warehouse adapter]
       operationId: reserveInventory
       parameters:
@@ -40,6 +51,7 @@ paths:
         '409': {$ref: '#/components/responses/OperationResult'}
   /api/v1/reservations/release:
     post:
+      summary: 释放正式预占
       tags: [Warehouse adapter]
       operationId: releaseReservation
       parameters:
@@ -57,6 +69,7 @@ paths:
         '409': {$ref: '#/components/responses/OperationResult'}
   /api/v1/operations/query:
     post:
+      summary: 按原幂等键查询操作最终结果
       tags: [Warehouse adapter]
       operationId: queryOperation
       parameters:
@@ -74,6 +87,7 @@ paths:
         '404': {$ref: '#/components/responses/OperationResult'}
   /api/v1/inbound-orders:
     post:
+      summary: 下发采购入库任务
       tags: [Warehouse adapter]
       operationId: submitInboundOrder
       parameters:
@@ -91,6 +105,7 @@ paths:
         '409': {$ref: '#/components/responses/OperationResult'}
   /api/v1/outbound-orders:
     post:
+      summary: 下发销售出库任务
       tags: [Warehouse adapter]
       operationId: submitOutboundOrder
       parameters:
@@ -108,6 +123,7 @@ paths:
         '409': {$ref: '#/components/responses/OperationResult'}
   /api/v1/outbound-orders/cancel:
     post:
+      summary: 申请取消销售出库任务
       tags: [Warehouse adapter]
       operationId: cancelOutboundOrder
       parameters:
@@ -125,10 +141,14 @@ paths:
         '409': {$ref: '#/components/responses/OperationResult'}
   /api/v1/wms/inbound/events:
     post:
+      summary: 向 FoodOS 回传仓储事实事件
       tags: [FoodOS inbound]
       operationId: publishWmsEvent
       servers:
-        - url: https://api.foodos.example.com
+        - url: https://{foodOsHost}
+          variables:
+            foodOsHost:
+              default: api.foodos.invalid
       parameters:
         - name: tenant
           in: header
@@ -155,6 +175,12 @@ paths:
         '400': {description: 信封或版本无效。}
         '401': {description: 签名、时间窗、连接或租户无效。}
 components:
+  securitySchemes:
+    HmacSignature:
+      type: apiKey
+      in: header
+      name: X-FoodOS-WMS-Signature
+      description: 与 X-FoodOS-WMS-Timestamp 共同验证；签名算法见 Signature 参数。
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
