@@ -57,8 +57,10 @@ public sealed class WmsAvailabilityReader(
             .ConfigureAwait(false);
 
         var byProduct = balances.ToDictionary(x => (x.Sku, x.Uom));
-        DateTimeOffset freshAfter = clock.GetUtcNow().AddSeconds(
+        DateTimeOffset now = clock.GetUtcNow();
+        DateTimeOffset freshAfter = now.AddSeconds(
             -Math.Clamp(settings.InventoryProjectionMaxAgeSeconds, 1, 86400));
+        DateTimeOffset futureLimit = now.AddSeconds(Math.Clamp(settings.ReplayWindowSeconds, 1, 3600));
         return requests.Select(request =>
         {
             string sku = Normalize(request.Sku);
@@ -72,7 +74,9 @@ public sealed class WmsAvailabilityReader(
                 request.Sku,
                 request.Uom,
                 balance.AvailableQuantity,
-                balance.AsOf >= freshAfter && balance.AvailableQuantity >= request.RequiredQuantity,
+                balance.AsOf >= freshAfter
+                    && balance.AsOf <= futureLimit
+                    && balance.AvailableQuantity >= request.RequiredQuantity,
                 balance.AsOf);
         }).ToList();
     }

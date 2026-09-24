@@ -37,7 +37,7 @@ internal static class ExternalWmsExecutionBoundary
         typeof(ConfirmCutoffCommand), typeof(GenerateWaveCommand), typeof(AssignWaveCommand),
         typeof(StartWaveCommand), typeof(ConfirmPickTaskCommand), typeof(CreatePackToteCommand), typeof(CreateShrinkageCommand),
         // Stop orchestration before it saves an order, shipment or POD then invokes local inventory.
-        typeof(PlaceShopOrderCommand), typeof(AmendShopOrderCommand), typeof(CancelShopOrderCommand),
+        typeof(AmendShopOrderCommand), typeof(CancelShopOrderCommand),
         typeof(PlaceOrderCommand), typeof(AmendOrderCommand), typeof(CancelOrderCommand),
         typeof(LockOrdersForCutoffCommand), typeof(StartOrderPickingCommand),
         typeof(ConfirmOrderPackedCommand), typeof(RecordOrderLineShortageCommand),

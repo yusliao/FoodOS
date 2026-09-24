@@ -33,7 +33,8 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
         DateOnly businessDate,
         DateTimeOffset cutoffAt,
         IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines,
-        string? customerTenantId = null)
+        string? customerTenantId = null,
+        Guid? orderId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(number);
         ArgumentNullException.ThrowIfNull(lines);
@@ -63,7 +64,7 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
 
         var order = new SalesOrder
         {
-            Id = Guid.CreateVersion7(),
+            Id = orderId ?? Guid.CreateVersion7(),
             Number = number.Trim().ToUpperInvariant(),
             CustomerTenantId = string.IsNullOrWhiteSpace(customerTenantId)
                 ? null

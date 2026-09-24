@@ -73,7 +73,10 @@ public static class PlaceShopOrderEndpoint
 {
     internal static RouteHandlerBuilder MapPlaceShopOrderEndpoint(this IEndpointRouteBuilder endpoints)
         => endpoints.MapPost("/orders",
-                (PlaceShopOrderCommand command, IMediator mediator, CancellationToken ct) => mediator.Send(command, ct))
+                (PlaceShopOrderRequest request, HttpRequest httpRequest, IMediator mediator, CancellationToken ct) =>
+                    mediator.Send(new PlaceShopOrderCommand(
+                        request.StoreId,
+                        httpRequest.Headers["Idempotency-Key"].ToString()), ct))
             .WithName("PlaceShopOrder")
             .RequirePermission(OrderingPermissions.Shop.Order)
             .WithIdempotency();
@@ -102,4 +105,5 @@ public static class CancelShopOrderEndpoint
 }
 
 internal sealed record UpdateShopCartRequest(IReadOnlyList<CartLineInput> Lines);
+internal sealed record PlaceShopOrderRequest(Guid StoreId);
 internal sealed record AmendShopOrderRequest(IReadOnlyList<AmendOrderLineInput> Lines);

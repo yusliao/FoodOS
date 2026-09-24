@@ -1345,3 +1345,18 @@
 - 新增可直接交仓库方的《FoodOS WMS Standard v1 接入指南》，包含权威边界、映射表、单位公式、签名、游标、错误语义和联调顺序；OpenAPI lint 无警告。Release 全解决方案构建 0 警告/0 错误，Architecture.Tests 53/53；隔离 PostgreSQL WMS 定向 7/7、连同原外部 WMS 总闸和调度组合回归 54/54，均 0 失败、0 跳过。迁移模型检查确认无未生成变化。
 - 按既有开发环境授权重新构建 `foodos-wms-dev` API 与 migrator，`AddWmsMappings` 已由正式 DbMigrator 应用，`wms.Mappings` 表存在；修正开发 Compose 端口依赖临时环境变量的问题，将 API/admin/dashboard 固定为 18080/18081/18082。migrator 退出码 0，三个 HTTP 健康检查均为 200；实际 API 已维护 `DC-01 / root / EA` 三项开发映射并批量校验 `resolved=3, missing=0`，符合新结构的签名 `outbound.picked` 事件以约 0.27 秒返回 200/accepted。生产未发布。
 - 5.4b 保持未勾选：FoodOS 侧标准与映射基础已具备，但仍需仓库方提交实现样例、可访问测试环境和真实映射数据，随后完成双方签名、幂等、事件及乱序补发联调。未恢复本地仓内执行，也未开始 5.4c 的采购与库存投影写入。
+
+### 2026-09-24：5.4c Shop 可售库存投影第一切片
+
+- WMS 顺序有效的 `inventory.snapshot / inventory.changed / inventory.adjusted` 事件现在在收件箱与对象游标同一数据库提交中更新 `wms.InventoryBalances`。投影按 provider、connection、外部库存对象保存仓库、货主、SKU、单位、批次及四类数量；事件数量作为绝对余额覆盖，不累加。重复、旧序列和未补洞事件不推进；缺口补齐后以原事件重放才更新。
+- 新增 WMS Contracts 只读可售查询，显式按已配置 provider、connection、运营货主和请求仓库过滤，再按 SKU＋单位聚合 `availableQuantity`。该查询允许饭店租户读取运营方的派生可售结果，但不会暴露其他连接或货主数据；默认超过 300 秒的投影、缺失投影和未配置 WMS 均按不可售失败关闭。
+- Shop 商品列表与详情不再固定返回可售，改为按授权门店默认仓、商品 SKU/基础单位和请求数量读取 WMS 投影；列表按 1 个基础单位判断，详情按实际询价数量判断。现有客户价格、门店归属和权限边界保持不变，不读取或修改旧 Inventory/LotBalance。
+- 生成 `AddWmsInventoryProjection` PostgreSQL 迁移，仅新增投影表和唯一/查询索引，无删除、重命名或数据回填。按既有授权通过正式 DbMigrator 应用到 `foodos-wms-dev` Docker Desktop 开发库并重建 API；migrator 退出码 0，投影表存在，API ready 返回 200，未连接生产数据库。Release 全解决方案构建 0 警告/错误，Architecture.Tests 53/53，WMS 入站与客户 Shop 隔离定向集成 10/10，均无跳过；迁移模型无未生成变化。
+- 5.4c 仍未完成：采购入库任务下发及收货/质检/上架进度投影尚未接线。5.4d 仍需实现预占确认、同键结果恢复、改单/取消确认和订单状态事件消费；在此之前正式下单继续由外部 WMS 总闸阻断。
+
+### 2026-09-24：5.4d Shop 正式预占与同键恢复第一切片
+
+- Shop 正式下单已从外部 WMS 总闸中单独开放，不再调用旧 Inventory 本地预占。请求必须携带 `Idempotency-Key`；FoodOS 在 `wms.OutboundOperations` 中先持久化租户隔离的操作 ID、请求摘要、原始下发报文和最后状态，再调用标准预占接口。仓库、运营货主 `root`、SKU 和基础单位均在下发前解析既有 WMS 映射，单位数量按映射因子换算。
+- WMS 返回 `accepted / unknown`、超时或暂时性错误时，不创建销售订单、不清空购物车；调用方使用原键重试后，FoodOS 改走标准结果查询。只有 WMS 明确返回 `completed` 且带预占标识，才使用稳定操作 ID 创建 `Reserved` 订单、绑定行预占并原子清空购物车；同键不同请求返回 409。`rejected` 和 `completed` 缺失预占标识均不会承诺供货。
+- 新增 `AddWmsOutboundOperations` PostgreSQL 迁移及租户幂等索引补充迁移，仅新增 WMS 出站操作日志表并将唯一键限定为租户＋连接＋幂等键，无删除、重命名或业务数据回填。集成验收覆盖“第一次未知保留购物车、第二次同键查询成功、订单 Reserved、购物车清空”，并验证 WMS 端只收到一次 Reserve 和一次 Query、两次键一致；WMS 网关及客户 Shop 定向回归分别 7/7、5/5 通过。两项迁移已通过正式 DbMigrator 应用到 `foodos-wms-dev`，租户唯一索引存在，重建后的 API ready 返回 200；未连接生产数据库。
+- 本切片不宣称 5.4d 完成：改单仍需释放旧预占并按新版本重新确认，取消仍需 WMS 释放确认，订单状态事件尚未驱动后续履约投影；这些入口继续由总闸失败关闭。Shop 前端的“可下单”就绪判断也仍需接入 WMS 健康/能力探测后再开放。

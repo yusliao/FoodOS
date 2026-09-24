@@ -26,7 +26,7 @@ public sealed partial class CustomerShopIsolationTests
     }
 
     [Fact]
-    public async Task RestaurantCustomers_Should_ShareCatalogAndKeepCartsIsolated_WhenPlacementIsWmsBlocked()
+    public async Task RestaurantCustomers_Should_ShareCatalogAndKeepCartsIsolated_WhenWmsIsUnavailable()
     {
         using var rootClient = await _auth.CreateRootAdminClientAsync();
         string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -113,10 +113,9 @@ public sealed partial class CustomerShopIsolationTests
 
         foreach (var (client, storeId) in new[] { (clientA, storeA), (clientB, storeB) })
         {
-            using var place = await client.PostAsJsonAsync(
-                $"{TestConstants.ShopBasePath}/orders", new { storeId });
+            using var place = await PostShopOrderAsync(client, storeId);
             place.StatusCode.ShouldBe(HttpStatusCode.Conflict, await place.Content.ReadAsStringAsync());
-            (await place.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
+            (await place.Content.ReadAsStringAsync()).ShouldContain("pending or its result is unknown");
         }
 
         await AssertCartPreservedAsync(clientA, storeA, productId, 3m);
@@ -151,15 +150,17 @@ public sealed partial class CustomerShopIsolationTests
             $"{TestConstants.ShopBasePath}/stores/{storeId}/cart",
             new { lines = new[] { new { productId, quantity = 1m } } });
         update.StatusCode.ShouldBe(HttpStatusCode.NotFound, await update.Content.ReadAsStringAsync());
-        using var place = await client.PostAsJsonAsync(
-            $"{TestConstants.ShopBasePath}/orders", new { storeId });
-        place.StatusCode.ShouldBe(HttpStatusCode.Conflict, await place.Content.ReadAsStringAsync());
-        (await place.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
+        using var place = await PostShopOrderAsync(client, storeId);
+        place.StatusCode.ShouldBe(HttpStatusCode.NotFound, await place.Content.ReadAsStringAsync());
     }
 
-    private async Task<HttpClient> CreateDashboardClientAsync(string email, string tenantId)
+    private async Task<HttpClient> CreateDashboardClientAsync(
+        string email,
+        string tenantId,
+        Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program>? factory = null)
     {
-        using var anonymous = _factory.CreateClient();
+        var selectedFactory = factory ?? _factory;
+        using var anonymous = selectedFactory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{TestConstants.IdentityBasePath}/token/issue");
         request.Headers.Add("tenant", tenantId);
         request.Headers.Add("X-FSH-App", "dashboard");
@@ -169,7 +170,7 @@ public sealed partial class CustomerShopIsolationTests
         var token = JsonSerializer.Deserialize<TokenResult>(
             await response.Content.ReadAsStringAsync(), JsonOptions).ShouldNotBeNull();
 
-        var client = _factory.CreateClient();
+        var client = selectedFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
         client.DefaultRequestHeaders.Add("tenant", tenantId);
         return client;
@@ -184,6 +185,16 @@ public sealed partial class CustomerShopIsolationTests
             $"{TestConstants.OrderingBasePath}/store-access/users/{profile.Id}",
             new { userId = profile.Id, storeIds = new[] { storeId } });
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
+    }
+
+    private static Task<HttpResponseMessage> PostShopOrderAsync(HttpClient client, Guid storeId)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{TestConstants.ShopBasePath}/orders")
+        {
+            Content = JsonContent.Create(new { storeId }),
+        };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+        return client.SendAsync(request);
     }
 
     private static async Task CreateTenantAsync(HttpClient rootClient, string tenantId, string adminEmail)

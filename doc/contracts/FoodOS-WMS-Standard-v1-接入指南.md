@@ -7,7 +7,7 @@
 - WMS 是实物库存、正式预占、质检和仓内执行的唯一权威。
 - FoodOS 管采购、销售订单、客户服务、配送与签收，并保存 WMS 事实投影。
 - WMS 超时、HTTP 429 或 5xx 时，FoodOS 将操作保持为 `unknown`，使用原 `Idempotency-Key` 查询或重试；不得更换键重复下发。
-- WMS 事件只写入 FoodOS WMS 收件箱和对象游标。业务投影由后续明确的消费者推进，不调用 FoodOS 原有质检、库存调整、上架、组波或拣货命令。
+- WMS 事件先写入 FoodOS WMS 收件箱和对象游标；顺序有效的库存余额事件同时更新只读可售投影。该投影不调用 FoodOS 原有质检、库存调整、上架、组波或拣货命令，也不是第二套实物库存账。
 
 ## 2. 身份与映射
 
@@ -54,6 +54,8 @@ FoodOS 内部管理端点：
 
 支持的事件类型和 payload 字段以 OpenAPI 为准。每个 payload 必须携带 `warehouseId`、`ownerId`，明细必须携带 `lineId`、`sku`、`uom` 和对应数量；外部编码字段用于双方对账，不替代 FoodOS 主键。
 
+`inventory.snapshot`、`inventory.changed` 和 `inventory.adjusted` 的数量字段按该 `externalObjectId` 的绝对余额处理，不按增量累加。只有 `accepted` 事件更新投影；`stale`、`duplicate` 和尚未补洞的 `awaitingGap` 不更新。补洞后使用原事件 ID 重放并转为 `accepted` 时才推进投影。Shop 按仓库、货主、SKU 和单位聚合 `availableQuantity`；缺少投影或投影超过默认 300 秒未更新时按不可售处理。
+
 ## 5. 联调顺序
 
 1. 双方确认 `provider`、`connectionId`、试点仓库、货主、密钥和回调地址。
@@ -64,3 +66,13 @@ FoodOS 内部管理端点：
 6. 完成期初库存和在途单据对账后，才能进入单仓业务联合验收。
 
 仓库方尚未实现的能力必须明确返回 `rejected` 及稳定错误码，不能以成功响应、静默忽略或本地 FoodOS 执行替代。
+
+## 6. Shop 正式预占与恢复
+
+- 饭店下单请求必须携带 `Idempotency-Key`；FoodOS 将该键原样用于 WMS 正式预占，并持久化操作 ID、请求摘要、下发报文和最后状态。
+- 首次调用使用 `POST /reservations`。WMS 返回 `accepted`、HTTP 超时、429 或 5xx 时，FoodOS 不创建订单、不清空购物车，也不改用新键重下。
+- 客户端使用同一 `Idempotency-Key` 重试后，FoodOS 使用 `GET /operations/{idempotencyKey}` 查询原操作。只有 WMS 明确返回 `completed` 且给出预占标识，FoodOS 才建立 `Reserved` 订单并清空购物车。
+- WMS 返回 `rejected` 时 FoodOS 保持购物车并向调用方返回冲突；稳定 `errorCode` 应可用于双方排障。`completed` 但缺少预占标识按 `unknown` 处理。
+- 同一幂等键绑定相同仓库、货主、SKU、单位和数量；FoodOS 检测到同键不同请求时返回冲突，不会向 WMS 发出第二笔业务操作。
+
+当前切片只开放新订单正式预占。改单释放/重预占、取消释放、销售出库任务及订单状态事件消费仍保持失败关闭，仓库方不能据此假设这些动作已上线。

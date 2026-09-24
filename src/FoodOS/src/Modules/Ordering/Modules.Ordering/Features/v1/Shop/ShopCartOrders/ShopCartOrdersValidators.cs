@@ -31,7 +31,11 @@ public sealed class SearchShopOrdersQueryValidator : AbstractValidator<SearchSho
 
 public sealed class PlaceShopOrderCommandValidator : AbstractValidator<PlaceShopOrderCommand>
 {
-    public PlaceShopOrderCommandValidator() => RuleFor(command => command.StoreId).NotEmpty();
+    public PlaceShopOrderCommandValidator()
+    {
+        RuleFor(command => command.StoreId).NotEmpty();
+        RuleFor(command => command.IdempotencyKey).NotEmpty().MaximumLength(200);
+    }
 }
 
 public sealed class AmendShopOrderCommandValidator : AbstractValidator<AmendShopOrderCommand>

@@ -19,7 +19,7 @@ public sealed record SearchShopOrdersQuery(
 
 public sealed record GetShopOrderByIdQuery(Guid OrderId) : IQuery<ShopOrderDto>;
 
-public sealed record PlaceShopOrderCommand(Guid StoreId) : ICommand<Guid>;
+public sealed record PlaceShopOrderCommand(Guid StoreId, string IdempotencyKey) : ICommand<Guid>;
 
 public sealed record AmendShopOrderCommand(
     Guid OrderId,

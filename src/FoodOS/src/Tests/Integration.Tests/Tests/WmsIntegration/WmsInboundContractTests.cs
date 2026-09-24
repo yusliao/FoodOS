@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Integration.Tests.Tests.WmsIntegration;
 
@@ -184,6 +185,61 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
             WmsMappingKinds.Sku, sku, externalSku, IsActive: false));
         deactivate.StatusCode.ShouldBe(HttpStatusCode.OK, await deactivate.Content.ReadAsStringAsync());
         (await deactivate.DeserializeAsync<WmsMappingDto>()).IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Reservation_Gateway_Should_Query_The_Same_Operation_After_An_Unknown_Result()
+    {
+        var wms = new SequencedWmsClient();
+        using var configured = CreateConfiguredFactory(factory).WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IWmsStandardClient>();
+                services.AddSingleton<IWmsStandardClient>(wms);
+            }));
+        var token = await new AuthHelper(factory).GetRootAdminTokenAsync();
+        using var client = configured.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        client.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string warehouse = $"DC-{suffix}";
+        string sku = $"SKU-{suffix}";
+        foreach (var mapping in new[]
+        {
+            new UpsertWmsMappingCommand(WmsMappingKinds.Warehouse, warehouse, $"EXT-{warehouse}"),
+            new UpsertWmsMappingCommand(WmsMappingKinds.Owner, "root", $"OWNER-{suffix}"),
+            new UpsertWmsMappingCommand(WmsMappingKinds.Sku, sku, $"EXT-{sku}"),
+            new UpsertWmsMappingCommand(WmsMappingKinds.Unit, "EA", $"UNIT-{suffix}"),
+        })
+        {
+            using var response = await PutMappingAsync(client, mapping);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        }
+
+        using var scope = configured.Services.CreateScope();
+        var tenantSetter = scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>();
+        string tenantId = $"restaurant-{suffix}";
+        tenantSetter.MultiTenantContext = new MultiTenantContext<AppTenantInfo>(new AppTenantInfo(
+            tenantId,
+            tenantId,
+            string.Empty,
+            $"admin@{tenantId}.test",
+            issuer: $"{tenantId}.issuer"));
+        var gateway = scope.ServiceProvider.GetRequiredService<IWmsReservationGateway>();
+        string key = Guid.NewGuid().ToString("N");
+        var request = new WmsReserveOrderRequest(
+            warehouse,
+            "root",
+            [new WmsReservationLine("line-1", sku, "EA", 2m)]);
+
+        var unknown = await gateway.ReserveAsync(key, $"corr-{suffix}", request);
+        unknown.Status.ShouldBe("unknown");
+        var completed = await gateway.ReserveAsync(key, $"corr-{suffix}", request);
+        completed.Status.ShouldBe("completed");
+        completed.OperationId.ShouldBe(unknown.OperationId);
+        completed.ReservationId.ShouldBe("WMS-RES-001");
+        wms.Requests.Select(item => item.Kind).ShouldBe([WmsOperationKind.Reserve, WmsOperationKind.Query]);
+        wms.Requests.Select(item => item.IdempotencyKey).Distinct().ShouldHaveSingleItem().ShouldBe(key);
     }
 
     [Fact]
@@ -408,4 +464,19 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
     private static async Task<WmsEventReceipt> ReadReceiptAsync(HttpResponseMessage response) =>
         JsonSerializer.Deserialize<WmsEventReceipt>(await response.Content.ReadAsByteArrayAsync(), JsonOptions)
         ?? throw new InvalidOperationException("Missing WMS event receipt.");
+
+    private sealed class SequencedWmsClient : IWmsStandardClient
+    {
+        public List<WmsOperationRequest> Requests { get; } = [];
+
+        public Task<WmsOperationResponse> ExecuteAsync(
+            WmsOperationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(request.Kind == WmsOperationKind.Reserve
+                ? new WmsOperationResponse("unknown", null, "timeout", "Timed out after submission.", null)
+                : new WmsOperationResponse("completed", "WMS-RES-001", null, null, null));
+        }
+    }
 }
