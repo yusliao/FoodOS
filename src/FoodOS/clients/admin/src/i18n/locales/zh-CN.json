@@ -3,6 +3,7 @@
   "chatCompose": {"message":"频道发言","reply":"线程回复","send":"发送消息","hint":"可输入文字、添加一个私有附件，或同时使用；文字最多 32,768 个字符。本页未修改内容的重试会复用请求键。","failed":"消息发送失败。","browsingHint":"消息按从新到旧排列。浏览不会自动标记消息已读。","attachment":"私有附件","attachmentHint":"最大 50 MB；文件完成上传确认后才能随消息发送。","uploadFailed":"附件上传失败。","retryUpload":"重试上传","removeAttachment":"移除附件"},
   "chatRead": {"action":"标记已读至此消息","success":"已更新已读位置。","failed":"无法更新已读位置。"},
   "chatManage": {"create":"创建频道","edit":"编辑频道","save":"保存频道","archive":"归档频道","archiveHint":"归档后，该频道将从成员的频道列表中移除。","archived":"已归档频道","archivedHint":"搜索当前运营身份域内的已归档频道，并按原成员关系恢复。","searchChannels":"搜索已归档频道","searchAction":"搜索","noArchived":"本页没有已归档频道。","restore":"恢复频道","restoreHint":"按现有成员关系恢复此频道。","channelHint":"命名频道可以设为公开或私有，创建者自动成为频道管理员。","name":"频道名称","description":"频道说明","private":"私有频道","members":"频道成员","add":"添加成员","addHint":"从当前运营身份域的活动用户中选择成员。","search":"搜索用户","selected":"已选择","noUsers":"本页没有可添加的用户。","lookupRequired":"需要用户目录查看权限才能选择新成员。","remove":"移除成员","leave":"退出频道","removeHint":"此操作会立即修改频道成员关系；私聊成员不可变更。","you":"你","failed":"频道操作失败。","roles":{"Member":"成员","Admin":"管理员"}},
+  "chatDiscovery": {"title":"查找消息","searchLabel":"搜索当前频道","searchAction":"搜索","searchResults":"搜索结果","searchFailed":"无法搜索消息。","noSearchResults":"没有匹配的消息。","showPinned":"查看置顶消息","hidePinned":"收起置顶消息","pinnedMessages":"置顶消息","pinnedFailed":"无法加载置顶消息。","noPinned":"当前频道没有置顶消息。","pin":"置顶消息","unpin":"取消置顶","react":"回应","addReaction":"添加回应","removeReaction":"移除回应","actionFailed":"无法更新消息。"},
   "chat": {"title":"聊天","description":"查看当前运营身份域内已加入的频道。","noChannels":"本页没有已加入的频道。","private":"私有","public":"公开","unread":"未读","back":"返回频道列表","invalidId":"频道或消息标识无效。","notMember":"你不是此频道的成员，无法读取消息。","browsingHint":"消息按从新到旧排列。当前浏览页面不会发送消息或标记已读。","target":"定位消息","closeTarget":"关闭定位消息","parent":"线程原消息","replies":"线程回复","messages":"频道消息","noMessages":"本页暂无消息。","newer":"较新消息","older":"更早消息","deleted":"此消息已删除。","edited":"已编辑","pinned":"已置顶","attachmentHint":"私有附件；仅在你选择文件后请求新的下载链接。","prepareDownload":"准备下载","download":"下载附件","downloadFailed":"无法准备下载。","downloadInvalid":"服务端返回了无效或已过期的下载链接，请重试。","attachmentUnavailable":"此历史附件或不可用附件无法在这里下载。","openThread":"查看线程","failed":"聊天加载失败。","types":{"DirectMessage":"私聊","GroupMessage":"群聊","Channel":"频道"}},
   "tickets": {
     "chooseAttachment": "选择附件",
@@ -463,6 +464,9 @@
     "signIn": "登录",
     "signingIn": "正在登录…",
     "loginFailed": "登录失败",
+    "twoFactorCode": "身份验证器验证码",
+    "twoFactorPrompt": "请输入身份验证器应用中的 6 位验证码。",
+    "twoFactorInvalid": "身份验证器验证码无效或已过期。",
     "inactivity": "因长时间未操作，已退出登录。",
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码",

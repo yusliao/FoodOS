@@ -32,6 +32,35 @@ export function markChatRead(input: { channelId: string; messageId: string }) {
     method: "POST", body: JSON.stringify({ messageId: input.messageId }),
   });
 }
+export function searchChatMessages(input: { query: string; channelId: string; page?: number }, signal?: AbortSignal) {
+  const query = new URLSearchParams({
+    q: input.query.trim(),
+    channelId: input.channelId,
+    page: String(input.page ?? 1),
+    pageSize: String(CHAT_PAGE_SIZE),
+  });
+  return apiFetch<ChatMessage[]>(`${base}/search?${query}`, { signal });
+}
+export function listPinnedChatMessages(channelId: string, signal?: AbortSignal) {
+  return apiFetch<ChatMessage[]>(`${base}/channels/${encodeURIComponent(channelId)}/pinned`, { signal });
+}
+export function pinChatMessage(messageId: string) {
+  return apiFetch<void>(`${base}/messages/${encodeURIComponent(messageId)}/pin`, { method: "POST" });
+}
+export function unpinChatMessage(messageId: string) {
+  return apiFetch<void>(`${base}/messages/${encodeURIComponent(messageId)}/pin`, { method: "DELETE" });
+}
+export function addChatReaction(input: { messageId: string; emoji: string }) {
+  return apiFetch<void>(`${base}/messages/${encodeURIComponent(input.messageId)}/reactions`, {
+    method: "POST",
+    body: JSON.stringify({ emoji: input.emoji }),
+  });
+}
+export function removeChatReaction(input: { messageId: string; emoji: string }) {
+  return apiFetch<void>(`${base}/messages/${encodeURIComponent(input.messageId)}/reactions/${encodeURIComponent(input.emoji)}`, {
+    method: "DELETE",
+  });
+}
 export function sendChatMessage(input: { channelId: string; parentMessageId: string | null; body: string; key: string; attachments: SendChatAttachment[] }) {
   return apiFetch<ChatMessage>(`${base}/channels/${encodeURIComponent(input.channelId)}/messages`, {
     method: "POST", headers: { "Idempotency-Key": input.key },

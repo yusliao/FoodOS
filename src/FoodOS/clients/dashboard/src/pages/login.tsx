@@ -34,6 +34,8 @@ export function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false);
   const [tenant, setTenant] = useState(env.defaultTenant);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,20 +54,30 @@ export function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  const performLogin = async (creds: { email: string; password: string; tenant: string }) => {
+  const performLogin = async (creds: { email: string; password: string; tenant: string; twoFactorCode?: string }) => {
     setError(null);
     setSubmitting(true);
     try {
       await login(creds);
       navigate(from, { replace: true });
     } catch (err) {
-      const message =
+      const detail =
         err instanceof ApiRequestError
           ? err.problem?.detail ?? err.problem?.title ?? err.message
           : err instanceof Error
             ? err.message
             : t("auth.loginFailed");
-      setError(message);
+      const reason = detail.toLowerCase();
+      if (err instanceof ApiRequestError && err.status === 401 && reason.startsWith("two_factor_required:")) {
+        setTwoFactorRequired(true);
+        setTwoFactorCode("");
+        setError(null);
+      } else if (err instanceof ApiRequestError && err.status === 401 && reason.startsWith("two_factor_invalid:")) {
+        setTwoFactorRequired(true);
+        setError(t("auth.twoFactorInvalid"));
+      } else {
+        setError(detail);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -73,7 +85,7 @@ export function LoginPage() {
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    await performLogin({ email, password, tenant });
+    await performLogin({ email, password, tenant, twoFactorCode: twoFactorRequired ? twoFactorCode : undefined });
   };
 
   // Demo picker → reflect the chosen creds in the form, then sign in
@@ -82,6 +94,8 @@ export function LoginPage() {
     setEmail(account.email);
     setPassword(account.password);
     setTenant(account.tenant);
+    setTwoFactorCode("");
+    setTwoFactorRequired(false);
     void performLogin({ email: account.email, password: account.password, tenant: account.tenant });
   };
 
@@ -124,7 +138,11 @@ export function LoginPage() {
             <Input
               id="tenant"
               value={tenant}
-              onChange={(e) => setTenant(e.target.value)}
+              onChange={(e) => {
+                setTenant(e.target.value);
+                setTwoFactorCode("");
+                setTwoFactorRequired(false);
+              }}
               placeholder="root"
               autoComplete="organization"
               required
@@ -144,7 +162,11 @@ export function LoginPage() {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setTwoFactorCode("");
+                setTwoFactorRequired(false);
+              }}
               placeholder="name@example.com"
               autoComplete="email"
               required
@@ -173,7 +195,11 @@ export function LoginPage() {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setTwoFactorCode("");
+                  setTwoFactorRequired(false);
+                }}
                 placeholder={t("auth.passwordPlaceholder")}
                 autoComplete="current-password"
                 required
@@ -190,6 +216,30 @@ export function LoginPage() {
               </button>
             </div>
           </div>
+
+          {twoFactorRequired && (
+            <div className="space-y-1.5 fsh-enter">
+              <Label
+                htmlFor="two-factor-code"
+                className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
+              >
+                {t("auth.twoFactorCode")}
+              </Label>
+              <Input
+                id="two-factor-code"
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                maxLength={8}
+                required
+                autoFocus
+                className="h-11 font-mono text-[16px] tracking-[0.35em]"
+              />
+              <p className="text-xs text-[var(--color-muted-foreground)]">{t("auth.twoFactorPrompt")}</p>
+            </div>
+          )}
 
           {error && (
             <div
@@ -210,7 +260,7 @@ export function LoginPage() {
           <div className="pt-1.5">
             <Button
               type="submit"
-              disabled={submitting || !email || !password || !tenant}
+              disabled={submitting || !email || !password || !tenant || (twoFactorRequired && twoFactorCode.length !== 6)}
               className="group h-11 w-full text-[14px] font-semibold"
             >
               {submitting ? (

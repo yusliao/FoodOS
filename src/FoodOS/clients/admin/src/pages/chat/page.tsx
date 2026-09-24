@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { useIsMutating, useQuery } from "@tanstack/react-query";
+import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import { CHAT_PAGE_SIZE, getChatChannel, getChatMessage, listChatChannels, listChatMessages, listChatReplies, type ChatChannel, type ChatMessage } from "@/api/chat";
 import { useAuth } from "@/auth/use-auth";
@@ -15,11 +15,40 @@ import { ReadAction } from "./read-action";
 import { ChannelManagement, CreateChannelButton } from "./channel-management";
 import { ArchivedChannelsButton } from "./archived-channels";
 import { ChatAttachmentDownload } from "./attachment-download";
+import { MessageDiscovery } from "./message-discovery";
+import { MessageEngagement } from "./message-engagement";
+import { useRealtimeEvent } from "@/realtime/realtime-context";
+
+const chatRealtimeEvents = [
+  "RealtimeReconnected",
+  "ChatMessageCreated",
+  "ChatMessageEdited",
+  "ChatMessageDeleted",
+  "ChatMessagePinned",
+  "ChatMessageUnpinned",
+  "ChatReactionChanged",
+  "ChatChannelMemberAdded",
+  "ChatChannelMemberRemoved",
+  "ChatChannelMemberRead",
+  "ChatChannelAdded",
+  "ChatChannelRemoved",
+  "ChatChannelRead",
+] as const;
 
 const validId = (value: string) => /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value) && !/^0{8}(-0{4}){3}-0{12}$/.test(value);
 function useChatAccess() {
   const { user } = useAuth();
   return { userId: user?.id, allowed: user?.tenant === "root" && user.permissions.includes(ChatPermissions.View) };
+}
+function ChatRealtimeEvent({ event, userId }: { event: string; userId?: string }) {
+  const queryClient = useQueryClient();
+  useRealtimeEvent(event, () => {
+    if (userId) void queryClient.invalidateQueries({ queryKey: ["chat", userId] });
+  }, [userId, queryClient]);
+  return null;
+}
+function ChatRealtimeSync({ userId }: { userId?: string }) {
+  return <>{chatRealtimeEvents.map(event => <ChatRealtimeEvent key={event} event={event} userId={userId} />)}</>;
 }
 function Failure({ error, retry, pending }: { error: unknown; retry: () => void; pending: boolean }) {
   const { t } = useLocale();
@@ -35,6 +64,7 @@ export function ChatPage() {
   const [page, setPage] = useState(1);
   const query = useQuery({ queryKey: ["chat", userId, "channels", page], queryFn: ({ signal }) => listChatChannels(page, signal), enabled: allowed });
   return <div className="space-y-6">
+    <ChatRealtimeSync userId={userId} />
     <EntityPageHeader icon={MessageSquare} title={t("chat.title")} description={t("chat.description")}><div className="flex flex-wrap gap-2"><ArchivedChannelsButton /><CreateChannelButton /></div></EntityPageHeader>
     {query.isPending && <LoadingRow label={t("common.loading")} />}
     {query.isError && <Failure error={query.error} retry={() => { if (allowed) void query.refetch(); }} pending={query.isFetching} />}
@@ -61,6 +91,7 @@ export function ChatChannelPage() {
   const query = useQuery({ queryKey: ["chat", userId, "channel", channelId], queryFn: ({ signal }) => getChatChannel(channelId, signal), enabled: allowed && valid });
   const member = query.data?.members.some(value => value.userId === userId);
   return <div className="min-w-0 space-y-6">
+    <ChatRealtimeSync userId={userId} />
     <Link to="/chat" className="underline">{t("chat.back")}</Link>
     {!valid ? <ErrorBand message={t("chat.invalidId")} /> : <>
       {query.isPending && <LoadingRow label={t("common.loading")} />}
@@ -71,6 +102,7 @@ export function ChatChannelPage() {
 }
 function ChannelContent({ channel }: { channel: ChatChannel }) {
   const { t } = useLocale();
+  const { userId } = useChatAccess();
   const busy = useIsMutating({ mutationKey: ["chat", "write", channel.id] }) > 0;
   const [search, setSearch] = useSearchParams();
   const target = search.get("messageId");
@@ -80,6 +112,7 @@ function ChannelContent({ channel }: { channel: ChatChannel }) {
     <p className="text-sm">{t("chat.unread")}: {channel.unreadCount ?? 0}</p>
     <p className="text-sm text-[var(--color-muted-foreground)]">{t("chatCompose.browsingHint")}</p>
     <ChannelManagement channel={channel} />
+    <MessageDiscovery channelId={channel.id} userId={userId} renderMessage={message => <MessageCard key={message.id} message={message} openThread />} />
     <ChatComposer channelId={channel.id} />
     {target !== null && <section aria-label={t("chat.target")} className="space-y-4 rounded-xl border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{t("chat.target")}</h2><Button variant="outline" disabled={busy} onClick={() => setSearch(previous => { const next = new URLSearchParams(previous); next.delete("messageId"); return next; })}>{t("chat.closeTarget")}</Button></div>
@@ -144,6 +177,7 @@ function MessageCard({ message, openThread = false }: { message: ChatMessage; op
       {message.isPinned && <span className="text-sm"> · {t("chat.pinned")}</span>}
       {message.attachments.length > 0 && <div className="space-y-2 text-sm"><p>{t("chat.attachmentHint")}</p><ul className="grid gap-2 sm:grid-cols-2">{message.attachments.map(file => <ChatAttachmentDownload key={file.id} attachment={file} />)}</ul></div>}
       {message.reactions.length > 0 && <p className="break-words">{message.reactions.map(reaction => reaction.emoji).join(" ")}</p>}
+      <MessageEngagement message={message} />
       <MessageActions message={message} />
     </>}
     <ReadAction message={message} />

@@ -14,10 +14,6 @@
 		     let analyzer regressions slip through to CI. -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
-		<!-- Transitive NU19xx advisories (OpenApi / Cryptography.Xml) fail restore when
-		     warnings are errors. CI already passes /p:NuGetAudit=false; keep local `dotnet ef`
-		     and `dotnet test` on the same path. -->
-		<NuGetAudit>false</NuGetAudit>
 		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 		<AnalysisLevel>latest</AnalysisLevel>
 		<AnalysisMode>AllEnabledByDefault</AnalysisMode>

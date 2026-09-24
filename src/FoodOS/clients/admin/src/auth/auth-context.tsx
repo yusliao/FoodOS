@@ -33,7 +33,7 @@ export type AuthContextValue = {
    */
   permissionsHydrated: boolean;
   permissionsError: boolean;
-  login: (input: { email: string; password: string; tenant: string }) => Promise<void>;
+  login: (input: { email: string; password: string; tenant: string; twoFactorCode?: string }) => Promise<void>;
   logout: () => void;
   /** Re-fetch the permission set for the signed-in user. Call after a role
    *  assignment changes for the current user. */
@@ -182,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const login = useCallback(
-    async (input: { email: string; password: string; tenant: string }) => {
+    async (input: { email: string; password: string; tenant: string; twoFactorCode?: string }) => {
       if (input.tenant !== "root") throw new Error(t("workbench.operatorOnly"));
       sessionGeneration.current += 1;
       queryClient.clear();

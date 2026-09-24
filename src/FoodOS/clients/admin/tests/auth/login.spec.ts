@@ -96,6 +96,52 @@ test.describe("admin login", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
+  test("prompts for an authenticator code and forwards retries without clearing credentials", async ({ page }) => {
+    const bodies: Array<Record<string, unknown>> = [];
+    await page.route("**/api/v1/identity/token/issue", async (route) => {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      bodies.push(body);
+      if (bodies.length === 1) {
+        await route.fulfill({
+          status: 401,
+          contentType: "application/problem+json",
+          json: { status: 401, title: "Unauthorized", detail: "two_factor_required: An authenticator code is required to complete sign-in." },
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 401,
+        contentType: "application/problem+json",
+        json: { status: 401, title: "Unauthorized", detail: "two_factor_invalid: The authenticator code is invalid or expired." },
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill("operator@root.example");
+    await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    const code = page.getByLabel("Authenticator code");
+    await expect(code).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeDisabled();
+    await expect(page.getByLabel("Email")).toHaveValue("operator@root.example");
+    await expect(page.getByLabel("Password", { exact: true })).toHaveValue("Sup3rSecret!");
+
+    await code.fill("123 456");
+    await expect(code).toHaveValue("123456");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    await expect(page.getByRole("alert")).toContainText("invalid or expired");
+    await expect(code).toHaveValue("123456");
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).not.toHaveProperty("twoFactorCode");
+    expect(bodies[1]).toMatchObject({
+      email: "operator@root.example",
+      password: "Sup3rSecret!",
+      twoFactorCode: "123456",
+    });
+  });
+
   test("runtime demo dialog lists seeded operator accounts and signs in on pick", async ({ page }) => {
     await mockJsonResponse(page, "**/api/v1/identity/token/issue", TOKEN_RESPONSE);
     await page.goto("/login");

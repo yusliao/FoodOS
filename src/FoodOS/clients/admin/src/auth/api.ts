@@ -11,10 +11,15 @@ export function issueToken(input: {
   email: string;
   password: string;
   tenant: string;
+  twoFactorCode?: string;
 }) {
   return apiFetch<TokenResponse>("/api/v1/identity/token/issue", {
     method: "POST",
-    body: JSON.stringify({ email: input.email, password: input.password }),
+    body: JSON.stringify({
+      email: input.email,
+      password: input.password,
+      twoFactorCode: input.twoFactorCode,
+    }),
     // X-FSH-App marks this client as the platform-admin app. Used by the
     // API to enforce the operator / customer application boundary.
     headers: { tenant: input.tenant, "X-FSH-App": "admin" },

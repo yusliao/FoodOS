@@ -17,7 +17,7 @@ import {
 } from "@microsoft/signalr";
 import { env } from "@/env";
 import { useAuth } from "@/auth/use-auth";
-import { NotificationPermissions } from "@/lib/permissions";
+import { ChatPermissions, NotificationPermissions } from "@/lib/permissions";
 import { tokenStore } from "@/auth/token-store";
 
 export type RealtimeStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -35,16 +35,20 @@ const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 /**
  * RealtimeProvider — single shared SignalR connection to /api/v1/realtime/hub
  * authenticated via ?access_token=. Reconnect with backoff [2s, 5s, 10s, 30s].
- * Admin only wires NotificationCreated today; the dashboard's variant subscribes
- * to chat events too. Re-runs on tokenStore changes so login/refresh/impersonation
- * cleanly tear down and rebuild.
+ * Admin wires notification and chat events. Re-runs on tokenStore changes so
+ * login/refresh/impersonation cleanly tear down and rebuild.
  */
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<RealtimeStatus>("idle");
   const connectionRef = useRef<HubConnection | null>(null);
   const listenersRef = useRef<Map<string, Set<Listener>>>(new Map());
   const { isAuthenticated, permissionsHydrated, user } = useAuth();
-  const authorized = isAuthenticated && permissionsHydrated && Boolean(user?.permissions.includes(NotificationPermissions.Inbox.View));
+  const authorized = isAuthenticated && permissionsHydrated && Boolean(
+    user?.permissions.some(
+      (permission) =>
+        permission === NotificationPermissions.Inbox.View || permission === ChatPermissions.View,
+    ),
+  );
   const [tokenEpoch, setTokenEpoch] = useState(0);
 
   useEffect(() => tokenStore.subscribe(() => setTokenEpoch((n) => n + 1)), []);
@@ -78,12 +82,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         .build();
     };
 
+    const emit = (name: string, payload: unknown) => {
+      const list = listenersRef.current.get(name);
+      if (list) for (const fn of list) fn(payload);
+    };
+
     const wireListeners = (conn: HubConnection) => {
       const events = new Set<string>();
-      const sink = (name: string) => (payload: unknown) => {
-        const list = listenersRef.current.get(name);
-        if (list) for (const fn of list) fn(payload);
-      };
+      const sink = (name: string) => (payload: unknown) => emit(name, payload);
       const wire = (name: string) => {
         if (events.has(name)) return;
         events.add(name);
@@ -91,7 +97,21 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       };
       // Pre-register every event admin cares about so late subscribers don't
       // miss the first payload.
-      for (const event of ["NotificationCreated"]) {
+      for (const event of [
+        "NotificationCreated",
+        "ChatMessageCreated",
+        "ChatMessageEdited",
+        "ChatMessageDeleted",
+        "ChatMessagePinned",
+        "ChatMessageUnpinned",
+        "ChatReactionChanged",
+        "ChatChannelMemberAdded",
+        "ChatChannelMemberRemoved",
+        "ChatChannelMemberRead",
+        "ChatChannelAdded",
+        "ChatChannelRemoved",
+        "ChatChannelRead",
+      ]) {
         wire(event);
       }
     };
@@ -108,7 +128,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       wireListeners(conn);
 
       conn.onreconnecting(() => setStatus("reconnecting"));
-      conn.onreconnected(() => setStatus("connected"));
+      conn.onreconnected(() => {
+        setStatus("connected");
+        // Events can be missed while the transport is down. Consumers use this
+        // local signal to re-read authoritative server state after recovery.
+        emit("RealtimeReconnected", undefined);
+      });
       conn.onclose(async () => {
         if (stopped) return;
         setStatus("error");

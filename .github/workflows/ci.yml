@@ -22,10 +22,10 @@ jobs:
       - name: Restore
         run: dotnet restore src/FoodOS.slnx
       - name: Build
-        run: dotnet build src/FoodOS.slnx --no-restore -c Release /p:NuGetAudit=false
+        run: dotnet build src/FoodOS.slnx --no-restore -c Release
       - name: Unit tests
         run: >
-          dotnet test src/FoodOS.slnx --no-build -c Release /p:NuGetAudit=false
+          dotnet test src/FoodOS.slnx --no-build -c Release
           --filter "FullyQualifiedName!~Integration.Tests&FullyQualifiedName!~Integration.Middleware.Tests"
 
   frontend:

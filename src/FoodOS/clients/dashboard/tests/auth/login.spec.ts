@@ -109,6 +109,54 @@ test.describe("login — manual sign in", () => {
     await expect(page.getByRole("alert")).toContainText(/invalid credentials/i);
     await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
   });
+
+  test("prompts for an authenticator code and forwards retries without clearing scope", async ({ page }) => {
+    const bodies: Array<Record<string, unknown>> = [];
+    await page.unroute("**/api/v1/identity/token/issue");
+    await page.route("**/api/v1/identity/token/issue", async (route) => {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      bodies.push(body);
+      if (bodies.length === 1) {
+        await route.fulfill({
+          status: 401,
+          contentType: "application/problem+json",
+          json: { status: 401, title: "Unauthorized", detail: "two_factor_required: An authenticator code is required to complete sign-in." },
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 401,
+        contentType: "application/problem+json",
+        json: { status: 401, title: "Unauthorized", detail: "two_factor_invalid: The authenticator code is invalid or expired." },
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Tenant").fill("acme");
+    await page.getByLabel("Email").fill("alice@acme.com");
+    await page.getByLabel("Password", { exact: true }).fill("Password123!");
+    await page.getByRole("button", { name: /^sign in$/i }).click();
+
+    const code = page.getByLabel("Authenticator code");
+    await expect(code).toBeVisible();
+    await expect(page.getByRole("button", { name: /^sign in$/i })).toBeDisabled();
+    await expect(page.getByLabel("Tenant")).toHaveValue("acme");
+    await expect(page.getByLabel("Email")).toHaveValue("alice@acme.com");
+
+    await code.fill("654 321");
+    await expect(code).toHaveValue("654321");
+    await page.getByRole("button", { name: /^sign in$/i }).click();
+
+    await expect(page.getByRole("alert")).toContainText(/invalid or expired/i);
+    await expect(code).toHaveValue("654321");
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).not.toHaveProperty("twoFactorCode");
+    expect(bodies[1]).toMatchObject({
+      email: "alice@acme.com",
+      password: "Password123!",
+      twoFactorCode: "654321",
+    });
+  });
 });
 
 test.describe("login — demo account picker", () => {
