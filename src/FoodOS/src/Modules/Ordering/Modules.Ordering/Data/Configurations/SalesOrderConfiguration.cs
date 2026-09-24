@@ -16,7 +16,10 @@ public sealed class SalesOrderConfiguration : IEntityTypeConfiguration<SalesOrde
         builder.Property(x => x.Number).IsRequired().HasMaxLength(32);
         builder.HasIndex(x => x.Number).IsUnique();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
-        builder.Property(x => x.WarehouseConfirmationStatus).HasConversion<string>().HasMaxLength(16);
+        builder.Property(x => x.WarehouseConfirmationStatus)
+            .HasConversion<string>()
+            .HasMaxLength(16)
+            .HasDefaultValue(WarehouseConfirmationStatus.NotTracked);
         builder.Property(x => x.WarehouseConfirmationDetail).HasMaxLength(1000);
         builder.Property(x => x.PlacementIdempotencyKey).HasMaxLength(200);
         builder.HasIndex(x => new { x.CustomerTenantId, x.PlacementIdempotencyKey })

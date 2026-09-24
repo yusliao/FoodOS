@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: >-
     FoodOS 制定的仓储适配标准。仓库方实现出站操作接口；FoodOS 实现入站事件接口。
-    WMS 是实物库存、正式预占、质检与仓内执行的唯一权威。FoodOS ID/代码为业务主键，
+    WMS 是实物库存、质检与仓内执行的唯一权威。FoodOS 下单先形成平台承诺并异步发送
+    销售出库任务；预占、释放与操作查询属于可选增强能力，不是一期 Shop 接单前置条件。FoodOS ID/代码为业务主键，
     仓库外部值通过 warehouse、owner、sku、supplier、store、unit 六类映射维护；单位换算定义为
     foodOsQuantityPerExternalUnit（一个外部单位包含的 FoodOS 基础单位数量）。
   license:
@@ -35,7 +36,7 @@ paths:
         '401': {description: 签名或连接无效。}
   /api/v1/reservations:
     post:
-      summary: 正式预占库存
+      summary: 正式预占库存（可选增强能力）
       tags: [Warehouse adapter]
       operationId: reserveInventory
       parameters:
@@ -53,7 +54,7 @@ paths:
         '409': {$ref: '#/components/responses/OperationResult'}
   /api/v1/reservations/release:
     post:
-      summary: 释放正式预占
+      summary: 释放正式预占（可选增强能力）
       tags: [Warehouse adapter]
       operationId: releaseReservation
       parameters:
@@ -71,7 +72,7 @@ paths:
         '409': {$ref: '#/components/responses/OperationResult'}
   /api/v1/operations/query:
     post:
-      summary: 按原幂等键查询操作最终结果
+      summary: 按原幂等键查询操作最终结果（可选增强能力）
       tags: [Warehouse adapter]
       operationId: queryOperation
       parameters:
@@ -273,10 +274,11 @@ components:
     OutboundOrder:
       type: object
       additionalProperties: false
-      required: [outboundOrderId, orderNumber, warehouseId, ownerId, shipBy, consignee, lines]
+      required: [outboundOrderId, orderNumber, revision, warehouseId, ownerId, shipBy, consignee, lines]
       properties:
         outboundOrderId: {type: string, format: uuid}
         orderNumber: {type: string, maxLength: 100}
+        revision: {type: integer, minimum: 0}
         warehouseId: {type: string, maxLength: 100}
         externalWarehouseId: {type: [string, 'null'], maxLength: 160}
         ownerId: {type: string, maxLength: 160}

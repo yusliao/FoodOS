@@ -46,6 +46,7 @@ public sealed class ExternalWmsBoundaryTests(FshWebApplicationFactory factory)
             typeof(SendPurchaseOrderCommand), typeof(CreateInboundAppointmentCommand),
             typeof(UpdateCartCommand), typeof(UpdateShopCartCommand), typeof(PlaceShopOrderCommand),
             typeof(AmendShopOrderCommand), typeof(CancelShopOrderCommand),
+            typeof(AmendOrderCommand), typeof(CancelOrderCommand),
             typeof(CreateStoreCommand), typeof(SetUserStoreAccessCommand),
             typeof(CreateCustomerOrgCommand), typeof(CreateAfterSalesTicketCommand),
             typeof(CreateShopAfterSalesCommand), typeof(ReconcileOrderCommand),
@@ -117,8 +118,8 @@ public sealed class ExternalWmsBoundaryTests(FshWebApplicationFactory factory)
         {
             body.RootElement.GetProperty("mode").GetString().ShouldBe("externalWms");
             body.RootElement.GetProperty("readiness").GetString().ShouldBe("notConfigured");
-            body.RootElement.GetProperty("acceptsOrders").GetBoolean().ShouldBeFalse();
-            body.RootElement.GetProperty("acceptsOrderChanges").GetBoolean().ShouldBeFalse();
+            body.RootElement.GetProperty("acceptsOrders").GetBoolean().ShouldBeTrue();
+            body.RootElement.GetProperty("acceptsOrderChanges").GetBoolean().ShouldBeTrue();
             body.RootElement.GetProperty("localWarehouseExecution").GetBoolean().ShouldBeFalse();
         }
     }

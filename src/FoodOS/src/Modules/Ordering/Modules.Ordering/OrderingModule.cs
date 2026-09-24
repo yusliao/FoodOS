@@ -4,6 +4,7 @@ using FSH.Framework.Shared.Constants;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Ordering.Contracts.Authorization;
 using FSH.Modules.Ordering.Contracts.Access;
+using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Access;
 using FSH.Modules.Ordering.Data;
 using FSH.Modules.Ordering.Features.v1.Carts.GetCart;
@@ -29,6 +30,7 @@ using FSH.Modules.Ordering.Features.v1.Shop.ShopCartOrders;
 using FSH.Modules.Ordering.Features.v1.Shop.ShopAfterSales;
 using FSH.Modules.Ordering.Features.v1.Shop.SearchShopDeliveries;
 using FSH.Modules.Ordering.Jobs;
+using FSH.Modules.Ordering.Services;
 using Hangfire;
 using Hangfire.Common;
 using Microsoft.AspNetCore.Builder;
@@ -53,8 +55,10 @@ public sealed class OrderingModule : IModule
         builder.Services.AddHeroDbContext<OrderingDbContext>();
         builder.Services.AddScoped<ICustomerAccessScopeResolver, CustomerAccessScopeResolver>();
         builder.Services.AddScoped<ICustomerDeliveryNotificationAudience, CustomerDeliveryNotificationAudience>();
+        builder.Services.AddScoped<IWarehouseOrderFeedbackSink, WarehouseOrderFeedbackSink>();
         builder.Services.AddScoped<IDbInitializer, OrderingDbInitializer>();
         builder.Services.AddTransient<ReconcileReminderJob>();
+        builder.Services.AddTransient<WmsOrderNotificationJob>();
 
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<OrderingDbContext>(
@@ -119,6 +123,11 @@ public sealed class OrderingModule : IModule
             jobManager.AddOrUpdate(
                 "ordering-reconcile-reminder",
                 Job.FromExpression<ReconcileReminderJob>(j => j.RunAsync(CancellationToken.None)),
+                "* * * * *",
+                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+            jobManager.AddOrUpdate(
+                "ordering-wms-order-notification",
+                Job.FromExpression<WmsOrderNotificationJob>(j => j.RunAsync(CancellationToken.None)),
                 "* * * * *",
                 new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
         }

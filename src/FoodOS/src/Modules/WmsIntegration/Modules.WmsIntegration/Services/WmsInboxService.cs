@@ -1,4 +1,5 @@
 using FSH.Modules.WmsIntegration.Contracts.v1;
+using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.WmsIntegration.Data;
 using FSH.Modules.WmsIntegration.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +7,7 @@ using System.Text.Json;
 
 namespace FSH.Modules.WmsIntegration.Services;
 
-public sealed class WmsInboxService(WmsIntegrationDbContext db)
+public sealed class WmsInboxService(WmsIntegrationDbContext db, IWarehouseOrderFeedbackSink orderFeedback)
 {
     public async Task<WmsEventReceipt> ReceiveAsync(
         WmsEventEnvelope envelope,
@@ -36,8 +37,13 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db)
                     duplicate.AcceptAfterGap();
                     await ApplyInventoryProjectionAsync(envelope, cancellationToken).ConfigureAwait(false);
                     await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    await ApplyWarehouseFeedbackAsync(envelope, cancellationToken).ConfigureAwait(false);
                     return new(envelope.MessageId, "accepted", waitingCursor.LastAcceptedSequence, null);
                 }
+            }
+            if (duplicate.Status == "accepted")
+            {
+                await ApplyWarehouseFeedbackAsync(envelope, cancellationToken).ConfigureAwait(false);
             }
             return new(envelope.MessageId, "duplicate", duplicate.Sequence, "Event was already accepted.");
         }
@@ -112,7 +118,53 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db)
             return new(envelope.MessageId, "duplicate", raced.Sequence, "Event was already accepted.");
         }
 
+        if (status == "accepted")
+        {
+            await ApplyWarehouseFeedbackAsync(envelope, cancellationToken).ConfigureAwait(false);
+        }
+
         return new(envelope.MessageId, status, cursor.LastAcceptedSequence, detail);
+    }
+
+    private Task ApplyWarehouseFeedbackAsync(
+        WmsEventEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        if (envelope.EventType is not WmsEventTypes.OutboundAllocated
+            and not WmsEventTypes.OutboundPicked
+            and not WmsEventTypes.OutboundShortage
+            and not WmsEventTypes.OutboundLoaded
+            and not WmsEventTypes.OutboundShipped)
+        {
+            return Task.CompletedTask;
+        }
+
+        JsonElement payload = envelope.Payload;
+        if (!Guid.TryParse(payload.GetProperty("outboundOrderId").GetString(), out Guid orderId))
+        {
+            return Task.CompletedTask;
+        }
+
+        string? reason = payload.TryGetProperty("reasonCode", out JsonElement reasonCode)
+            && reasonCode.ValueKind == JsonValueKind.String
+                ? reasonCode.GetString()
+                : null;
+        var lines = payload.GetProperty("lines").EnumerateArray().Select(line =>
+        {
+            if (!Guid.TryParse(line.GetProperty("lineId").GetString(), out Guid lineId))
+            {
+                return null;
+            }
+
+            return new WarehouseOrderFeedbackLine(lineId, line.GetProperty("quantity").GetDecimal());
+        }).Where(line => line is not null).Select(line => line!).ToList();
+        if (lines.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+        return orderFeedback.ApplyAsync(
+            new WarehouseOrderFeedback(orderId, envelope.EventType, reason, envelope.OccurredAt, lines),
+            cancellationToken);
     }
 
     private async Task ApplyInventoryProjectionAsync(

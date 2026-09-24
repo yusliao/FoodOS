@@ -124,6 +124,9 @@ export type ShopOrderDto = {
   cutoffAt: string;
   placedAt?: string | null;
   revision: number;
+  warehouseConfirmationStatus: "NotTracked" | "Pending" | "Confirmed" | "Exception";
+  warehouseConfirmationDetail?: string | null;
+  warehouseConfirmationUpdatedAt?: string | null;
   lines: ShopOrderLineDto[];
 };
 

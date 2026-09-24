@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installShellMocks } from "../helpers/shell-mocks";
-const status = { mode: "externalWms", readiness: "notConfigured", acceptsOrders: false, acceptsOrderChanges: false, localWarehouseExecution: false, blockingReasons: ["notConfigured"] };
+const status = { mode: "externalWms", readiness: "notConfigured", acceptsOrders: true, acceptsOrderChanges: true, localWarehouseExecution: false, blockingReasons: ["notConfigured"] };
 for (const granted of [true, false]) test(`legacy execution is absent from navigation and commands (grants=${granted})`, async ({ page }) => {
   const permissions = granted ? ["Permissions.Procurement.Purchase.View", "Permissions.Warehouse.Putaway.View", "Permissions.Warehouse.Waves.View", "Permissions.Warehouse.Picks.View", "Permissions.Logistics.Shipments.View"] : [];
   await page.route("**/api/v1/identity/permissions", route => route.fulfill({ json: permissions }));
@@ -17,16 +17,16 @@ for (const granted of [true, false]) test(`legacy execution is absent from navig
     await expect(page.getByRole("option", { name })).toHaveCount(0);
   }
 });
-test("existing order remains readable without amendment or cancellation", async ({ page }) => {
+test("platform-committed order remains changeable while warehouse confirmation is pending", async ({ page }) => {
   await page.route("**/api/v1/shop/stores**", route => route.fulfill({ json: [{ id: "store-1", name: "Kitchen", code: "S1", address: "1 Main St" }] }));
-  await page.route("**/api/v1/shop/orders/order-1", route => route.fulfill({ json: { id: "order-1", number: "SO-WMS", storeId: "store-1", status: "Reserved", cutoffAt: "2099-01-01T00:00:00Z", businessDate: "2026-09-17", revision: 1, lines: [] } }));
+  await page.route("**/api/v1/shop/orders/order-1", route => route.fulfill({ json: { id: "order-1", number: "SO-WMS", storeId: "store-1", status: "Reserved", cutoffAt: "2099-01-01T00:00:00Z", businessDate: "2026-09-17", revision: 1, warehouseConfirmationStatus: "Pending", warehouseConfirmationDetail: "Order accepted by FoodOS; warehouse confirmation is pending.", lines: [] } }));
   const writes: string[] = [];
   page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/shop/orders")) writes.push(request.url()); });
   await page.goto("/shop/orders/order-1");
   await expect(page.getByRole("heading", { name: "SO-WMS" })).toBeVisible();
-  await expect(page.getByText("WMS integration is not ready. Stock and delivery cannot be confirmed.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Save changes|Cancel order/ })).toHaveCount(0);
+  await expect(page.getByText("Platform committed · awaiting warehouse")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel order" })).toBeVisible();
   expect(writes).toEqual([]);
 });
 test.beforeEach(async ({ page }) => {

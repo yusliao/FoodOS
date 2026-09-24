@@ -36,9 +36,9 @@ internal static class ExternalWmsExecutionBoundary
         typeof(CreateLocationCommand), typeof(CreatePutawayTaskCommand), typeof(ConfirmPutawayCommand),
         typeof(ConfirmCutoffCommand), typeof(GenerateWaveCommand), typeof(AssignWaveCommand),
         typeof(StartWaveCommand), typeof(ConfirmPickTaskCommand), typeof(CreatePackToteCommand), typeof(CreateShrinkageCommand),
-        // Stop orchestration before it saves an order, shipment or POD then invokes local inventory.
-        typeof(AmendShopOrderCommand), typeof(CancelShopOrderCommand),
-        typeof(PlaceOrderCommand), typeof(AmendOrderCommand), typeof(CancelOrderCommand),
+        // Legacy operator placement still invokes local inventory. Shop placement and order changes
+        // are platform commitments and only enqueue asynchronous WMS notifications.
+        typeof(PlaceOrderCommand),
         typeof(LockOrdersForCutoffCommand), typeof(StartOrderPickingCommand),
         typeof(ConfirmOrderPackedCommand), typeof(RecordOrderLineShortageCommand),
         typeof(StartOrderInTransitCommand), typeof(ConfirmOrderReceivedCommand),

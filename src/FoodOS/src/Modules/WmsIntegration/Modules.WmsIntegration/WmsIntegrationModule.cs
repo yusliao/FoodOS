@@ -38,6 +38,7 @@ public sealed class WmsIntegrationModule : IModule
         builder.Services.AddScoped<WmsInboxService>();
         builder.Services.AddScoped<IWmsAvailabilityReader, WmsAvailabilityReader>();
         builder.Services.AddScoped<IWmsReservationGateway, WmsReservationGateway>();
+        builder.Services.AddScoped<IWmsOrderNotificationGateway, WmsOrderNotificationGateway>();
         builder.Services.AddScoped<IWmsReadiness, WmsReadiness>();
         builder.Services.AddHttpClient<IWmsStandardClient, WmsStandardClient>((services, client) =>
         {

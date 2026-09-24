@@ -36,6 +36,13 @@ export function ShopOrdersPage() {
   });
 
   const items = query.data?.items ?? [];
+  const warehouseLabel = (status: string) => status === "Confirmed"
+    ? t("shop.warehouseConfirmed", "Warehouse confirmed")
+    : status === "Exception"
+      ? t("shop.warehouseException", "Warehouse exception")
+      : status === "Pending"
+        ? t("shop.warehousePending", "Platform committed · awaiting warehouse")
+        : t("shop.warehouseNotTracked", "Legacy order · confirmation not tracked");
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -78,6 +85,9 @@ export function ShopOrdersPage() {
                   </div>
                   <EntityStatusBadge tone={orderStatusTone(order.status)}>{order.status}</EntityStatusBadge>
                 </div>
+                <p className="mt-2 text-[12px] text-[var(--color-muted-foreground)]">
+                  {warehouseLabel(order.warehouseConfirmationStatus)}
+                </p>
               </EntityMobileCard>
             ))}
           </div>
@@ -103,7 +113,12 @@ export function ShopOrdersPage() {
                   <Link to={`/shop/orders/${order.id}`} className="min-w-0 font-mono text-[13px] font-medium">
                     {order.number}
                   </Link>
-                  <EntityStatusBadge tone={orderStatusTone(order.status)}>{order.status}</EntityStatusBadge>
+                  <div className="space-y-1">
+                    <EntityStatusBadge tone={orderStatusTone(order.status)}>{order.status}</EntityStatusBadge>
+                    <div className="text-[11px] text-[var(--color-muted-foreground)]">
+                      {warehouseLabel(order.warehouseConfirmationStatus)}
+                    </div>
+                  </div>
                   <span className="font-display text-[14px] font-semibold tabular-nums">
                     {formatMoney(total, currency)}
                   </span>

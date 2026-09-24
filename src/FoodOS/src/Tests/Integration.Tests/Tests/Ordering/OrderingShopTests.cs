@@ -11,7 +11,8 @@ using Integration.Tests.Infrastructure.Extensions;
 namespace Integration.Tests.Tests.Ordering;
 
 /// <summary>
-/// External-WMS mode keeps cart maintenance available but blocks place, amend and cancel before local orders or reservations are written.
+/// External-WMS mode keeps the legacy operator placement path closed because it still relies on local inventory.
+/// Restaurant shop placement and order changes are covered separately by the platform-commitment tests.
 /// </summary>
 [Collection(FshCollectionDefinition.Name)]
 public sealed class OrderingShopTests
@@ -41,7 +42,7 @@ public sealed class OrderingShopTests
     }
 
     [Fact]
-    public async Task PlaceAmendCancel_Should_AllFailClosed_WithoutLocalState()
+    public async Task LegacyPlacement_Should_FailClosed_WhileUnknownOrderChanges_ReturnNotFound()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var setup = await CreateCartSetupAsync(client, 6m);
@@ -53,10 +54,10 @@ public sealed class OrderingShopTests
         using var amend = await client.PostAsJsonAsync(
             $"{TestConstants.OrderingBasePath}/orders/{orderId}/amend",
             new { orderId, lines = new[] { new { productId = setup.ProductId, quantity = 3m } } });
-        await AssertBlockedAsync(amend);
+        amend.StatusCode.ShouldBe(HttpStatusCode.NotFound, await amend.Content.ReadAsStringAsync());
         using var cancel = await client.PostAsJsonAsync(
             $"{TestConstants.OrderingBasePath}/orders/{orderId}/cancel", new { });
-        await AssertBlockedAsync(cancel);
+        cancel.StatusCode.ShouldBe(HttpStatusCode.NotFound, await cancel.Content.ReadAsStringAsync());
 
         await AssertCartAsync(client, setup.StoreId, setup.ProductId, 6m);
         await AssertNoOrderOrReservationAsync(setup.StoreId, setup.ProductId);
@@ -65,7 +66,7 @@ public sealed class OrderingShopTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CancelRetry_Should_RemainBlocked_BeforeAndAfterBlockedCutoff(bool afterCutoff)
+    public async Task UnknownOrderCancelRetry_Should_RemainNotFound_BeforeAndAfterBlockedCutoff(bool afterCutoff)
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var setup = await CreateCartSetupAsync(client, 4m);
@@ -81,7 +82,7 @@ public sealed class OrderingShopTests
         {
             using var cancel = await client.PostAsJsonAsync(
                 $"{TestConstants.OrderingBasePath}/orders/{orderId}/cancel", new { });
-            await AssertBlockedAsync(cancel);
+            cancel.StatusCode.ShouldBe(HttpStatusCode.NotFound, await cancel.Content.ReadAsStringAsync());
         }
 
         await AssertCartAsync(client, setup.StoreId, setup.ProductId, 4m);

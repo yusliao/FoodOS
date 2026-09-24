@@ -51,7 +51,6 @@ export function ShopOrderDetailPage() {
   const canOrder = user?.permissions.includes(SHOP_PERMISSIONS.order) ?? false;
   const capabilities = useFulfillmentCapabilities();
   const fulfillmentCanChange = capabilities.isSuccess
-    && capabilities.data.readiness === "ready"
     && capabilities.data.acceptsOrderChanges === true;
   const canChange = canOrder && fulfillmentCanChange;
   const { orderId = "" } = useParams<{ orderId: string }>();
@@ -195,6 +194,33 @@ export function ShopOrderDetailPage() {
                 : t("shop.afterCutoff", "This order is locked. Changes are no longer allowed.")}
           </p>
 
+          <div className="rounded-xl border p-4" data-testid="warehouse-confirmation">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                {t("shop.warehouseConfirmation", "Warehouse confirmation")}
+              </span>
+              <EntityStatusBadge
+                tone={order.warehouseConfirmationStatus === "Confirmed"
+                  ? "success"
+                  : order.warehouseConfirmationStatus === "Exception"
+                    ? "danger"
+                    : "warning"}
+              >
+                {order.warehouseConfirmationStatus === "Confirmed"
+                  ? t("shop.warehouseConfirmed", "Warehouse confirmed")
+                  : order.warehouseConfirmationStatus === "Exception"
+                    ? t("shop.warehouseException", "Warehouse exception")
+                    : order.warehouseConfirmationStatus === "Pending"
+                      ? t("shop.warehousePending", "Platform committed · awaiting warehouse")
+                      : t("shop.warehouseNotTracked", "Legacy order · confirmation not tracked")}
+              </EntityStatusBadge>
+            </div>
+            <p className="mt-2 text-[13px] text-[var(--color-muted-foreground)]">
+              {order.warehouseConfirmationDetail
+                ?? t("shop.platformCommitmentDetail", "FoodOS has accepted the order. Physical stock remains authoritative in WMS.")}
+            </p>
+          </div>
+
           <EntityDetailSection title={t("shop.lines", "Lines")} icon={ClipboardList} padded={false}>
             <EntityListCard>
               <EntityListHeader className={DESKTOP_GRID}>
@@ -262,7 +288,7 @@ export function ShopOrderDetailPage() {
           <DialogHeader>
             <DialogTitle>{t("shop.cancelOrder", "Cancel order")}</DialogTitle>
             <DialogDescription>
-              {t("shop.confirmCancel", "Cancel this order? Reserved stock will be released.")}
+              {t("shop.confirmCancel", "Cancel this order? FoodOS will notify the warehouse asynchronously.")}
             </DialogDescription>
           </DialogHeader>
           <DialogBody />

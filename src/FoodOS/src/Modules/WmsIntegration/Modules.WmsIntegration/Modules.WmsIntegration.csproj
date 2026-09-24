@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\Persistence\Persistence.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Web\Web.csproj" />
+    <ProjectReference Include="..\..\Ordering\Modules.Ordering.Contracts\Modules.Ordering.Contracts.csproj" />
     <ProjectReference Include="..\Modules.WmsIntegration.Contracts\Modules.WmsIntegration.Contracts.csproj" />
   </ItemGroup>
 </Project>

@@ -52,8 +52,7 @@ public sealed partial class CustomerShopIsolationTests
         foreignOrder.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignOrder.Content.ReadAsStringAsync());
         using var foreignCancel = await clientA.PostAsync(
             $"{TestConstants.ShopBasePath}/orders/{orderId}/cancel", content: null);
-        foreignCancel.StatusCode.ShouldBe(HttpStatusCode.Conflict, await foreignCancel.Content.ReadAsStringAsync());
-        (await foreignCancel.Content.ReadAsStringAsync()).ShouldContain("External WMS confirmation");
+        foreignCancel.StatusCode.ShouldBe(HttpStatusCode.NotFound, await foreignCancel.Content.ReadAsStringAsync());
 
         using var foreignTickets = await clientA.GetAsync(
             $"{TestConstants.ShopBasePath}/after-sales?orderId={orderId}");
