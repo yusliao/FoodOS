@@ -2,6 +2,9 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
 using FSH.Framework.Shared.Persistence;
 using FSH.Modules.WmsIntegration.Contracts.v1;
 using FSH.Modules.WmsIntegration.Contracts.v1.Mappings;
@@ -11,6 +14,7 @@ using Integration.Tests.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Integration.Tests.Tests.WmsIntegration;
 
@@ -47,6 +51,44 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
         var recovered = await ReadReceiptAsync(await SendAsync(client, third));
         recovered.Status.ShouldBe("accepted");
         recovered.LastAcceptedSequence.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task Accepted_Inventory_Events_Should_Project_Availability_In_Sequence()
+    {
+        using var configured = CreateConfiguredFactory(factory);
+        using var client = configured.CreateClient();
+        string objectId = $"INV-{Guid.NewGuid():N}";
+        string sku = $"SKU-{Guid.NewGuid():N}";
+
+        (await ReadReceiptAsync(await SendAsync(client,
+            CreateInventoryEnvelope(objectId, $"event-{Guid.NewGuid():N}", 1, sku, 8m)))).Status.ShouldBe("accepted");
+        await AssertAvailabilityAsync(configured, sku, 8m, 8m, true);
+
+        var third = CreateInventoryEnvelope(objectId, $"event-{Guid.NewGuid():N}", 3, sku, 4m);
+        using var gap = await SendAsync(client, third);
+        gap.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var gapEnvelope = await ReadReceiptAsync(gap);
+        gapEnvelope.Status.ShouldBe("awaitingGap");
+        await AssertAvailabilityAsync(configured, sku, 8m, 8m, true);
+
+        (await ReadReceiptAsync(await SendAsync(client,
+            CreateInventoryEnvelope(objectId, $"event-{Guid.NewGuid():N}", 2, sku, 6m)))).Status.ShouldBe("accepted");
+        await AssertAvailabilityAsync(configured, sku, 6m, 6m, true);
+
+        using var recoveredThird = await SendAsync(client, third);
+        (await ReadReceiptAsync(recoveredThird)).Status.ShouldBe("accepted");
+        await AssertAvailabilityAsync(configured, sku, 4m, 5m, false);
+
+        string staleSku = $"SKU-{Guid.NewGuid():N}";
+        (await ReadReceiptAsync(await SendAsync(client, CreateInventoryEnvelope(
+            $"INV-{Guid.NewGuid():N}",
+            $"event-{Guid.NewGuid():N}",
+            1,
+            staleSku,
+            10m,
+            DateTimeOffset.UtcNow.AddMinutes(-10))))).Status.ShouldBe("accepted");
+        await AssertAvailabilityAsync(configured, staleSku, 10m, 1m, false);
     }
 
     [Fact]
@@ -261,6 +303,65 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
                 new { lineId = "line-1", sku = "SKU-001", uom = "EA", quantity = 1m },
             },
         }));
+
+    private static WmsEventEnvelope CreateInventoryEnvelope(
+        string objectId,
+        string eventId,
+        long sequence,
+        string sku,
+        decimal availableQuantity,
+        DateTimeOffset? occurredAt = null) => new(
+        Guid.CreateVersion7(),
+        "reference-wms",
+        "dev-primary",
+        WmsEventTypes.InventoryChanged,
+        WmsEntityTypes.Inventory,
+        "1.0",
+        eventId,
+        objectId,
+        sequence,
+        occurredAt ?? DateTimeOffset.UtcNow,
+        DateTimeOffset.UtcNow,
+        $"corr-{objectId}",
+        null,
+        $"reference-wms:dev-primary:{eventId}",
+        JsonSerializer.SerializeToElement(new
+        {
+            warehouseId = "DC-01",
+            ownerId = "root",
+            sku,
+            uom = "EA",
+            onHandQuantity = availableQuantity,
+            allocatedQuantity = 0m,
+            availableQuantity,
+            quarantinedQuantity = 0m,
+        }));
+
+    private static async Task AssertAvailabilityAsync(
+        WebApplicationFactory<Program> factory,
+        string sku,
+        decimal expectedQuantity,
+        decimal requiredQuantity,
+        bool expectedAvailable)
+    {
+        using var scope = factory.Services.CreateScope();
+        var tenantSetter = scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>();
+        tenantSetter.MultiTenantContext = new MultiTenantContext<AppTenantInfo>(new AppTenantInfo(
+            "restaurant-probe",
+            "Restaurant Probe",
+            string.Empty,
+            "admin@restaurant-probe.test",
+            issuer: "restaurant-probe.issuer"));
+        var reader = scope.ServiceProvider.GetRequiredService<IWmsAvailabilityReader>();
+        var result = await reader.GetAvailabilityAsync(
+            "DC-01",
+            [new WmsAvailabilityRequest(sku, "EA", requiredQuantity)],
+            CancellationToken.None);
+        result.Count.ShouldBe(1);
+        var availability = result[0];
+        availability.AvailableQuantity.ShouldBe(expectedQuantity);
+        availability.IsAvailable.ShouldBe(expectedAvailable);
+    }
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, WmsEventEnvelope envelope)
     {

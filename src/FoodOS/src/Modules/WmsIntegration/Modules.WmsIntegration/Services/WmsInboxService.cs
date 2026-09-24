@@ -2,6 +2,7 @@ using FSH.Modules.WmsIntegration.Contracts.v1;
 using FSH.Modules.WmsIntegration.Data;
 using FSH.Modules.WmsIntegration.Domain;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace FSH.Modules.WmsIntegration.Services;
 
@@ -33,6 +34,7 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db)
                 {
                     waitingCursor.Advance(envelope.Sequence);
                     duplicate.AcceptAfterGap();
+                    await ApplyInventoryProjectionAsync(envelope, cancellationToken).ConfigureAwait(false);
                     await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                     return new(envelope.MessageId, "accepted", waitingCursor.LastAcceptedSequence, null);
                 }
@@ -89,6 +91,11 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db)
             envelope.OccurredAt,
             detail));
 
+        if (status == "accepted")
+        {
+            await ApplyInventoryProjectionAsync(envelope, cancellationToken).ConfigureAwait(false);
+        }
+
         try
         {
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -107,4 +114,64 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db)
 
         return new(envelope.MessageId, status, cursor.LastAcceptedSequence, detail);
     }
+
+    private async Task ApplyInventoryProjectionAsync(
+        WmsEventEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        if (envelope.EventType is not WmsEventTypes.InventorySnapshot
+            and not WmsEventTypes.InventoryChanged
+            and not WmsEventTypes.InventoryAdjusted)
+        {
+            return;
+        }
+
+        string provider = Normalize(envelope.Provider);
+        string connectionId = Normalize(envelope.ConnectionId);
+        var balance = await db.InventoryBalances
+            .FirstOrDefaultAsync(x => x.Provider == provider
+                && x.ConnectionId == connectionId
+                && x.ExternalObjectId == envelope.ExternalObjectId, cancellationToken)
+            .ConfigureAwait(false);
+
+        JsonElement payload = envelope.Payload;
+        string? lotNumber = payload.TryGetProperty("lotNumber", out JsonElement lot)
+            && lot.ValueKind == JsonValueKind.String
+                ? lot.GetString()
+                : null;
+        if (balance is null)
+        {
+            db.InventoryBalances.Add(WmsInventoryBalance.Create(
+                envelope.Provider,
+                envelope.ConnectionId,
+                envelope.ExternalObjectId,
+                payload.GetProperty("warehouseId").GetString()!,
+                payload.GetProperty("ownerId").GetString()!,
+                payload.GetProperty("sku").GetString()!,
+                payload.GetProperty("uom").GetString()!,
+                lotNumber,
+                payload.GetProperty("onHandQuantity").GetDecimal(),
+                payload.GetProperty("allocatedQuantity").GetDecimal(),
+                payload.GetProperty("availableQuantity").GetDecimal(),
+                payload.GetProperty("quarantinedQuantity").GetDecimal(),
+                envelope.Sequence,
+                envelope.OccurredAt));
+            return;
+        }
+
+        balance.Apply(
+            payload.GetProperty("warehouseId").GetString()!,
+            payload.GetProperty("ownerId").GetString()!,
+            payload.GetProperty("sku").GetString()!,
+            payload.GetProperty("uom").GetString()!,
+            lotNumber,
+            payload.GetProperty("onHandQuantity").GetDecimal(),
+            payload.GetProperty("allocatedQuantity").GetDecimal(),
+            payload.GetProperty("availableQuantity").GetDecimal(),
+            payload.GetProperty("quarantinedQuantity").GetDecimal(),
+            envelope.Sequence,
+            envelope.OccurredAt);
+    }
+
+    private static string Normalize(string value) => value.Trim().ToUpperInvariant();
 }

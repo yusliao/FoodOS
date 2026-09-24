@@ -5,12 +5,18 @@ using FSH.Modules.Catalog.Contracts.v1.Products;
 using FSH.Modules.Ordering.Contracts.Access;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.v1.Shop;
+using FSH.Modules.Ordering.Data;
+using FSH.Modules.Inventory.Contracts.v1.Warehouses;
+using FSH.Modules.WmsIntegration.Contracts.v1;
 using Mediator;
+using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Ordering.Features.v1.Shop.SearchShopProducts;
 
 public sealed class SearchShopProductsQueryHandler(
     ICustomerAccessScopeResolver accessScopeResolver,
+    OrderingDbContext dbContext,
+    IWmsAvailabilityReader availabilityReader,
     IMediator mediator)
     : IQueryHandler<SearchShopProductsQuery, PagedResponse<ShopProductDto>>,
       IQueryHandler<GetShopProductByIdQuery, ShopProductDto>
@@ -45,13 +51,20 @@ public sealed class SearchShopProductsQueryHandler(
                 cancellationToken)
             .ConfigureAwait(false);
         var quoteByProduct = quotes.ToDictionary(quote => quote.ProductId);
+        string? warehouseCode = await ResolveWarehouseCodeAsync(query.StoreId, access, cancellationToken)
+            .ConfigureAwait(false);
+        var availability = await GetAvailabilityAsync(
+                warehouseCode,
+                products.Items.Select(product => (product.Sku, product.BaseUom, 1m)).ToList(),
+                cancellationToken)
+            .ConfigureAwait(false);
 
         return new PagedResponse<ShopProductDto>
         {
             Items = products.Items.Select(product =>
             {
                 var quote = quoteByProduct[product.Id];
-                return ToShopDto(product, quote);
+                return ToShopDto(product, quote, availability[(Normalize(product.Sku), Normalize(product.BaseUom))]);
             }).ToList(),
             PageNumber = products.PageNumber,
             PageSize = products.PageSize,
@@ -82,12 +95,23 @@ public sealed class SearchShopProductsQueryHandler(
                 new QuoteProductPriceQuery(access.CustomerOrgId, query.ProductId, query.Quantity),
                 cancellationToken)
             .ConfigureAwait(false);
-        return ToShopDto(product, quote);
+        string? warehouseCode = await ResolveWarehouseCodeAsync(query.StoreId, access, cancellationToken)
+            .ConfigureAwait(false);
+        var availability = await GetAvailabilityAsync(
+                warehouseCode,
+                [(product.Sku, product.BaseUom, query.Quantity)],
+                cancellationToken)
+            .ConfigureAwait(false);
+        return ToShopDto(
+            product,
+            quote,
+            availability[(Normalize(product.Sku), Normalize(product.BaseUom))]);
     }
 
     private static ShopProductDto ToShopDto(
         FSH.Modules.Catalog.Contracts.Dtos.ProductDto product,
-        FSH.Modules.Catalog.Contracts.Dtos.PriceQuoteDto quote)
+        FSH.Modules.Catalog.Contracts.Dtos.PriceQuoteDto quote,
+        bool isAvailable)
         => new(
             product.Id,
             product.Sku,
@@ -101,5 +125,54 @@ public sealed class SearchShopProductsQueryHandler(
             product.BaseUom,
             product.CatchWeight,
             product.ThumbnailUrl,
-            IsAvailable: true);
+            IsAvailable: isAvailable);
+
+    private async Task<string?> ResolveWarehouseCodeAsync(
+        Guid? requestedStoreId,
+        CustomerAccessScope access,
+        CancellationToken cancellationToken)
+    {
+        Guid? storeId = requestedStoreId ?? access.StoreIds.OrderBy(id => id).Cast<Guid?>().FirstOrDefault();
+        if (storeId is null)
+        {
+            return null;
+        }
+
+        var store = await dbContext.Stores.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == storeId
+                && item.CustomerOrgId == access.CustomerOrgId
+                && item.CustomerTenantId == access.CustomerTenantId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new NotFoundException($"Store {storeId} not found.");
+        var warehouse = await mediator.Send(new GetWarehouseByIdQuery(store.DefaultWarehouseId), cancellationToken)
+            .ConfigureAwait(false);
+        return warehouse.Code;
+    }
+
+    private async Task<IReadOnlyDictionary<(string Sku, string Uom), bool>> GetAvailabilityAsync(
+        string? warehouseCode,
+        IReadOnlyCollection<(string Sku, string Uom, decimal Quantity)> products,
+        CancellationToken cancellationToken)
+    {
+        if (warehouseCode is null)
+        {
+            return products.ToDictionary(
+                product => (Normalize(product.Sku), Normalize(product.Uom)),
+                _ => false);
+        }
+
+        var result = await availabilityReader.GetAvailabilityAsync(
+                warehouseCode,
+                products.Select(product => new WmsAvailabilityRequest(
+                    product.Sku,
+                    product.Uom,
+                    product.Quantity)).ToList(),
+                cancellationToken)
+            .ConfigureAwait(false);
+        return result.ToDictionary(
+            item => (Normalize(item.Sku), Normalize(item.Uom)),
+            item => item.IsAvailable);
+    }
+
+    private static string Normalize(string value) => value.Trim().ToUpperInvariant();
 }

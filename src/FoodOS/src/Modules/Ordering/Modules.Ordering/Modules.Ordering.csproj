@@ -15,6 +15,7 @@
 		<ProjectReference Include="..\..\Inventory\Modules.Inventory.Contracts\Modules.Inventory.Contracts.csproj" />
 		<ProjectReference Include="..\..\Logistics\Modules.Logistics.Contracts\Modules.Logistics.Contracts.csproj" />
 		<ProjectReference Include="..\..\Identity\Modules.Identity.Contracts\Modules.Identity.Contracts.csproj" />
+		<ProjectReference Include="..\..\WmsIntegration\Modules.WmsIntegration.Contracts\Modules.WmsIntegration.Contracts.csproj" />
 	</ItemGroup>
 
 </Project>

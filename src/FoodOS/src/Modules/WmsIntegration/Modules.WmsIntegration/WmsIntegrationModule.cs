@@ -36,6 +36,7 @@ public sealed class WmsIntegrationModule : IModule
         builder.Services.AddHeroDbContext<WmsIntegrationDbContext>();
         builder.Services.AddScoped<IDbInitializer, WmsIntegrationDbInitializer>();
         builder.Services.AddScoped<WmsInboxService>();
+        builder.Services.AddScoped<IWmsAvailabilityReader, WmsAvailabilityReader>();
         builder.Services.AddSingleton<IWmsReadiness, WmsReadiness>();
         builder.Services.AddHttpClient<IWmsStandardClient, WmsStandardClient>((services, client) =>
         {

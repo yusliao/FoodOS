@@ -13,6 +13,7 @@ public sealed class WmsIntegrationOptions
     public string SigningSecret { get; set; } = string.Empty;
     public int RequestTimeoutSeconds { get; set; } = 15;
     public int ReplayWindowSeconds { get; set; } = 300;
+    public int InventoryProjectionMaxAgeSeconds { get; set; } = 300;
 
     public bool IsConfigured => Enabled
         && Uri.TryCreate(BaseUrl, UriKind.Absolute, out _)
