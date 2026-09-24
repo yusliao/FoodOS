@@ -19,5 +19,5 @@ public sealed class WmsIntegrationOptions
         && !string.IsNullOrWhiteSpace(Provider)
         && !string.IsNullOrWhiteSpace(ConnectionId)
         && !string.IsNullOrWhiteSpace(WarehouseId)
-        && !string.IsNullOrWhiteSpace(SigningSecret);
+        && SigningSecret.Length >= 32;
 }

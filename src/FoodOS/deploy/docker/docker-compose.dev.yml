@@ -1,0 +1,37 @@
+# Isolated Docker Desktop development stack. Use with docker-compose.yml and a distinct project name.
+services:
+  postgres:
+    container_name: foodos-wms-dev-postgres
+    restart: "no"
+  redis:
+    container_name: foodos-wms-dev-redis
+    restart: "no"
+  minio:
+    container_name: foodos-wms-dev-minio
+    restart: "no"
+  minio-init:
+    container_name: foodos-wms-dev-minio-init
+  migrator:
+    container_name: foodos-wms-dev-migrator
+    environment:
+      DOTNET_ENVIRONMENT: Development
+  demo-seeder:
+    container_name: foodos-wms-dev-demo-seeder
+  api:
+    container_name: foodos-wms-dev-api
+    restart: "no"
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      WmsIntegration__Enabled: "true"
+      WmsIntegration__Provider: reference-wms
+      WmsIntegration__ConnectionId: docker-dev-primary
+      WmsIntegration__WarehouseId: DC-01
+      WmsIntegration__Tenant: root
+      WmsIntegration__BaseUrl: http://wms-adapter:8080/
+      WmsIntegration__SigningSecret: ${WMS_SIGNING_SECRET:?WMS_SIGNING_SECRET is required}
+  admin:
+    container_name: foodos-wms-dev-admin
+    restart: "no"
+  dashboard:
+    container_name: foodos-wms-dev-dashboard
+    restart: "no"

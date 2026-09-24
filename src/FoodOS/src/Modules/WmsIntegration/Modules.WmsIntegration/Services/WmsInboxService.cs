@@ -14,13 +14,29 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db)
     {
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(rawJson);
-        var duplicate = await db.InboxMessages.AsNoTracking()
+        var duplicate = await db.InboxMessages
             .FirstOrDefaultAsync(x => x.Provider == envelope.Provider
                 && x.ConnectionId == envelope.ConnectionId
                 && x.ExternalEventId == envelope.ExternalEventId, cancellationToken)
             .ConfigureAwait(false);
         if (duplicate is not null)
         {
+            if (duplicate.Status == "awaitingGap")
+            {
+                var waitingCursor = await db.ObjectCursors
+                    .FirstOrDefaultAsync(x => x.Provider == envelope.Provider
+                        && x.ConnectionId == envelope.ConnectionId
+                        && x.EntityType == envelope.EntityType
+                        && x.ExternalObjectId == envelope.ExternalObjectId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (waitingCursor is not null && envelope.Sequence == waitingCursor.LastAcceptedSequence + 1)
+                {
+                    waitingCursor.Advance(envelope.Sequence);
+                    duplicate.AcceptAfterGap();
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    return new(envelope.MessageId, "accepted", waitingCursor.LastAcceptedSequence, null);
+                }
+            }
             return new(envelope.MessageId, "duplicate", duplicate.Sequence, "Event was already accepted.");
         }
 

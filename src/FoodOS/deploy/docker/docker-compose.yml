@@ -168,6 +168,13 @@ services:
       CorsOptions__AllowedOrigins__0: ${FSH_ADMIN_URL:?FSH_ADMIN_URL is required}
       CorsOptions__AllowedOrigins__1: ${FSH_DASHBOARD_URL:?FSH_DASHBOARD_URL is required}
       OpenTelemetryOptions__Exporter__Otlp__Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      WmsIntegration__Enabled: ${WMS_ENABLED:-false}
+      WmsIntegration__Provider: ${WMS_PROVIDER:-}
+      WmsIntegration__ConnectionId: ${WMS_CONNECTION_ID:-}
+      WmsIntegration__WarehouseId: ${WMS_WAREHOUSE_ID:-}
+      WmsIntegration__Tenant: ${WMS_TENANT:-root}
+      WmsIntegration__BaseUrl: ${WMS_BASE_URL:-}
+      WmsIntegration__SigningSecret: ${WMS_SIGNING_SECRET:-}
     ports:
       - "${FSH_API_PORT:-8080}:8080"
 

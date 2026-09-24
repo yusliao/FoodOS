@@ -56,4 +56,10 @@ public sealed class WmsInboxMessage : BaseEntity<Guid>
             ReceivedAtUtc = TimeProvider.System.GetUtcNow().UtcDateTime,
             Detail = detail,
         };
+
+    public void AcceptAfterGap()
+    {
+        Status = "accepted";
+        Detail = null;
+    }
 }

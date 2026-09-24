@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace FSH.Modules.WmsIntegration.Features.v1.ReceiveEvent;
 
-public static class WmsEventEndpoint
+public static class ReceiveWmsEventEndpoint
 {
     private const int MaximumBodyBytes = 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -61,16 +61,26 @@ public static class WmsEventEndpoint
             || envelope.MessageId == Guid.Empty
             || envelope.Sequence <= 0
             || envelope.SchemaVersion != "1.0"
-            || !string.Equals(envelope.Provider, settings.Provider, StringComparison.Ordinal)
-            || !string.Equals(envelope.ConnectionId, settings.ConnectionId, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(envelope.EventType)
+            || envelope.EventType.Length > 120
             || string.IsNullOrWhiteSpace(envelope.EntityType)
+            || envelope.EntityType.Length > 80
             || string.IsNullOrWhiteSpace(envelope.ExternalEventId)
+            || envelope.ExternalEventId.Length > 160
             || string.IsNullOrWhiteSpace(envelope.ExternalObjectId)
+            || envelope.ExternalObjectId.Length > 160
             || string.IsNullOrWhiteSpace(envelope.IdempotencyKey)
-            || string.IsNullOrWhiteSpace(envelope.CorrelationId))
+            || envelope.IdempotencyKey.Length > 200
+            || string.IsNullOrWhiteSpace(envelope.CorrelationId)
+            || envelope.CorrelationId.Length > 160
+            || envelope.Payload.ValueKind != JsonValueKind.Object)
         {
             return Results.BadRequest(new { error = "invalid_envelope" });
+        }
+        if (!string.Equals(envelope.Provider, settings.Provider, StringComparison.Ordinal)
+            || !string.Equals(envelope.ConnectionId, settings.ConnectionId, StringComparison.Ordinal))
+        {
+            return Results.Unauthorized();
         }
 
         var receipt = await inbox.ReceiveAsync(envelope, Encoding.UTF8.GetString(body), cancellationToken).ConfigureAwait(false);

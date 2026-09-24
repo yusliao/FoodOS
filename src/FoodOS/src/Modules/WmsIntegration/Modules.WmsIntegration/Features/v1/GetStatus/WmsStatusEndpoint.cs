@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace FSH.Modules.WmsIntegration.Features.v1.GetStatus;
 
-public static class WmsStatusEndpoint
+public static class GetWmsIntegrationStatusEndpoint
 {
     internal static RouteHandlerBuilder MapWmsStatusEndpoint(this IEndpointRouteBuilder endpoints)
     {

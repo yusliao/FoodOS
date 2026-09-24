@@ -17,7 +17,7 @@ public sealed class WmsStandardClient(HttpClient httpClient, IOptions<WmsIntegra
         var settings = options.Value;
         if (!settings.IsConfigured)
         {
-            return new("Unavailable", null, "wms_not_configured", "The WMS connection is not configured.", null);
+            return new("unknown", null, "wms_not_configured", "The WMS connection is not configured.", null);
         }
 
         string path = request.Kind switch
@@ -31,7 +31,7 @@ public sealed class WmsStandardClient(HttpClient httpClient, IOptions<WmsIntegra
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, "Unsupported WMS operation."),
         };
 
-        byte[] body = JsonSerializer.SerializeToUtf8Bytes(request, JsonOptions);
+        byte[] body = JsonSerializer.SerializeToUtf8Bytes(request.Payload, JsonOptions);
         string timestamp = TimeProvider.System.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         using var message = new HttpRequestMessage(HttpMethod.Post, path)
         {
@@ -49,14 +49,14 @@ public sealed class WmsStandardClient(HttpClient httpClient, IOptions<WmsIntegra
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<WmsOperationResponse>(JsonOptions, cancellationToken).ConfigureAwait(false)
-                    ?? new("Unknown", null, "empty_response", "WMS returned an empty response.", null);
+                    ?? new("unknown", null, "empty_response", "WMS returned an empty response.", null);
             }
 
             string detail = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             bool unknown = response.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
                 || (int)response.StatusCode >= 500;
             return new(
-                unknown ? "Unknown" : "Rejected",
+                unknown ? "unknown" : "rejected",
                 null,
                 $"http_{(int)response.StatusCode}",
                 detail,
@@ -64,11 +64,11 @@ public sealed class WmsStandardClient(HttpClient httpClient, IOptions<WmsIntegra
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new("Unknown", null, "timeout", "WMS result is unknown; query with the same idempotency key.", null);
+            return new("unknown", null, "timeout", "WMS result is unknown; query with the same idempotency key.", null);
         }
         catch (HttpRequestException ex)
         {
-            return new("Unknown", null, "transport_error", ex.Message, null);
+            return new("unknown", null, "transport_error", ex.Message, null);
         }
     }
 }
