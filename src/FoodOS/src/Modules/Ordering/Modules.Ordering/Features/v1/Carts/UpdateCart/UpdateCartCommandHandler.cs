@@ -46,11 +46,19 @@ public sealed class UpdateCartCommandHandler(OrderingDbContext dbContext, IMedia
         }
         else
         {
-            dbContext.CartLines.RemoveRange(cart.Lines);
-            cart.Clear();
+            var existingLines = cart.Lines.ToList();
+            if (existingLines.Count > 0)
+            {
+                dbContext.CartLines.RemoveRange(existingLines);
+            }
         }
 
         cart.ReplaceLines(resolved);
+        if (dbContext.Entry(cart).State != EntityState.Added)
+        {
+            dbContext.CartLines.AddRange(cart.Lines);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return cart.Id;
     }

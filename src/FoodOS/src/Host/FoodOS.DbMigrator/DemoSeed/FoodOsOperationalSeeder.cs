@@ -12,10 +12,15 @@ using FSH.Modules.Ordering.Data;
 using FSH.Modules.Ordering.Domain;
 using FSH.Modules.Procurement.Data;
 using FSH.Modules.Warehouse.Data;
+using FSH.Modules.WmsIntegration;
+using FSH.Modules.WmsIntegration.Contracts.v1.Mappings;
+using FSH.Modules.WmsIntegration.Data;
+using FSH.Modules.WmsIntegration.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using CatalogTemperature = FSH.Modules.Catalog.Domain.TemperatureZone;
 using LogisticsDriver = FSH.Modules.Logistics.Domain.Driver;
 using LogisticsRoute = FSH.Modules.Logistics.Domain.Route;
@@ -74,6 +79,139 @@ internal static class FoodOsOperationalSeeder
         await EnsureContractPricesAsync(catalog, ordering, logger, cancellationToken).ConfigureAwait(false);
         await EnsureLogisticsAsync(logistics, users, warehouse.Id, stores, logger, cancellationToken)
             .ConfigureAwait(false);
+        await EnsureWmsMappingsAsync(scope.ServiceProvider, catalog, stores, logger, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task EnsureWmsMappingsAsync(
+        IServiceProvider services,
+        CatalogDbContext catalog,
+        IReadOnlyList<Store> stores,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var settings = services.GetRequiredService<IOptions<WmsIntegrationOptions>>().Value;
+        if (!settings.IsConfigured)
+        {
+            return;
+        }
+
+        var products = await catalog.Products.AsNoTracking()
+            .Where(product => product.IsActive)
+            .Select(product => new { product.Sku, product.BaseUom })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var required = new List<(string Kind, string FoodOsValue, string ExternalValue)>
+        {
+            (WmsMappingKinds.Warehouse, WarehouseCode, WarehouseCode),
+            (WmsMappingKinds.Owner, MultitenancyConstants.Root.Id, MultitenancyConstants.Root.Id),
+            (WmsMappingKinds.Supplier, SupplierCode, SupplierCode),
+        };
+        required.AddRange(products.Select(product =>
+            (WmsMappingKinds.Sku, product.Sku, product.Sku)));
+        required.AddRange(products.Select(product => product.BaseUom)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(unit => (WmsMappingKinds.Unit, unit, unit)));
+        required.AddRange(stores.Select(store =>
+            (WmsMappingKinds.Store, store.Id.ToString(), store.Code)));
+
+        var db = services.GetRequiredService<WmsIntegrationDbContext>();
+        var existing = await db.Mappings
+            .Where(mapping => mapping.Provider == settings.Provider
+                && mapping.ConnectionId == settings.ConnectionId)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        int changed = 0;
+        foreach (var item in required.Distinct())
+        {
+            var mapping = existing.FirstOrDefault(candidate =>
+                candidate.Kind == item.Kind
+                && string.Equals(candidate.FoodOsValue, item.FoodOsValue, StringComparison.OrdinalIgnoreCase));
+            if (mapping is null)
+            {
+                db.Mappings.Add(WmsMapping.Create(
+                    settings.Provider,
+                    settings.ConnectionId,
+                    item.Kind,
+                    item.FoodOsValue,
+                    item.ExternalValue,
+                    1m,
+                    isActive: true));
+                changed++;
+                continue;
+            }
+
+            if (!mapping.IsActive
+                || mapping.FoodOsQuantityPerExternalUnit != 1m
+                || !string.Equals(mapping.ExternalValue, item.ExternalValue, StringComparison.Ordinal))
+            {
+                mapping.Update(item.ExternalValue, 1m, isActive: true);
+                changed++;
+            }
+        }
+
+        string normalizedProvider = settings.Provider.ToUpperInvariant();
+        string normalizedConnectionId = settings.ConnectionId.ToUpperInvariant();
+        var balances = await db.InventoryBalances
+            .Where(balance => balance.Provider == normalizedProvider
+                && balance.ConnectionId == normalizedConnectionId)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        int projected = 0;
+        DateTimeOffset occurredAt = DateTimeOffset.UtcNow;
+        foreach (var product in products)
+        {
+            string externalObjectId = $"demo-inventory:{WarehouseCode}:{product.Sku}:{product.BaseUom}";
+            var balance = balances.FirstOrDefault(candidate =>
+                string.Equals(candidate.ExternalObjectId, externalObjectId, StringComparison.OrdinalIgnoreCase));
+            if (balance is null)
+            {
+                db.InventoryBalances.Add(WmsInventoryBalance.Create(
+                    settings.Provider,
+                    settings.ConnectionId,
+                    externalObjectId,
+                    WarehouseCode,
+                    MultitenancyConstants.Root.Id,
+                    product.Sku,
+                    product.BaseUom,
+                    lotNumber: null,
+                    onHandQuantity: 1000m,
+                    allocatedQuantity: 0m,
+                    availableQuantity: 1000m,
+                    quarantinedQuantity: 0m,
+                    sequence: 1,
+                    occurredAt));
+            }
+            else
+            {
+                balance.Apply(
+                    WarehouseCode,
+                    MultitenancyConstants.Root.Id,
+                    product.Sku,
+                    product.BaseUom,
+                    lotNumber: null,
+                    onHandQuantity: 1000m,
+                    allocatedQuantity: 0m,
+                    availableQuantity: 1000m,
+                    quarantinedQuantity: 0m,
+                    sequence: balance.LastSequence + 1,
+                    occurredAt);
+            }
+            projected++;
+        }
+
+        if (changed == 0 && projected == 0)
+        {
+            return;
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "[demo-seed] [{Tenant}] configured {Mappings} mappings and refreshed {Balances} availability projections for demo WMS {Provider}/{ConnectionId}",
+                MultitenancyConstants.Root.Id, changed, projected, settings.Provider, settings.ConnectionId);
+        }
     }
 
     private static async Task<Warehouse> EnsureWarehouseAsync(

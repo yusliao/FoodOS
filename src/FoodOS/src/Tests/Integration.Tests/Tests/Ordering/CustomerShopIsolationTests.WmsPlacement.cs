@@ -101,6 +101,16 @@ public sealed partial class CustomerShopIsolationTests
         (await repeated.DeserializeAsync<Guid>()).ShouldBe(orderId);
         using var cartResponse = await customer.GetAsync($"{TestConstants.ShopBasePath}/stores/{storeId}/cart");
         (await cartResponse.DeserializeAsync<ShopCartDto>()).Lines.ShouldBeEmpty();
+
+        using var refillCart = await customer.PutAsJsonAsync(
+            $"{TestConstants.ShopBasePath}/stores/{storeId}/cart",
+            new { lines = new[] { new { productId, quantity = 2m } } });
+        refillCart.StatusCode.ShouldBe(HttpStatusCode.OK, await refillCart.Content.ReadAsStringAsync());
+        using var refilledCartResponse = await customer.GetAsync(
+            $"{TestConstants.ShopBasePath}/stores/{storeId}/cart");
+        var refilledCart = await refilledCartResponse.DeserializeAsync<ShopCartDto>();
+        refilledCart.Lines.ShouldHaveSingleItem().Quantity.ShouldBe(2m);
+
         using var orderResponse = await customer.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
         var order = await orderResponse.DeserializeAsync<ShopOrderDto>();
         order.Status.ShouldBe("Reserved");

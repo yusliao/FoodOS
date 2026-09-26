@@ -1,0 +1,17 @@
+# Remote-host runtime policy for the customer demo stack.
+# Combine after docker-compose.yml and docker-compose.demo.yml.
+services:
+  postgres:
+    restart: unless-stopped
+  redis:
+    restart: unless-stopped
+  minio:
+    restart: unless-stopped
+  wms-adapter:
+    restart: unless-stopped
+  api:
+    restart: unless-stopped
+  admin:
+    restart: unless-stopped
+  dashboard:
+    restart: unless-stopped

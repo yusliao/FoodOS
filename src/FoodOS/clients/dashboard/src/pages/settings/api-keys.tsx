@@ -1,5 +1,4 @@
-import { ExternalLink, KeyRound } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { KeyRound } from "lucide-react";
 import { SettingsSection } from "@/pages/settings/settings-layout";
 import { useT } from "@/i18n/locale-provider";
 
@@ -26,23 +25,9 @@ export function ApiKeysSettings() {
           <h3 className="mb-1.5 font-display text-[17px] font-semibold text-[var(--color-foreground)]">
             {t("settings.apiKeysPlaceholderTitle")}
           </h3>
-          <p className="mb-6 max-w-[380px] text-[13px] text-[var(--color-muted-foreground)]">
+          <p className="max-w-[380px] text-[13px] text-[var(--color-muted-foreground)]">
             {t("settings.apiKeysPlaceholderBody")}
           </p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              window.open(
-                "https://github.com/fullstackhero/dotnet-starter-kit",
-                "_blank",
-                "noopener,noreferrer",
-              );
-            }}
-            className="h-9 rounded-lg px-4 text-[13px]"
-          >
-            <ExternalLink className="mr-1.5 size-4" />
-            {t("settings.viewRoadmap")}
-          </Button>
         </div>
       </SettingsSection>
     </div>

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mockJsonResponse, mockProblemDetails } from "../helpers/api-mocks";
 import { installShellMocks } from "../helpers/shell-mocks";
 
-// The dashboard login page (rebuilt to the dentalOS card layout): FSH logo
+// The dashboard login page (rebuilt to the dentalOS card layout): 东方味力 logo
 // lockup + tenant workspace caption, tenant/email/password card, and a
 // demoMode-gated restaurant account picker that signs in instantly.
 
@@ -34,9 +34,9 @@ test.describe("login — page chrome", () => {
     await setConfig(page, true);
   });
 
-  test("renders the FSH logo lockup with the workspace caption", async ({ page }) => {
+  test("renders the 东方味力 logo lockup with the workspace caption", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("img", { name: /fullstackhero/i })).toBeVisible();
+    await expect(page.getByRole("img", { name: "东方味力" })).toBeVisible();
     await expect(page.getByText(/tenant workspace/i)).toBeVisible();
     await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
     await expect(page.getByText(/sign in to your account/i)).toBeVisible();

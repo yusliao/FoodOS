@@ -5,8 +5,7 @@ import { cn } from "@/lib/cn";
  * any surface that needs a sub-header-sized reference to the product.
  *
  * Matches the dashboard's brand treatment: a small gradient square carrying
- * the "F" initial, paired with the "fullstackhero" wordmark with a tinted
- * accent on "hero", and a small "Admin" sub-label.
+ * the brand initial, paired with the 东方味力 wordmark and an Admin sub-label.
  *
  * The chartreuse signal colour from the old Console identity is retired here.
  * Colour-identity is now driven purely by the shared `--color-primary` token.
@@ -21,11 +20,11 @@ export function BrandMark({ className }: { className?: string }) {
           "font-display text-[12px] font-bold text-[var(--color-primary-foreground)]",
         )}
       >
-        F
+        东
       </span>
       <div className="flex flex-col">
         <span className="whitespace-nowrap font-display text-[15px] font-bold leading-none tracking-tight text-[var(--color-foreground)]">
-          fullstack<span className="text-[var(--color-primary)]">hero</span>
+          东方<span className="text-[var(--color-primary)]">味力</span>
         </span>
         <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.7)]">
           Admin
@@ -36,8 +35,8 @@ export function BrandMark({ className }: { className?: string }) {
 }
 
 /**
- * BrandMarkXL — splash version for the Login page. Leads with the FSH logo
- * mark + "fullstackhero" wordmark, then a display monogram and a one-line
+ * BrandMarkXL — splash version for the Login page. Leads with the 东方味力
+ * mark and wordmark, then a display monogram and a one-line
  * system blurb.
  */
 export function BrandMarkXL({ className }: { className?: string }) {
@@ -46,11 +45,11 @@ export function BrandMarkXL({ className }: { className?: string }) {
       <div className="flex items-center gap-2.5">
         <img
           src="/logo-fullstackhero.png"
-          alt="fullstackhero"
+          alt="东方味力"
           className="size-7 object-contain"
         />
         <span className="font-display text-[18px] font-semibold tracking-tight text-[var(--color-foreground)]">
-          fullstack<span className="text-[var(--color-primary)]">hero</span>
+          东方<span className="text-[var(--color-primary)]">味力</span>
         </span>
         <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-[var(--color-muted-foreground)]">
           · platform admin

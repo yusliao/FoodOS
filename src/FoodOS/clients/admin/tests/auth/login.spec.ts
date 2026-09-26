@@ -27,13 +27,13 @@ test.describe("admin login", () => {
     await expect(page.getByRole("button", { name: "Sign in with a demo account" })).toHaveCount(0);
   });
 
-  test("renders the FSH brand lockup + the welcome form", async ({ page }) => {
+  test("renders the 东方味力 brand lockup + the welcome form", async ({ page }) => {
     await page.goto("/login");
 
-    // Brand lockup: logo image, the fullstackhero wordmark, and the
+    // Brand lockup: logo image, the 东方味力 wordmark, and the
     // "Platform Admin" divider label that marks this as the operator app.
-    await expect(page.getByRole("img", { name: /fullstackhero/i }).first()).toBeVisible();
-    await expect(page.getByText("fullstackhero").first()).toBeVisible();
+    await expect(page.getByRole("img", { name: "东方味力" }).first()).toBeVisible();
+    await expect(page.getByText("东方味力").first()).toBeVisible();
     await expect(page.getByText("Operator workbench").first()).toBeVisible();
 
     // Card heading.

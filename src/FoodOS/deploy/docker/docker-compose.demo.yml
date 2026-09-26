@@ -1,0 +1,84 @@
+# Isolated, repeatable customer-demo stack. Always combine with docker-compose.yml.
+services:
+  postgres:
+    container_name: foodos-demo-postgres
+    restart: "no"
+  redis:
+    container_name: foodos-demo-redis
+    restart: "no"
+  minio:
+    container_name: foodos-demo-minio
+    restart: "no"
+  minio-init:
+    container_name: foodos-demo-minio-init
+  migrator:
+    image: foodos-demo/dbmigrator:local
+    container_name: foodos-demo-migrator
+    restart: "no"
+  demo-seeder:
+    image: foodos-demo/dbmigrator:local
+    container_name: foodos-demo-seeder
+    environment:
+      WmsIntegration__Enabled: "true"
+      WmsIntegration__Provider: demo-wms
+      WmsIntegration__ConnectionId: customer-demo
+      WmsIntegration__WarehouseId: BOS1
+      WmsIntegration__Tenant: root
+      WmsIntegration__BaseUrl: http://wms-adapter:8080/
+      WmsIntegration__SigningSecret: ${WMS_SIGNING_SECRET:?WMS_SIGNING_SECRET is required}
+      WmsIntegration__InventoryProjectionMaxAgeSeconds: "86400"
+  wms-adapter:
+    build:
+      context: ./demo-wms
+    image: foodos-demo/wms-adapter:local
+    container_name: foodos-demo-wms-adapter
+    restart: "no"
+    environment:
+      PORT: "8080"
+      FOODOS_API_URL: http://api:8080
+      FOODOS_TENANT: root
+      WMS_PROVIDER: demo-wms
+      WMS_CONNECTION_ID: customer-demo
+      WMS_SIGNING_SECRET: ${WMS_SIGNING_SECRET:?WMS_SIGNING_SECRET is required}
+      DEMO_WMS_MODE: accepted
+    ports:
+      - "${DEMO_WMS_BIND_ADDRESS:-127.0.0.1}:${DEMO_WMS_PORT:-19083}:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  api:
+    image: foodos-demo/api:local
+    container_name: foodos-demo-api
+    restart: "no"
+    depends_on:
+      wms-adapter: { condition: service_healthy }
+    environment:
+      WmsIntegration__Enabled: "true"
+      WmsIntegration__Provider: demo-wms
+      WmsIntegration__ConnectionId: customer-demo
+      WmsIntegration__WarehouseId: BOS1
+      WmsIntegration__Tenant: root
+      WmsIntegration__BaseUrl: http://wms-adapter:8080/
+      WmsIntegration__SigningSecret: ${WMS_SIGNING_SECRET:?WMS_SIGNING_SECRET is required}
+      WmsIntegration__InventoryProjectionMaxAgeSeconds: "86400"
+    ports: !override
+      - "${DEMO_BIND_ADDRESS:-127.0.0.1}:${FSH_API_PORT:-19080}:8080"
+  admin:
+    image: foodos-demo/admin:local
+    container_name: foodos-demo-admin
+    restart: "no"
+    environment:
+      FSH_DEMO_MODE: "true"
+    ports: !override
+      - "${DEMO_BIND_ADDRESS:-127.0.0.1}:${FSH_ADMIN_PORT:-19081}:80"
+  dashboard:
+    image: foodos-demo/dashboard:local
+    container_name: foodos-demo-dashboard
+    restart: "no"
+    environment:
+      FSH_DEFAULT_TENANT: acme
+      FSH_DEMO_MODE: "true"
+    ports: !override
+      - "${DEMO_BIND_ADDRESS:-127.0.0.1}:${FSH_DASHBOARD_PORT:-19082}:80"

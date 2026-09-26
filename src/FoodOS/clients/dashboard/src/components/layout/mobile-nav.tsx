@@ -102,9 +102,9 @@ export function MobileNavRoot() {
               "shadow-[0_1px_0_oklch(1_0_0_/_0.18)_inset,0_4px_14px_-4px_oklch(from_var(--color-primary)_l_c_h_/_0.45)]",
             )}
           >
-            F
+            东
           </span>
-          <span className="font-semibold tracking-tight">fullstackhero</span>
+          <span className="font-semibold tracking-tight">东方味力</span>
         </div>
 
         <SidebarNavBody

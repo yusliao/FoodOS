@@ -1,4 +1,4 @@
-# Deploy fullstackhero with Docker Compose
+# Deploy 东方味力 FoodOS with Docker Compose
 
 This brings up the full stack on a single host:
 
@@ -19,6 +19,67 @@ The compose file does **not** include a reverse proxy or TLS terminator. You bri
 - Docker Engine 24+ with the Compose plugin (`docker compose version` should print v2.x).
 - 2 GB free RAM, 5 GB disk for first-run images + builds.
 - Ports 8080–8082 free on the host (or set custom ports in `.env`).
+
+## Isolated customer demo
+
+The customer demo is intentionally separate from the default `fsh` stack. It uses the
+`foodos-demo` Compose project, ports `19080`–`19083`, demo-only volumes, the full
+`seed-demo` dataset, visible demo-account selectors, and a lightweight reference WMS.
+The reference WMS validates FoodOS signatures and idempotency, acknowledges outbound
+orders, and returns either an allocated or shortage event. It is demonstration software,
+not evidence of integration with the customer's warehouse.
+
+From this directory on Windows:
+
+```powershell
+.\Start-FoodOsDemo.ps1
+```
+
+Open `http://localhost:19081` for the operator workbench or
+`http://localhost:19082` for the restaurant portal. Use the on-screen demo account
+selector; all demo personas use `Password123!`. The recovery account
+`admin@root.com` is deliberately not advertised because its password is generated
+locally and stored only in the ignored `.env.demo` file.
+
+The presenter can change the next outbound-order result without changing FoodOS:
+
+```powershell
+.\Set-FoodOsDemoWmsMode.ps1 -Mode accepted
+.\Set-FoodOsDemoWmsMode.ps1 -Mode pending
+.\Set-FoodOsDemoWmsMode.ps1 -Mode rejected
+.\Set-FoodOsDemoWmsMode.ps1 -Mode shortage
+```
+
+Run `.\Test-FoodOsDemo.ps1` for a non-destructive health/seed/configuration check.
+For a real Chromium smoke test against the deployed containers, run
+`npm run test:e2e:demo` from `clients/admin`; it does not install API mocks.
+Stop while retaining data with `.\Stop-FoodOsDemo.ps1`; use the explicit
+`-RemoveData` switch only when the demo volumes should be deleted.
+
+The default bind address is `127.0.0.1`. Publishing this environment to customers
+still requires an approved host, TLS/reverse proxy, access control, and externally
+correct `FSH_*_URL` values. Do not expose port `19083` publicly.
+
+### Ubuntu 24.04 remote demo
+
+Clone or upload the repository to the server, enter this directory, and run:
+
+```bash
+sudo bash Deploy-FoodOsDemoUbuntu.sh \
+  --public-host 203.0.113.10 \
+  --install-docker
+```
+
+Replace the example address with the server's public IPv4 address or DNS name. The
+script installs Docker only when `--install-docker` is explicitly supplied, generates
+an ignored `.env.demo.remote` with mode `0600`, builds and seeds the isolated demo
+stack, and verifies all four HTTP services. Re-running it preserves generated secrets
+and demo data. Use `--no-build` only when the required images already exist locally.
+
+Open TCP `19080`–`19082` in the cloud security group for the intended customer source
+addresses. The reference WMS stays on `127.0.0.1:19083`; PostgreSQL, Valkey, and MinIO
+remain Compose-internal. This is an HTTP demonstration deployment. Put a TLS reverse
+proxy or cloud load balancer in front before treating it as an internet-facing service.
 
 ## Five-minute deploy
 
