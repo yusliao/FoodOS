@@ -6,7 +6,7 @@ using FSH.Modules.Ordering.Contracts.Access;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.v1.Shop;
 using FSH.Modules.Ordering.Data;
-using FSH.Modules.Inventory.Contracts.v1.Warehouses;
+using FSH.Modules.Ordering.Services;
 using FSH.Modules.WmsIntegration.Contracts.v1;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -144,9 +144,9 @@ public sealed class SearchShopProductsQueryHandler(
                 && item.CustomerTenantId == access.CustomerTenantId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Store {storeId} not found.");
-        var warehouse = await mediator.Send(new GetWarehouseByIdQuery(store.DefaultWarehouseId), cancellationToken)
+        var warehouse = await StoreWarehouseResolver.ResolveAsync(mediator, store.DefaultWarehouseId, cancellationToken)
             .ConfigureAwait(false);
-        return warehouse.Code;
+        return warehouse?.Code;
     }
 
     private async Task<IReadOnlyDictionary<(string Sku, string Uom), bool>> GetAvailabilityAsync(

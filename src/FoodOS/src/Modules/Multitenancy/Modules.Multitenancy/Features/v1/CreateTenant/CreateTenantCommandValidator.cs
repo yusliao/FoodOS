@@ -16,6 +16,7 @@ public sealed class CreateTenantCommandValidator : AbstractValidator<CreateTenan
 
         RuleFor(t => t.Name).Cascade(CascadeMode.Stop)
             .NotEmpty()
+            .MaximumLength(128)
             .MustAsync(async (name, ct) => !await tenantService.ExistsWithNameAsync(name!, ct).ConfigureAwait(false))
             .WithMessage((_, name) => $"Tenant {name} already exists.");
 

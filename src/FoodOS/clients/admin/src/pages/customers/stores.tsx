@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { Store } from "lucide-react";
-import { listStores, searchCustomers } from "@/api/customers";
+import { listStores, searchCustomers, updateStore } from "@/api/customers";
 import { useAuth } from "@/auth/use-auth";
 import { OrderingPermissions, InventoryPermissions } from "@/lib/permissions";
 import { EntityPageHeader, Field, Select, LoadingRow, ErrorBand } from "@/components/list";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "./request-error";
 import { StoreCreate } from "./store-create";
@@ -19,11 +20,23 @@ export function StoresPage() {
   const granted = user?.permissions ?? [];
   const canViewCustomers = granted.includes(OrderingPermissions.Customers.View);
   const canCreate = granted.includes(OrderingPermissions.Stores.Create);
+  const canEdit = granted.includes(OrderingPermissions.Stores.Update);
   const canChoose = canViewCustomers && granted.includes(InventoryPermissions.Warehouses.View);
   const [params, setParams] = useSearchParams();
   const customer = params.get("customerOrgId") ?? "";
   const validFilter = customer === "" || (GUID.test(customer) && customer !== "00000000-0000-0000-0000-000000000000");
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [draftAddress, setDraftAddress] = useState("");
+  const queryClient = useQueryClient();
+  const update = useMutation({
+    mutationFn: updateStore,
+    onSuccess: async () => {
+      setEditingId(null);
+      await queryClient.invalidateQueries({ queryKey: ["stores"] });
+    },
+  });
   const customers = useQuery({ queryKey: ["customers", ""], queryFn: ({ signal }) => searchCustomers("", signal), enabled: canViewCustomers });
   const stores = useQuery({ queryKey: ["stores", customer], queryFn: ({ signal }) => listStores(customer, signal), enabled: validFilter });
   return <div className="space-y-6">
@@ -51,11 +64,18 @@ export function StoresPage() {
           ["code", store.code],
           ["customer", (canViewCustomers && customers.isSuccess ? customers.data.find(c => c.id === store.customerOrgId)?.name : null) ?? store.customerOrgId],
           ["tenant", store.customerTenantId ?? t("partners.unlinked")],
-          ["address", store.address], ["warehouseId", store.defaultWarehouseId],
+          ["address", store.address || t("partners.addressPending")], ["warehouseId", store.defaultWarehouseId === "00000000-0000-0000-0000-000000000000" ? t("partners.operatorWarehouseAutomatic") : store.defaultWarehouseId],
           ["routeId", store.defaultRouteId ?? t("partners.unassigned")],
           ["deliveryWindow", store.deliveryWindow ?? t("partners.unassigned")],
         ].map(([key, value]) => <div key={key}><dt className="text-[var(--color-muted-foreground)]">{t(`partners.${key}`)}</dt><dd>{value}</dd></div>)}
       </dl>
+      {canEdit && editingId !== store.id && <Button variant="outline" onClick={() => { setEditingId(store.id); setDraftName(store.name); setDraftAddress(store.address); update.reset(); }}>{t("partners.editStore")}</Button>}
+      {canEdit && editingId === store.id && <form className="space-y-3" onSubmit={event => { event.preventDefault(); update.mutate({ id: store.id, name: draftName.trim(), address: draftAddress.trim() }); }}>
+        <Field id={`store-name-${store.id}`} label={t("partners.name")}><Input id={`store-name-${store.id}`} value={draftName} maxLength={128} onChange={event => setDraftName(event.target.value)} required /></Field>
+        <Field id={`store-address-${store.id}`} label={t("partners.address")}><Input id={`store-address-${store.id}`} value={draftAddress} maxLength={256} onChange={event => setDraftAddress(event.target.value)} required /></Field>
+        {update.isError && <ErrorBand message={describe(update.error, t("partners.requestFailed"))} />}
+        <div className="flex gap-2"><Button type="submit" disabled={update.isPending || !draftName.trim() || !draftAddress.trim()}>{t("partners.saveChanges")}</Button><Button type="button" variant="outline" onClick={() => setEditingId(null)}>{t("partners.cancel")}</Button></div>
+      </form>}
     </article>)}</div>}
     {creating && canCreate && canChoose && <StoreCreate customerOrgId={customer} onClose={() => setCreating(false)} />}
   </div>;

@@ -286,6 +286,15 @@ public sealed partial class CustomerShopIsolationTests
 
     private static async Task<Guid> CreateCustomerOrgAsync(HttpClient client, string tenantId, string code)
     {
+        using var list = await client.GetAsync($"{TestConstants.OrderingBasePath}/customer-orgs");
+        list.StatusCode.ShouldBe(HttpStatusCode.OK, await list.Content.ReadAsStringAsync());
+        var existing = (await list.DeserializeAsync<IReadOnlyList<CustomerOrgDto>>())
+            .SingleOrDefault(org => string.Equals(org.CustomerTenantId, tenantId, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            return existing.Id;
+        }
+
         using var response = await client.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/customer-orgs",
             new { code, name = $"Restaurant {code}", customerTenantId = tenantId });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

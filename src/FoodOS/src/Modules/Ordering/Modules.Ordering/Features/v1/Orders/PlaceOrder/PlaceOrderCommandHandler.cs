@@ -3,10 +3,10 @@ using System.Net;
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Inventory.Contracts;
 using FSH.Modules.Inventory.Contracts.v1.Plans;
-using FSH.Modules.Inventory.Contracts.v1.Warehouses;
 using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Data;
 using FSH.Modules.Ordering.Domain;
+using FSH.Modules.Ordering.Services;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +23,13 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
             .FirstOrDefaultAsync(s => s.Id == command.StoreId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Store {command.StoreId} not found.");
+        if (string.IsNullOrWhiteSpace(store.Address))
+        {
+            throw new CustomException(
+                "The store delivery address must be completed before placing an order.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
+        }
 
         var org = await dbContext.CustomerOrgs
             .FirstOrDefaultAsync(o => o.Id == store.CustomerOrgId, cancellationToken)
@@ -49,8 +56,12 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
                 HttpStatusCode.BadRequest);
         }
 
-        var warehouse = await mediator.Send(new GetWarehouseByIdQuery(store.DefaultWarehouseId), cancellationToken)
-            .ConfigureAwait(false);
+        var warehouse = await StoreWarehouseResolver.ResolveAsync(mediator, store.DefaultWarehouseId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new CustomException(
+                "The operator warehouse must be configured before placing an order.",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.Conflict);
 
         DateTimeOffset utcNow = clock.GetUtcNow();
         TimeOnly cutoffLocal = TimeOnly.ParseExact(

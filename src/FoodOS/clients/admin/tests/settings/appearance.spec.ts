@@ -2,9 +2,8 @@ import { expect, test } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installAdminShellMocks, ADMIN_PERMS } from "../helpers/shell-mocks";
 
-// AppearanceSettings is purely client-side: it calls ThemeProvider.setTheme,
-// which toggles the "dark" class on <html> and persists to the
-// "fsh.admin.theme" localStorage key. No API to mock beyond the shell.
+// AppearanceSettings is purely client-side: theme and accent choices are
+// applied to <html> and stored locally. No API to mock beyond the shell.
 
 test.beforeEach(async ({ page }) => {
   await seedAuthedSession(page, { ...TEST_USER, permissions: [...ADMIN_PERMS] });
@@ -57,5 +56,35 @@ test.describe("settings · appearance", () => {
 
     const stored = await page.evaluate(() => localStorage.getItem("fsh.admin.theme"));
     expect(stored).toBe("light");
+  });
+
+  test("switches accent palettes and restores the selection after reload", async ({ page }) => {
+    await page.goto("/settings/appearance");
+
+    const main = page.getByRole("main");
+    const indigo = main.getByRole("button", { name: "Indigo", exact: true });
+    const amber = main.getByRole("button", { name: "Amber", exact: true });
+    const rose = main.getByRole("button", { name: "Rose", exact: true });
+    await expect(indigo).toBeVisible({ timeout: 10_000 });
+
+    await indigo.click();
+    await expect(indigo).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("html")).toHaveClass(/accent-indigo/);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--brand-600").trim()))
+      .toBe("oklch(0.555 0.220 268)");
+
+    await amber.click();
+    await expect(page.locator("html")).toHaveClass(/accent-amber/);
+    await expect(page.locator("html")).not.toHaveClass(/accent-indigo/);
+    await page.reload();
+    await expect(amber).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("html")).toHaveClass(/accent-amber/);
+    expect(await page.evaluate(() => localStorage.getItem("fsh.admin.accent"))).toBe("amber");
+
+    await rose.click();
+    await expect(rose).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("html")).not.toHaveClass(/accent-/);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--brand-600").trim()))
+      .toMatch(/^oklch\(0\.575\s+0\.232\s+13\)$/);
   });
 });

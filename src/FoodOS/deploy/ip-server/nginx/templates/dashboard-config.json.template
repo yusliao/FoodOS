@@ -1,0 +1,7 @@
+{
+  "apiBase": "${FOODOS_API_URL}",
+  "defaultTenant": "",
+  "demoMode": false,
+  "inactivityIdleMs": 1200000,
+  "inactivityWarningMs": 60000
+}

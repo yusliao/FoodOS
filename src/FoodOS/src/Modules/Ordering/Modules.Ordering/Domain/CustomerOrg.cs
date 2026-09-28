@@ -34,6 +34,12 @@ public sealed class CustomerOrg : AggregateRoot<Guid>, IOperatorOwnedEntity
 
     public void SetCreditHold(bool creditHold) => CreditHold = creditHold;
 
+    public void Rename(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Name = name.Trim();
+    }
+
     public void AssignCustomerTenant(string customerTenantId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(customerTenantId);

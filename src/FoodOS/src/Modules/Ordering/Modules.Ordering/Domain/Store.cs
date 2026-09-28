@@ -57,6 +57,39 @@ public sealed class Store : AggregateRoot<Guid>, IOperatorOwnedEntity
         };
     }
 
+    public static Store CreateInitial(
+        Guid customerOrgId,
+        string code,
+        string name,
+        string customerTenantId)
+    {
+        if (customerOrgId == Guid.Empty) throw new ArgumentException("CustomerOrgId is required.", nameof(customerOrgId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerTenantId);
+
+        // The operator's sole warehouse is resolved when ordering, not assigned by the customer.
+        return new Store
+        {
+            Id = Guid.CreateVersion7(),
+            CustomerTenantId = customerTenantId.Trim().ToUpperInvariant(),
+            CustomerOrgId = customerOrgId,
+            Code = code.Trim().ToUpperInvariant(),
+            Name = name.Trim(),
+            Address = string.Empty,
+            DefaultWarehouseId = Guid.Empty,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    public void UpdateDetails(string name, string address)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(address);
+        Name = name.Trim();
+        Address = address.Trim();
+    }
+
     public void AssignCustomerTenant(string customerTenantId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(customerTenantId);

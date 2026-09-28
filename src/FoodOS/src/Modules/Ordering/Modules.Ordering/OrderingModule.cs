@@ -4,6 +4,7 @@ using FSH.Framework.Shared.Constants;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Ordering.Contracts.Authorization;
 using FSH.Modules.Ordering.Contracts.Access;
+using FSH.Modules.Ordering.Contracts.Services;
 using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Access;
 using FSH.Modules.Ordering.Data;
@@ -11,6 +12,7 @@ using FSH.Modules.Ordering.Features.v1.Carts.GetCart;
 using FSH.Modules.Ordering.Features.v1.Carts.UpdateCart;
 using FSH.Modules.Ordering.Features.v1.CustomerOrgs.CreateCustomerOrg;
 using FSH.Modules.Ordering.Features.v1.CustomerOrgs.SearchCustomerOrgs;
+using FSH.Modules.Ordering.Features.v1.CustomerOrgs.UpdateCustomerOrg;
 using FSH.Modules.Ordering.Features.v1.AfterSales.CreateAfterSalesTicket;
 using FSH.Modules.Ordering.Features.v1.AfterSales.SearchAfterSalesTickets;
 using FSH.Modules.Ordering.Features.v1.Orders.AmendOrder;
@@ -22,6 +24,7 @@ using FSH.Modules.Ordering.Features.v1.Orders.SearchOrders;
 using FSH.Modules.Ordering.Features.v1.Stores.CreateStore;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStoreById;
 using FSH.Modules.Ordering.Features.v1.Stores.GetStores;
+using FSH.Modules.Ordering.Features.v1.Stores.UpdateStore;
 using FSH.Modules.Ordering.Features.v1.StoreAccess.GetMyStoreAccess;
 using FSH.Modules.Ordering.Features.v1.StoreAccess.SetUserStoreAccess;
 using FSH.Modules.Ordering.Features.v1.Shop.SearchShopProducts;
@@ -54,6 +57,7 @@ public sealed class OrderingModule : IModule
 
         builder.Services.AddHeroDbContext<OrderingDbContext>();
         builder.Services.AddScoped<ICustomerAccessScopeResolver, CustomerAccessScopeResolver>();
+        builder.Services.AddScoped<ICustomerTemplateService, CustomerTemplateService>();
         builder.Services.AddScoped<ICustomerDeliveryNotificationAudience, CustomerDeliveryNotificationAudience>();
         builder.Services.AddScoped<IWarehouseOrderFeedbackSink, WarehouseOrderFeedbackSink>();
         builder.Services.AddScoped<IDbInitializer, OrderingDbInitializer>();
@@ -88,8 +92,10 @@ public sealed class OrderingModule : IModule
 
         group.MapSearchCustomerOrgsEndpoint();
         group.MapCreateCustomerOrgEndpoint();
+        group.MapUpdateCustomerOrgEndpoint();
         group.MapGetStoresEndpoint();
         group.MapCreateStoreEndpoint();
+        group.MapUpdateStoreEndpoint();
         group.MapGetStoreByIdEndpoint();
         group.MapGetMyStoreAccessEndpoint();
         group.MapSetUserStoreAccessEndpoint();

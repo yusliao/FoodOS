@@ -5,6 +5,7 @@ using FSH.Framework.Persistence;
 using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Multitenancy.Contracts;
 using FSH.Modules.Multitenancy.Services;
+using FSH.Modules.Ordering.Contracts.Services;
 using Microsoft.Extensions.Logging;
 
 namespace FSH.Modules.Multitenancy.Provisioning;
@@ -15,6 +16,7 @@ public sealed class TenantProvisioningJob
     private readonly IMultiTenantStore<AppTenantInfo> _tenantStore;
     private readonly IMultiTenantContextSetter _tenantContextSetter;
     private readonly ITenantService _tenantService;
+    private readonly ICustomerTemplateService _customerTemplateService;
     private readonly ILogger<TenantProvisioningJob> _logger;
 
     public TenantProvisioningJob(
@@ -22,12 +24,14 @@ public sealed class TenantProvisioningJob
         IMultiTenantStore<AppTenantInfo> tenantStore,
         IMultiTenantContextSetter tenantContextSetter,
         ITenantService tenantService,
+        ICustomerTemplateService customerTemplateService,
         ILogger<TenantProvisioningJob> logger)
     {
         _provisioningService = provisioningService;
         _tenantStore = tenantStore;
         _tenantContextSetter = tenantContextSetter;
         _tenantService = tenantService;
+        _customerTemplateService = customerTemplateService;
         _logger = logger;
     }
 
@@ -61,6 +65,10 @@ public sealed class TenantProvisioningJob
             if (runSeeding)
             {
                 await _tenantService.SeedTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(tenant.Id, MultitenancyConstants.Root.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    await _customerTemplateService.EnsureAsync(tenant.Id, cancellationToken).ConfigureAwait(false);
+                }
                 await _provisioningService.MarkStepCompletedAsync(tenantId, correlationId, currentStep, cancellationToken).ConfigureAwait(false);
             }
 

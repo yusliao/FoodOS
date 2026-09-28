@@ -284,12 +284,15 @@ internal sealed class DemoSeeder
 
     private async Task SeedRootSuperAdminAsync(CancellationToken cancellationToken)
     {
-        var rootTenant = new AppTenantInfo(
-            id: MultitenancyConstants.Root.Id,
-            name: MultitenancyConstants.Root.Name,
-            connectionString: string.Empty,
-            adminEmail: MultitenancyConstants.Root.EmailAddress,
-            issuer: MultitenancyConstants.Root.Issuer);
+        using var scope = _services.CreateScope();
+        var tenantStore = scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>();
+        var rootTenant = await tenantStore.GetAsync(MultitenancyConstants.Root.Id).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Root tenant must exist before seeding the super admin.");
+
+        // seed-demo can also be run on a migrated database whose root roles were never seeded.
+        // Ensure the built-in Admin role and its full operator permission catalog exist first.
+        var tenantService = scope.ServiceProvider.GetRequiredService<ITenantService>();
+        await tenantService.SeedTenantAsync(rootTenant, cancellationToken).ConfigureAwait(false);
 
         await SeedUsersInTenantAsync(rootTenant, BuildRootUsers(), BuildOperatorRoles(), cancellationToken).ConfigureAwait(false);
     }
@@ -412,8 +415,17 @@ internal sealed class DemoSeeder
                 if (!await userManager.IsInRoleAsync(existing, role).ConfigureAwait(false))
                 {
                     var roleEntity = await roleManager.FindByNameAsync(role).ConfigureAwait(false);
-                    if (roleEntity is null) continue;
-                    await userManager.AddToRoleAsync(existing, role).ConfigureAwait(false);
+                    if (roleEntity is null)
+                    {
+                        throw new InvalidOperationException($"Role '{role}' is missing for tenant '{tenant.Id}' while seeding '{demoUser.Email}'.");
+                    }
+                    var assigned = await userManager.AddToRoleAsync(existing, role).ConfigureAwait(false);
+                    if (!assigned.Succeeded)
+                    {
+                        throw new InvalidOperationException(
+                            $"Failed to assign role '{role}' to '{demoUser.Email}' in tenant '{tenant.Id}': "
+                            + string.Join("; ", assigned.Errors.Select(error => error.Description)));
+                    }
                 }
             }
         }

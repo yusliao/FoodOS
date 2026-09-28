@@ -42,8 +42,20 @@ export function createCustomer(input: CreateCustomerInput, idempotencyKey: strin
   });
 }
 
+export function updateCustomer(input: Pick<CustomerOrgDto, "id" | "name">) {
+  return apiFetch<void>("/api/v1/ordering/customer-orgs/details", {
+    method: "PUT", body: JSON.stringify({ customerOrgId: input.id, name: input.name }),
+  });
+}
+
 export function createStore(input: CreateStoreInput, idempotencyKey: string) {
   return apiFetch<string>("/api/v1/ordering/stores", {
     method: "POST", body: JSON.stringify(input), headers: { "Idempotency-Key": idempotencyKey },
+  });
+}
+
+export function updateStore(input: Pick<StoreDto, "id" | "name" | "address">) {
+  return apiFetch<void>("/api/v1/ordering/stores/details", {
+    method: "PUT", body: JSON.stringify({ storeId: input.id, name: input.name, address: input.address }),
   });
 }

@@ -3,7 +3,6 @@ using System.Net;
 using FSH.Framework.Core.Exceptions;
 using FSH.Framework.Shared.Persistence;
 using FSH.Modules.Inventory.Contracts.v1.Plans;
-using FSH.Modules.Inventory.Contracts.v1.Warehouses;
 using FSH.Modules.Ordering.Contracts.Access;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.v1.Carts;
@@ -11,6 +10,7 @@ using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Contracts.v1.Shop;
 using FSH.Modules.Ordering.Data;
 using FSH.Modules.Ordering.Domain;
+using FSH.Modules.Ordering.Services;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -128,6 +128,10 @@ public sealed class ShopCartOrdersHandler(
         var store = await dbContext.Stores
             .FirstAsync(item => item.Id == command.StoreId, cancellationToken)
             .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(store.Address))
+        {
+            throw Conflict("The store delivery address must be completed before placing an order.");
+        }
         var org = await dbContext.CustomerOrgs
             .FirstOrDefaultAsync(item => item.Id == store.CustomerOrgId, cancellationToken)
             .ConfigureAwait(false)
@@ -148,8 +152,9 @@ public sealed class ShopCartOrdersHandler(
                 HttpStatusCode.BadRequest);
         }
 
-        var warehouse = await mediator.Send(new GetWarehouseByIdQuery(store.DefaultWarehouseId), cancellationToken)
-            .ConfigureAwait(false);
+        var warehouse = await StoreWarehouseResolver.ResolveAsync(mediator, store.DefaultWarehouseId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw Conflict("The operator warehouse must be configured before placing an order.");
         DateTimeOffset utcNow = clock.GetUtcNow();
         TimeOnly cutoffLocal = TimeOnly.ParseExact(
             warehouse.Clock.CutoffLocal,

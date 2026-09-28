@@ -32,7 +32,7 @@ var redis = builder.AddContainer("redis", "valkey/valkey", "9.1.0")
 
 var redisEndpoint = redis.GetEndpoint("tcp");
 var redisConnectionString = ReferenceExpression.Create(
-    $"{redisEndpoint.Property(EndpointProperty.HostAndPort)}");
+    $"{redisEndpoint.Property(EndpointProperty.IPV4Host)}:{redisEndpoint.Property(EndpointProperty.Port)}");
 
 // RedisInsight cache browser (dev-only) sidecar; RI_REDIS_* pre-registers the Valkey connection via the container-network alias "redis".
 builder.AddContainer("redis-insight", "redis/redisinsight", "latest")

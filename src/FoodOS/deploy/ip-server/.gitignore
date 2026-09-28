@@ -1,0 +1,6 @@
+/foodos.env
+!/releases/
+/releases/*
+!/releases/.gitkeep
+/data/*
+!/data/.gitkeep

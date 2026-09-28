@@ -1,0 +1,104 @@
+name: foodos
+
+services:
+  valkey:
+    image: valkey/valkey:9.1.0-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--requirepass", "${FOODOS_VALKEY_PASSWORD:?set FOODOS_VALKEY_PASSWORD}", "--appendonly", "yes"]
+    environment:
+      VALKEY_PASSWORD: ${FOODOS_VALKEY_PASSWORD:?set FOODOS_VALKEY_PASSWORD}
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  migrator:
+    profiles: ["ops"]
+    image: mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra
+    user: "1654:1654"
+    working_dir: /app
+    entrypoint: ["dotnet", "FoodOS.DbMigrator.dll"]
+    command: ["apply", "--seed"]
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      DatabaseOptions__ConnectionString: ${FOODOS_DB_CONNECTION:?set FOODOS_DB_CONNECTION}
+      CachingOptions__Redis: valkey,password=${FOODOS_VALKEY_PASSWORD:?set FOODOS_VALKEY_PASSWORD}
+      JwtOptions__SigningKey: ${FOODOS_JWT_SIGNING_KEY:?set FOODOS_JWT_SIGNING_KEY}
+      Seed__DefaultAdminPassword: ${FOODOS_SEED_ADMIN_PASSWORD:?set FOODOS_SEED_ADMIN_PASSWORD}
+    volumes:
+      - ${FOODOS_RELEASE_DIR:?set FOODOS_RELEASE_DIR}/migrator:/app:ro
+    depends_on:
+      valkey:
+        condition: service_healthy
+    networks:
+      - default
+      - shared
+
+  api:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra
+    user: "1654:1654"
+    working_dir: /app
+    entrypoint: ["dotnet", "FoodOS.Api.dll"]
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      DatabaseOptions__ConnectionString: ${FOODOS_DB_CONNECTION:?set FOODOS_DB_CONNECTION}
+      CachingOptions__Redis: valkey,password=${FOODOS_VALKEY_PASSWORD:?set FOODOS_VALKEY_PASSWORD}
+      JwtOptions__SigningKey: ${FOODOS_JWT_SIGNING_KEY:?set FOODOS_JWT_SIGNING_KEY}
+      Seed__DefaultAdminPassword: ${FOODOS_SEED_ADMIN_PASSWORD:?set FOODOS_SEED_ADMIN_PASSWORD}
+      HangfireOptions__UserName: ${FOODOS_HANGFIRE_USERNAME:?set FOODOS_HANGFIRE_USERNAME}
+      HangfireOptions__Password: ${FOODOS_HANGFIRE_PASSWORD:?set FOODOS_HANGFIRE_PASSWORD}
+      CorsOptions__AllowedOrigins__0: ${FOODOS_ADMIN_URL:?set FOODOS_ADMIN_URL}
+      CorsOptions__AllowedOrigins__1: ${FOODOS_DASHBOARD_URL:?set FOODOS_DASHBOARD_URL}
+      OriginOptions__OriginUrl: ${FOODOS_API_URL:?set FOODOS_API_URL}
+      Storage__Provider: s3
+      Storage__S3__ServiceUrl: ${FOODOS_MINIO_URL:?set FOODOS_MINIO_URL}
+      Storage__S3__AccessKey: ${FOODOS_MINIO_ACCESS_KEY:?set FOODOS_MINIO_ACCESS_KEY}
+      Storage__S3__SecretKey: ${FOODOS_MINIO_SECRET_KEY:?set FOODOS_MINIO_SECRET_KEY}
+      Storage__S3__Bucket: foodos
+      Storage__S3__ForcePathStyle: "true"
+      Storage__S3__PublicRead: "false"
+      WmsIntegration__Enabled: "false"
+    volumes:
+      - ${FOODOS_RELEASE_DIR:?set FOODOS_RELEASE_DIR}/api:/app:ro
+      - ./data/api-wwwroot:/app/wwwroot
+      - ./data/audit-dlq:/app/audit-dlq
+    depends_on:
+      valkey:
+        condition: service_healthy
+    networks:
+      - default
+      - shared
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      FOODOS_API_URL: ${FOODOS_API_URL:?set FOODOS_API_URL}
+      FOODOS_DASHBOARD_URL: ${FOODOS_DASHBOARD_URL:?set FOODOS_DASHBOARD_URL}
+      NGINX_ENVSUBST_FILTER: ^FOODOS_
+    ports:
+      - "${FOODOS_API_PORT:-18080}:8080"
+      - "${FOODOS_ADMIN_PORT:-18081}:8081"
+      - "${FOODOS_DASHBOARD_PORT:-18082}:8082"
+      - "${FOODOS_MINIO_PORT:-18083}:8083"
+    volumes:
+      - ./nginx/foodos.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ${FOODOS_RELEASE_DIR:?set FOODOS_RELEASE_DIR}/admin:/usr/share/nginx/html/admin:ro
+      - ${FOODOS_RELEASE_DIR:?set FOODOS_RELEASE_DIR}/dashboard:/usr/share/nginx/html/dashboard:ro
+    networks:
+      - default
+      - shared
+
+volumes:
+  valkey_data:
+
+networks:
+  shared:
+    external: true
+    name: checkpay_app-network

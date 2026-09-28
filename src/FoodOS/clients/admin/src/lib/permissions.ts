@@ -23,10 +23,12 @@ export const OrderingPermissions = Object.freeze({
   Customers: {
     View: "Permissions.Ordering.Customers.View",
     Create: "Permissions.Ordering.Customers.Create",
+    Update: "Permissions.Ordering.Customers.Update",
   },
   Stores: {
     View: "Permissions.Ordering.Stores.View",
     Create: "Permissions.Ordering.Stores.Create",
+    Update: "Permissions.Ordering.Stores.Update",
   },
 });
 

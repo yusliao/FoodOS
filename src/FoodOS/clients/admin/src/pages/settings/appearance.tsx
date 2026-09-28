@@ -1,5 +1,5 @@
 import { Moon, Palette, Sun } from "lucide-react";
-import { useTheme } from "@/components/theme/theme-provider";
+import { ACCENTS, useTheme } from "@/components/theme/theme-provider";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/list";
 import { useLocale } from "@/i18n/locale-provider";
@@ -22,7 +22,7 @@ const MODES: {
  * to a tri-state. Persistence is handled by the provider; we just call setTheme.
  */
 export function AppearanceSettings() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, accent, setAccent } = useTheme();
   const { culture, setCulture, t } = useLocale();
 
   return (
@@ -81,6 +81,41 @@ export function AppearanceSettings() {
                 <span className="text-xs leading-relaxed text-[var(--color-muted-foreground)]">
                   {blurb}
                 </span>
+              </button>
+            );
+          })}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title={t("settings.accentTitle")}
+        icon={Palette}
+        description={t("settings.accentDescription")}
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {ACCENTS.map(({ id, swatch }) => {
+            const active = accent === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAccent(id)}
+                aria-pressed={active}
+                aria-label={t(`settings.accent.${id}`)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl border p-3 text-left transition-colors duration-[var(--duration-default)]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]",
+                  active
+                    ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)]"
+                    : "border-[var(--color-border)] bg-[var(--color-card)] hover:bg-[var(--color-muted)]",
+                )}
+              >
+                <span
+                  className="size-6 shrink-0 rounded-full border border-[var(--color-border)]"
+                  style={{ backgroundColor: swatch }}
+                  aria-hidden="true"
+                />
+                <span className="text-sm font-semibold">{t(`settings.accent.${id}`)}</span>
               </button>
             );
           })}

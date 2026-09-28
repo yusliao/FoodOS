@@ -74,4 +74,25 @@ test.describe("settings/appearance — theme + accent (client-side)", () => {
       "true",
     );
   });
+
+  test("localizes appearance settings and the custom accent dialog in Chinese", async ({ page }) => {
+    await page.goto("/settings/appearance");
+    await page.getByRole("button", { name: "中文" }).click();
+
+    for (const title of ["强调色", "字体", "密度", "动效"]) {
+      await expect(page.getByText(title, { exact: true })).toBeVisible();
+    }
+    await expect(page.getByText("选择用于工作台主要操作、图表和高亮的品牌色。")).toBeVisible();
+    await expect(page.getByRole("button", { name: "靛蓝强调色" })).toBeVisible();
+    await expect(page.getByText("选择界面字体；代码块始终使用 JetBrains Mono 等宽字体。")).toBeVisible();
+    await expect(page.getByText("在工作台中使用紧凑间距。")).toBeVisible();
+    await expect(page.getByText("关闭过渡效果和装饰性动画。")).toBeVisible();
+
+    await page.getByRole("button", { name: "自定义强调色" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "选择品牌色" })).toBeVisible();
+    await expect(dialog.getByLabel("色相")).toBeVisible();
+    await expect(dialog.getByLabel("饱和度")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "应用强调色" })).toBeVisible();
+  });
 });

@@ -5,8 +5,10 @@ import { mockJsonResponse } from "../helpers/api-mocks";
 
 const CV = "Permissions.Ordering.Customers.View";
 const CC = "Permissions.Ordering.Customers.Create";
+const CU = "Permissions.Ordering.Customers.Update";
 const SV = "Permissions.Ordering.Stores.View";
 const SC = "Permissions.Ordering.Stores.Create";
+const SU = "Permissions.Ordering.Stores.Update";
 const WV = "Permissions.Inventory.Warehouses.View";
 const A = "11111111-1111-1111-1111-111111111111";
 const B = "22222222-2222-2222-2222-222222222222";
@@ -51,6 +53,35 @@ test("customer search preserves root identity and customer link filters stores",
   expect((await filtered).headers().tenant).toBe("root");
   await expect(page.getByRole("heading", { name: "Acme Main" })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`customerOrgId=${A}`));
+});
+
+test("operator can complete the initial customer and store template", async ({ page }) => {
+  await setup(page, [CV, CU, SV, SU]);
+  const updates: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/ordering/customer-orgs/details", async route => {
+    updates.push(route.request().postDataJSON());
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/v1/ordering/stores/details", async route => {
+    updates.push(route.request().postDataJSON());
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.goto("/customers");
+  await page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Acme Restaurant" }) })
+    .getByRole("button", { name: "Edit customer name" }).click();
+  await page.getByRole("textbox", { name: "Name" }).fill("Acme Dining");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect.poll(() => updates.length).toBe(1);
+  expect(updates[0]).toEqual({ customerOrgId: A, name: "Acme Dining" });
+
+  await page.goto("/stores");
+  await page.getByRole("button", { name: "Edit store" }).click();
+  await page.getByRole("textbox", { name: "Name" }).fill("Main Branch");
+  await page.getByRole("textbox", { name: "Address" }).fill("1 Main St");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect.poll(() => updates.length).toBe(2);
+  expect(updates[1]).toEqual({ storeId: store.id, name: "Main Branch", address: "1 Main St" });
 });
 
 for (const path of ["customers", "stores"]) {

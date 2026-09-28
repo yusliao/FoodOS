@@ -1,0 +1,8 @@
+{
+  "apiBase": "${FOODOS_API_URL}",
+  "defaultTenant": "root",
+  "dashboardUrl": "${FOODOS_DASHBOARD_URL}",
+  "demoMode": false,
+  "inactivityIdleMs": 600000,
+  "inactivityWarningMs": 60000
+}
