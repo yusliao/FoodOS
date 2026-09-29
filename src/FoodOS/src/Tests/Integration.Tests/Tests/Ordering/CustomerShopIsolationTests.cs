@@ -65,6 +65,15 @@ public sealed partial class CustomerShopIsolationTests
         product.UnitPrice.ShouldBe(9.5m);
         product.IsAvailable.ShouldBeFalse();
 
+        using var emptyProductsResponse = await clientA.GetAsync(
+            $"{TestConstants.ShopBasePath}/products?storeId={storeA}&search=not-found-{Guid.NewGuid():N}&pageNumber=1&pageSize=20");
+        emptyProductsResponse.StatusCode.ShouldBe(
+            HttpStatusCode.OK,
+            await emptyProductsResponse.Content.ReadAsStringAsync());
+        var emptyProducts = await emptyProductsResponse.DeserializeAsync<PagedResult<ShopProductDto>>();
+        emptyProducts.Items.ShouldBeEmpty();
+        emptyProducts.TotalCount.ShouldBe(0);
+
         using var productDetailResponse = await clientA.GetAsync(
             $"{TestConstants.ShopBasePath}/products/{productId}?storeId={storeA}&quantity=3");
         productDetailResponse.StatusCode.ShouldBe(

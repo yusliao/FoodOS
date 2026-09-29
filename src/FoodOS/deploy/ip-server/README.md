@@ -13,7 +13,7 @@
   nginx/                     # 四个端口的代理、前端运行配置模板
   minio/                     # 独立 bucket 的访问策略与 CORS
   releases/<版本号>/
-    api/                     # dotnet publish 的全部输出
+    api/                     # dotnet publish 的全部输出，含 audit-dlq/ 挂载点
     migrator/                # dotnet publish 的全部输出，迁移时才运行
     admin/                   # Vite dist 的全部内容
     dashboard/               # Vite dist 的全部内容
@@ -142,3 +142,5 @@ curl -fsS http://127.0.0.1:18082/config.json
 ## 更新与回退
 
 每次更新生成一个新的 `releases/<版本号>`，上传后先备份 FoodOS 数据库与 `foodos` bucket，再用新版本的 migrator 执行 `list-pending`、`apply`。修改 `foodos.env` 的 `FOODOS_RELEASE_DIR` 并重建 FoodOS API、Nginx 容器；不要使用 `down -v`。若数据库迁移与旧程序不兼容，应用版本回退还需要恢复迁移前数据库备份。检查静态资源和 `/config.json` 后再开放测试访问。
+
+新发布包的 `api/audit-dlq/` 必须存在，Compose 才能把持久化目录挂到只读的 `/app` 下。若旧发布包缺少此目录，先在服务器对应版本的 `api` 目录中创建，再运行 `docker compose -f compose.yml up -d --no-deps --force-recreate api`；仅 `up -d api` 可能复用已经创建失败的容器。

@@ -44,6 +44,18 @@ public sealed class SearchShopProductsQueryHandler(
                     SortDir: "asc"),
                 cancellationToken)
             .ConfigureAwait(false);
+        if (products.Items.Count == 0)
+        {
+            return new PagedResponse<ShopProductDto>
+            {
+                Items = [],
+                PageNumber = products.PageNumber,
+                PageSize = products.PageSize,
+                TotalCount = products.TotalCount,
+                TotalPages = products.TotalPages,
+            };
+        }
+
         var quotes = await mediator.Send(
                 new QuoteProductPricesQuery(
                     access.CustomerOrgId,
