@@ -25,8 +25,12 @@ Push-Location $projectRoot
 try {
     & dotnet publish 'src/Host/FoodOS.Api/FoodOS.Api.csproj' -c Release -r linux-x64 --self-contained false -o (Join-Path $releaseRoot 'api')
     Assert-ExitCode 'API publish'
-    # /app is mounted read-only; Docker needs the nested audit-dlq mountpoint to exist.
-    New-Item -ItemType Directory -Path (Join-Path $releaseRoot 'api/audit-dlq') -Force | Out-Null
+    # /app is mounted read-only; nested bind mount targets must survive the upload.
+    foreach ($mountpoint in @('wwwroot', 'audit-dlq')) {
+        $mountPath = Join-Path $releaseRoot "api/$mountpoint"
+        New-Item -ItemType Directory -Path $mountPath -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $mountPath 'MOUNTPOINT') -Force | Out-Null
+    }
 
     & dotnet publish 'src/Host/FoodOS.DbMigrator/FoodOS.DbMigrator.csproj' -c Release -r linux-x64 --self-contained false -o (Join-Path $releaseRoot 'migrator')
     Assert-ExitCode 'DbMigrator publish'
