@@ -879,7 +879,7 @@ internal sealed class DemoSeeder
     // A hand-typed name that doesn't match a registry entry (e.g. the old
     // "Permissions.Brands.View" vs the real "Permissions.Catalog.Brands.View")
     // is a claim that grants nothing, silently.
-    private static IReadOnlyList<DemoRole> BuildOperatorRoles() =>
+    internal static IReadOnlyList<DemoRole> BuildOperatorRoles() =>
     [
         new(
             "Manager",

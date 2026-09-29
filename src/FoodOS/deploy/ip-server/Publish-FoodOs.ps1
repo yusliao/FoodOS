@@ -31,16 +31,42 @@ try {
 
     foreach ($app in @('admin', 'dashboard')) {
         $appRoot = Join-Path $projectRoot "clients/$app"
-        Push-Location $appRoot
+        $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
+        $buildRoot = Join-Path $tempRoot "foodos-publish-$ReleaseId-$app-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Path $buildRoot | Out-Null
+
         try {
-            & npm ci
-            Assert-ExitCode "$app npm ci"
-            & npm run build
-            Assert-ExitCode "$app build"
-            Copy-Item -Path (Join-Path $appRoot 'dist/*') -Destination (Join-Path $releaseRoot $app) -Recurse -Force
+            # npm ci removes node_modules first. Build from a private copy so a running
+            # dev server cannot lock a native .node file in the source checkout.
+            foreach ($entry in @('package.json', 'package-lock.json', 'index.html',
+                                  'vite.config.ts', 'tsconfig.json', 'tsconfig.app.json',
+                                  'tsconfig.node.json', 'src', 'public')) {
+                Copy-Item -LiteralPath (Join-Path $appRoot $entry) -Destination $buildRoot -Recurse -Force
+            }
+
+            Push-Location $buildRoot
+            try {
+                & npm ci
+                Assert-ExitCode "$app npm ci"
+                & npm run build
+                Assert-ExitCode "$app build"
+                Copy-Item -Path (Join-Path $buildRoot 'dist/*') -Destination (Join-Path $releaseRoot $app) -Recurse -Force
+            }
+            finally {
+                Pop-Location
+            }
         }
         finally {
-            Pop-Location
+            $resolvedBuildRoot = [IO.Path]::GetFullPath($buildRoot)
+            if ($resolvedBuildRoot.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -and
+                (Test-Path -LiteralPath $resolvedBuildRoot)) {
+                try {
+                    Remove-Item -LiteralPath $resolvedBuildRoot -Recurse -Force
+                }
+                catch {
+                    Write-Warning "Temporary build directory could not be removed: $resolvedBuildRoot"
+                }
+            }
         }
     }
 }

@@ -147,6 +147,41 @@ users / catalog / tickets / chat / FoodOS operational master data. Fresh tenants
 `POST /api/v1/tenants` come up with just a tenant admin user — no
 catalogue, no demo content. This matches production behaviour.
 
+### Opt-in restaurant showcase in an existing database
+
+`seed-showcase` is a separate, deliberately limited command for a customer-facing
+test environment. It does **not** run during normal `apply --seed` or API startup.
+Create a non-root customer tenant with its own administrator first (for example
+`demo-restaurant`) and wait for provisioning to finish. Back up the database before
+writing. The command is read-only by default:
+
+```bash
+docker compose -f compose.yml --profile ops run --rm migrator seed-showcase --tenant demo-restaurant
+docker compose -f compose.yml --profile ops run --rm migrator seed-showcase --tenant demo-restaurant --apply-showcase
+docker compose -f compose.yml --profile ops run --rm migrator seed-showcase --tenant demo-restaurant
+```
+
+Run these from `/opt/foodos` with the **new** published migrator release selected
+by `FOODOS_RELEASE_DIR` in `.env`. Use the actual tenant ID if different. The
+showcase inserts 22 foodservice SKUs (all `DEMO-` prefixed, zero stock) with
+English canonical names and Chinese `zh-CN` translations, an empty
+distribution-centre record, a supplier, a customer organization and restaurant
+store, four customer-price lines, the customer administrator's store access, one
+customer ticket, three operator roles (only when absent), and three **inactive**
+operator examples with non-routable email addresses and no password. Existing
+passwords, account state, manually edited roles and data are not changed. One
+inactive restaurant-staff example is also added under the customer tenant; only
+the tenant administrator created during normal provisioning can sign in.
+
+No sales orders, inventory lots/balances/transactions, invoices, WMS mappings,
+external calls, or scheduled jobs are generated. Dashboard users can see the
+catalog and quote prices, but availability is intentionally unavailable until a
+real or separately isolated WMS integration supplies it. Because the operator
+catalog is shared, `DEMO-` products may be visible to other customer tenants;
+deactivate them before onboarding real customers. This command is additive: do
+not expect it to remove data on rollback. A read-only verification query is in
+`deploy/ip-server/showcase-verify.sql`.
+
 ## API behavior when schema is behind
 
 If the API boots against a database whose schema is behind the running

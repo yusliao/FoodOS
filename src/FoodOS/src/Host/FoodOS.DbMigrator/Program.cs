@@ -226,6 +226,20 @@ try
         .ConfigureAwait(false);
     await Console.Out.WriteLineAsync("[migrator] advisory lock acquired").ConfigureAwait(false);
 
+    if (cli.Command == "seed-showcase")
+    {
+        if (string.IsNullOrWhiteSpace(cli.Tenant) ||
+            string.Equals(cli.Tenant, MultitenancyConstants.Root.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("seed-showcase requires --tenant <existing non-root tenant id>.");
+        }
+
+        var seeder = new ShowcaseSeeder(host.Services);
+        await seeder.RunAsync(cli.Tenant, cli.ApplyShowcase, CancellationToken.None).ConfigureAwait(false);
+        await Console.Out.WriteLineAsync("[migrator] finished successfully.").ConfigureAwait(false);
+        return 0;
+    }
+
     // ── Step 1 — tenant catalog ───────────────────────────────────────────
     // Always applied first: the per-tenant migrator below reads every tenant out of this database.
     using (var scope = host.Services.CreateScope())

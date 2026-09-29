@@ -15,9 +15,10 @@ internal sealed record MigratorCommand(
     string? Tenant,
     bool CatalogOnly,
     bool SeedAfter,
+    bool ApplyShowcase,
     bool Help)
 {
-    private static readonly string[] KnownVerbs = ["apply", "seed", "seed-demo", "list-pending"];
+    private static readonly string[] KnownVerbs = ["apply", "seed", "seed-demo", "seed-showcase", "list-pending"];
 
     public static MigratorCommand Parse(string[] args)
     {
@@ -32,9 +33,10 @@ internal sealed record MigratorCommand(
         var tenant = ExtractValue(args, "--tenant");
         var catalogOnly = args.Any(a => string.Equals(a, "--catalog-only", StringComparison.OrdinalIgnoreCase));
         var seedAfter = args.Any(a => string.Equals(a, "--seed", StringComparison.OrdinalIgnoreCase));
+        var applyShowcase = args.Any(a => string.Equals(a, "--apply-showcase", StringComparison.OrdinalIgnoreCase));
         var help = args.Any(a => a is "-h" or "--help");
 
-        return new MigratorCommand(verb, tenant, catalogOnly, seedAfter, help);
+        return new MigratorCommand(verb, tenant, catalogOnly, seedAfter, applyShowcase, help);
     }
 
     private static string? ExtractValue(string[] args, string flag)
@@ -68,12 +70,15 @@ internal sealed record MigratorCommand(
                           tickets, and chat. Acme also gets the FoodOS demo chain
                           (1 DC / 3 zones / ~22 food SKUs / 4 stores / 1 route).
                           Dev-only — refuses to run unless DOTNET_ENVIRONMENT=Development.
+          seed-showcase   Preview restaurant showcase data for an existing customer tenant.
+                          Add --apply-showcase to insert missing records; never resets passwords.
           list-pending    Print pending migrations without applying anything.
 
         Options:
           --tenant <id>        Restrict to a single tenant id (default: all tenants).
           --catalog-only       Skip the per-tenant pass; only the tenant catalog is migrated.
           --seed               After apply, also call ITenantService.SeedTenantAsync.
+          --apply-showcase     Allow seed-showcase to write missing showcase records.
           -h, --help           Print this help text.
 
         Exit codes:
