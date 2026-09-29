@@ -6,9 +6,9 @@ SELECT 'zh_CN_product_names', count(*) FROM catalog."ProductTranslations" transl
     JOIN catalog."Products" product ON product."Id" = translation."ProductId"
     WHERE product."Sku" LIKE 'DEMO-%' AND translation."Culture" = 'zh-CN'
 UNION ALL
-SELECT 'customer', count(*) FROM ordering."CustomerOrgs" WHERE "Code" = 'DEMO-REST'
+SELECT 'customer', count(*) FROM ordering."CustomerOrgs" WHERE "CustomerTenantId" = 'DEMO-RESTAURANT'
 UNION ALL
-SELECT 'store', count(*) FROM ordering."Stores" WHERE "Code" = 'DEMO-BISTRO'
+SELECT 'store', count(*) FROM ordering."Stores" WHERE "CustomerTenantId" = 'DEMO-RESTAURANT'
 UNION ALL
 SELECT 'supplier', count(*) FROM procurement."Suppliers" WHERE "Code" = 'DEMO-SUP'
 UNION ALL
@@ -24,7 +24,9 @@ SELECT 'inactive_customer_staff', count(*) FROM identity."Users"
 UNION ALL
 SELECT 'store_access', count(*) FROM ordering."CustomerUserStoreAccesses" access
     JOIN ordering."Stores" store ON store."Id" = access."StoreId"
-    WHERE store."Code" = 'DEMO-BISTRO' AND access."CustomerTenantId" = 'DEMO-RESTAURANT'
+    WHERE store."CustomerTenantId" = 'DEMO-RESTAURANT'
+      AND access."CustomerTenantId" = 'DEMO-RESTAURANT'
+      AND access."CustomerOrgId" = store."CustomerOrgId" AND access."IsActive"
 UNION ALL
 SELECT 'price_lines', count(*) FROM catalog."PriceListLines" line
     JOIN catalog."PriceLists" list ON list."Id" = line."PriceListId"
@@ -37,4 +39,4 @@ SELECT org."Code" AS customer_code, org."CustomerTenantId" AS customer_tenant,
        store."Code" AS store_code, store."CustomerTenantId" AS store_tenant
 FROM ordering."CustomerOrgs" org
 JOIN ordering."Stores" store ON store."CustomerOrgId" = org."Id"
-WHERE org."Code" = 'DEMO-REST';
+WHERE org."CustomerTenantId" = 'DEMO-RESTAURANT';

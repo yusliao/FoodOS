@@ -54,6 +54,7 @@ services:
       HangfireOptions__Password: ${FOODOS_HANGFIRE_PASSWORD:?set FOODOS_HANGFIRE_PASSWORD}
       CorsOptions__AllowedOrigins__0: ${FOODOS_ADMIN_URL:?set FOODOS_ADMIN_URL}
       CorsOptions__AllowedOrigins__1: ${FOODOS_DASHBOARD_URL:?set FOODOS_DASHBOARD_URL}
+      CorsOptions__AllowedHeaders__5: x-requested-with
       OriginOptions__OriginUrl: ${FOODOS_API_URL:?set FOODOS_API_URL}
       Storage__Provider: s3
       Storage__S3__ServiceUrl: ${FOODOS_MINIO_URL:?set FOODOS_MINIO_URL}

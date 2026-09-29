@@ -144,8 +144,9 @@ schema OR data. The two convenient ways to run it locally are:
 
 `seed-demo` is the **only** way to get the demo tenants and their
 users / catalog / tickets / chat / FoodOS operational master data. Fresh tenants created via
-`POST /api/v1/tenants` come up with just a tenant admin user — no
-catalogue, no demo content. This matches production behaviour.
+`POST /api/v1/tenants` get an admin, one customer organization, one initial
+store, and the admin's store access through normal provisioning. They do not
+get a catalogue or showcase content. This matches production behaviour.
 
 ### Opt-in restaurant showcase in an existing database
 
@@ -165,18 +166,21 @@ Run these from `/opt/foodos` with the **new** published migrator release selecte
 by `FOODOS_RELEASE_DIR` in `.env`. Use the actual tenant ID if different. The
 showcase inserts 22 foodservice SKUs (all `DEMO-` prefixed, zero stock) with
 English canonical names and Chinese `zh-CN` translations, an empty
-distribution-centre record, a supplier, a customer organization and restaurant
-store, four customer-price lines, the customer administrator's store access, one
+distribution-centre record, a supplier, four customer-price lines, one
 customer ticket, three operator roles (only when absent), and three **inactive**
-operator examples with non-routable email addresses and no password. Existing
+operator examples with non-routable email addresses and no password. It reuses
+the provisioned customer organization and initial store, filling only an empty
+store address while preserving existing codes, names, and access. Existing
 passwords, account state, manually edited roles and data are not changed. One
 inactive restaurant-staff example is also added under the customer tenant; only
 the tenant administrator created during normal provisioning can sign in.
 
-No sales orders, inventory lots/balances/transactions, invoices, WMS mappings,
-external calls, or scheduled jobs are generated. Dashboard users can see the
-catalog and quote prices, but availability is intentionally unavailable until a
-real or separately isolated WMS integration supplies it. Because the operator
+The showcase command itself creates no sales orders, inventory lots/balances/
+transactions, invoices, WMS mappings, or scheduled jobs, and makes no external
+calls. Tenant creation may independently issue a subscription invoice for a paid
+plan. Dashboard users can see the catalog and quote prices, but availability is
+intentionally unavailable until a real or separately isolated WMS integration
+supplies it. Because the operator
 catalog is shared, `DEMO-` products may be visible to other customer tenants;
 deactivate them before onboarding real customers. This command is additive: do
 not expect it to remove data on rollback. A read-only verification query is in

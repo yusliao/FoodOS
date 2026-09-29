@@ -28,8 +28,6 @@ namespace FoodOS.DbMigrator.DemoSeed;
 /// </summary>
 internal sealed class ShowcaseSeeder(IServiceProvider services)
 {
-    private const string OrgCode = "DEMO-REST";
-    private const string StoreCode = "DEMO-BISTRO";
     private const string WarehouseCode = "DEMO-DC";
     private const string SupplierCode = "DEMO-SUP";
     private const string PriceListName = "DEMO Restaurant Contract";
@@ -108,38 +106,37 @@ internal sealed class ShowcaseSeeder(IServiceProvider services)
         // or password changes are performed by this command unless --apply-showcase is present.
         var existingProducts = await catalog.Products
             .CountAsync(product => product.Sku.StartsWith("DEMO-"), ct).ConfigureAwait(false);
-        var existingOrg = await ordering.CustomerOrgs
-            .FirstOrDefaultAsync(org => org.Code == OrgCode, ct).ConfigureAwait(false);
         var normalizedTenantId = tenantId.ToUpperInvariant();
-        var tenantOrg = await ordering.CustomerOrgs
-            .FirstOrDefaultAsync(org => org.CustomerTenantId == normalizedTenantId, ct)
-            .ConfigureAwait(false);
-        if (tenantOrg is not null && tenantOrg.Code != OrgCode)
+        var org = await ordering.CustomerOrgs
+            .SingleOrDefaultAsync(customerOrg => customerOrg.CustomerTenantId == normalizedTenantId, ct)
+            .ConfigureAwait(false)
+            ?? throw new InvalidOperationException(
+                $"Tenant '{tenantId}' has no customer organization. Complete normal provisioning first.");
+        var stores = await ordering.Stores.Where(store => store.CustomerOrgId == org.Id)
+            .OrderBy(store => store.CreatedAtUtc)
+            .Take(2)
+            .ToListAsync(ct).ConfigureAwait(false);
+        if (stores.Count != 1)
         {
             throw new InvalidOperationException(
-                $"Tenant '{tenantId}' is already mapped to customer '{tenantOrg.Code}'. " +
-                "Use a fresh showcase tenant; no records were written.");
+                $"Tenant '{tenantId}' must have exactly one provisioned store; found {stores.Count}.");
         }
-        if (existingOrg is not null &&
-            !string.Equals(existingOrg.CustomerTenantId, tenantId, StringComparison.OrdinalIgnoreCase))
+        var store = stores[0];
+        if (!string.Equals(store.CustomerTenantId, tenantId, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException($"Customer code {OrgCode} already belongs to tenant '{existingOrg.CustomerTenantId}'.");
+            throw new InvalidOperationException($"Store '{store.Code}' is not mapped to tenant '{tenantId}'.");
         }
-        var existingStore = await ordering.Stores
-            .FirstOrDefaultAsync(store => store.Code == StoreCode, ct).ConfigureAwait(false);
-        if (existingStore is not null &&
-            !string.Equals(existingStore.CustomerTenantId, tenantId, StringComparison.OrdinalIgnoreCase))
+        var adminAccess = await ordering.CustomerUserStoreAccesses.FirstOrDefaultAsync(access =>
+            access.CustomerTenantId == normalizedTenantId && access.StoreId == store.Id &&
+            access.UserId == customerAdminId, ct).ConfigureAwait(false);
+        if (adminAccess is null || !adminAccess.IsActive || adminAccess.CustomerOrgId != org.Id)
         {
-            throw new InvalidOperationException($"Store code {StoreCode} already belongs to tenant '{existingStore.CustomerTenantId}'.");
-        }
-        if (existingOrg is not null && existingStore is not null && existingStore.CustomerOrgId != existingOrg.Id)
-        {
-            throw new InvalidOperationException($"Store {StoreCode} is associated with another customer organization.");
+            throw new InvalidOperationException(
+                $"Tenant administrator access to store '{store.Code}' is missing, inactive or inconsistent.");
         }
         var existingPriceList = await catalog.PriceLists
             .FirstOrDefaultAsync(priceList => priceList.Name == PriceListName, ct).ConfigureAwait(false);
-        if (existingPriceList is not null &&
-            (existingOrg is null || existingPriceList.CustomerOrgId != existingOrg.Id))
+        if (existingPriceList is not null && existingPriceList.CustomerOrgId != org.Id)
         {
             throw new InvalidOperationException($"Price list {PriceListName} belongs to another customer organization.");
         }
@@ -147,11 +144,11 @@ internal sealed class ShowcaseSeeder(IServiceProvider services)
         await Console.Out.WriteLineAsync(
             $"[showcase] tenant={customer.Id}; mode={(apply ? "APPLY" : "PREVIEW")}; " +
             $"food SKUs={FoodProducts.Length}, existing DEMO SKUs={existingProducts}; " +
-            $"customer={(existingOrg is null ? "create" : "keep")}; store={(existingStore is null ? "create" : "keep")}")
+            $"customer=reuse {org.Code}; store=reuse {store.Code}")
             .ConfigureAwait(false);
         await Console.Out.WriteLineAsync(
             "[showcase] scope: restaurant catalog, 3 inactive operator examples, 1 supplier, " +
-            "1 empty warehouse, customer/store access, contract prices, 1 customer ticket; " +
+            "1 empty warehouse, existing customer/store access, contract prices, 1 customer ticket; " +
             "no orders, balances, stock movements, invoices, WMS callbacks, or password resets.")
             .ConfigureAwait(false);
         if (!apply)
@@ -164,11 +161,9 @@ internal sealed class ShowcaseSeeder(IServiceProvider services)
         await EnsureOperatorRolesAndUsersAsync(rootScope.ServiceProvider, identity, ct).ConfigureAwait(false);
         await EnsureCatalogAsync(catalog, ct).ConfigureAwait(false);
         await EnsureSupplierAsync(procurement, ct).ConfigureAwait(false);
-        var warehouse = await EnsureWarehouseAsync(inventory, ct).ConfigureAwait(false);
-        var org = await EnsureCustomerAsync(ordering, existingOrg, tenantId, ct).ConfigureAwait(false);
-        var store = await EnsureStoreAsync(ordering, existingStore, org.Id, warehouse.Id, tenantId, ct).ConfigureAwait(false);
+        await EnsureWarehouseAsync(inventory, ct).ConfigureAwait(false);
+        await FillEmptyStoreAddressAsync(ordering, store, ct).ConfigureAwait(false);
         await EnsureContractPricesAsync(catalog, org.Id, ct).ConfigureAwait(false);
-        await EnsureCustomerAccessAsync(ordering, store, tenantId, customerAdminId, ct).ConfigureAwait(false);
         await EnsureCustomerStaffAsync(customerUsers).ConfigureAwait(false);
         await EnsureCustomerTicketAsync(customerScope.ServiceProvider, tenantId, customerAdminId, ct).ConfigureAwait(false);
         await Console.Out.WriteLineAsync("[showcase] complete; re-running keeps existing values and passwords unchanged.")
@@ -300,36 +295,23 @@ internal sealed class ShowcaseSeeder(IServiceProvider services)
         await procurement.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
-    private static async Task<Warehouse> EnsureWarehouseAsync(InventoryDbContext inventory, CancellationToken ct)
+    private static async Task EnsureWarehouseAsync(InventoryDbContext inventory, CancellationToken ct)
     {
         var existing = await inventory.Warehouses.FirstOrDefaultAsync(warehouse => warehouse.Code == WarehouseCode, ct)
             .ConfigureAwait(false);
-        if (existing is not null) return existing;
+        if (existing is not null) return;
         var warehouse = Warehouse.Create(WarehouseCode, "DEMO Distribution Centre (no physical stock)", "Demo City");
         inventory.Warehouses.Add(warehouse);
         await inventory.SaveChangesAsync(ct).ConfigureAwait(false);
-        return warehouse;
     }
 
-    private static async Task<CustomerOrg> EnsureCustomerAsync(
-        OrderingDbContext ordering, CustomerOrg? existing, string tenantId, CancellationToken ct)
+    private static async Task FillEmptyStoreAddressAsync(OrderingDbContext ordering, Store store, CancellationToken ct)
     {
-        if (existing is not null) return existing;
-        var customer = CustomerOrg.Create(OrgCode, "DEMO Restaurant Group", customerTenantId: tenantId);
-        ordering.CustomerOrgs.Add(customer);
-        await ordering.SaveChangesAsync(ct).ConfigureAwait(false);
-        return customer;
-    }
-
-    private static async Task<Store> EnsureStoreAsync(
-        OrderingDbContext ordering, Store? existing, Guid orgId, Guid warehouseId, string tenantId, CancellationToken ct)
-    {
-        if (existing is not null) return existing;
-        var store = Store.Create(orgId, StoreCode, "DEMO Bistro", "100 Example Street, Demo City",
-            warehouseId, deliveryWindow: "05:00-08:00", customerTenantId: tenantId);
-        ordering.Stores.Add(store);
-        await ordering.SaveChangesAsync(ct).ConfigureAwait(false);
-        return store;
+        if (string.IsNullOrWhiteSpace(store.Address))
+        {
+            store.UpdateDetails(store.Name, "100 Example Street, Demo City");
+            await ordering.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
     }
 
     private static async Task EnsureContractPricesAsync(CatalogDbContext catalog, Guid orgId, CancellationToken ct)
@@ -352,21 +334,6 @@ internal sealed class ShowcaseSeeder(IServiceProvider services)
         }
         catalog.PriceLists.Add(list);
         await catalog.SaveChangesAsync(ct).ConfigureAwait(false);
-    }
-
-    private static async Task EnsureCustomerAccessAsync(
-        OrderingDbContext ordering, Store store, string tenantId, Guid userId, CancellationToken ct)
-    {
-        var normalizedTenantId = tenantId.ToUpperInvariant();
-        if (await ordering.CustomerUserStoreAccesses.AnyAsync(access =>
-                access.CustomerTenantId == normalizedTenantId && access.StoreId == store.Id && access.UserId == userId,
-                ct).ConfigureAwait(false))
-        {
-            return;
-        }
-        ordering.CustomerUserStoreAccesses.Add(CustomerUserStoreAccess.Create(
-            tenantId, store.CustomerOrgId, store.Id, userId, DateTimeOffset.UtcNow));
-        await ordering.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     private static async Task EnsureCustomerTicketAsync(
