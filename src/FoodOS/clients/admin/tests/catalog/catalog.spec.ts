@@ -85,7 +85,7 @@ test("category update keeps the server-defined parent relationship payload", asy
   await page.goto("/catalog/categories");
   await page.getByRole("button", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Name").fill("Leafy vegetables");
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Leafy vegetables");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toHaveCount(0);
   expect(posted).toMatchObject({ categoryId: category.id, name: "Leafy vegetables", parentCategoryId: null });
@@ -101,8 +101,10 @@ test("product creation and base-price update use only existing catalog endpoints
   const create = page.getByRole("dialog");
   await create.getByLabel("SKU").fill("VEG-02");
   await create.getByLabel("Name").fill("Kale");
-  await create.getByRole("combobox", { name: "Brand ID" }).selectOption(brand.id);
-  await create.getByRole("combobox", { name: "Category ID" }).selectOption(category.id);
+  await create.getByRole("button", { name: "Brand", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: brand.name, exact: true }).click();
+  await create.getByRole("button", { name: "Category", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: category.name, exact: true }).click();
   await create.getByLabel("Base price (USD)").fill("4.25");
   await create.getByRole("button", { name: "Save" }).click();
   await expect(create).toHaveCount(0);
