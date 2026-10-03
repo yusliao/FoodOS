@@ -7,6 +7,7 @@ using FSH.Modules.WmsIntegration.Contracts.Authorization;
 using FSH.Modules.WmsIntegration.Contracts.v1;
 using FSH.Modules.WmsIntegration.Data;
 using FSH.Modules.WmsIntegration.Features.v1.GetStatus;
+using FSH.Modules.WmsIntegration.Features.v1.GetAvailability;
 using FSH.Modules.WmsIntegration.Features.v1.Mappings.SearchMappings;
 using FSH.Modules.WmsIntegration.Features.v1.Mappings.UpsertMapping;
 using FSH.Modules.WmsIntegration.Features.v1.Mappings.ValidateMappings;
@@ -73,6 +74,7 @@ public sealed class WmsIntegrationModule : IModule
             .WithApiVersionSet(versionSet)
             .RequireAuthorization();
         management.MapWmsStatusEndpoint();
+        management.MapGetWmsAvailabilityEndpoint();
         management.MapUpsertWmsMappingEndpoint();
         management.MapSearchWmsMappingsEndpoint();
         management.MapResolveWmsMappingsEndpoint();

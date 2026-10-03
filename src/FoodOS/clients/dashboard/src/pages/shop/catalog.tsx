@@ -1,3 +1,4 @@
+import { availabilityLabelKey } from "./availability-label";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -197,7 +198,7 @@ export function ShopCatalogPage() {
                     <QuotedPrice product={product} />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <AvailabilityChip available={product.isAvailable} />
+                    <AvailabilityChip product={product} />
                     <Button
                       size="sm"
                       className="ml-auto h-8"
@@ -246,7 +247,7 @@ export function ShopCatalogPage() {
                     {product.sku}
                   </code>
                   <QuotedPrice product={product} />
-                  <AvailabilityChip available={product.isAvailable} />
+                  <AvailabilityChip product={product} />
                   <div className="flex justify-end">
                     <Button
                       size="sm"
@@ -293,12 +294,12 @@ function QuotedPrice({ product }: { product: ShopProductDto }) {
   );
 }
 
-function AvailabilityChip({ available }: { available: boolean }) {
+function AvailabilityChip({ product }: { product: ShopProductDto }) {
   const t = useT();
-  if (!available) {
+  if (!product.isAvailable) {
     return (
       <span className="text-[12px] text-[var(--color-destructive)]">
-        {t("shop.outOfStock", "Out of stock")}
+        {t(availabilityLabelKey(product))}
       </span>
     );
   }

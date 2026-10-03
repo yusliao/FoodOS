@@ -25,7 +25,7 @@ public sealed class WmsAvailabilityReader(
         var settings = options.Value;
         if (!settings.IsConfigured)
         {
-            return requests.Select(Unavailable).ToList();
+            return requests.Select(request => Unavailable(request, "notConfigured")).ToList();
         }
 
         string normalizedWarehouse = Normalize(warehouseId);
@@ -67,22 +67,24 @@ public sealed class WmsAvailabilityReader(
             string uom = Normalize(request.Uom);
             if (!byProduct.TryGetValue((sku, uom), out var balance))
             {
-                return Unavailable(request);
+                return Unavailable(request, "notSynced");
             }
 
+            bool fresh = balance.AsOf >= freshAfter && balance.AsOf <= futureLimit;
+            bool enough = balance.AvailableQuantity >= request.RequiredQuantity;
+            string status = enough ? "available" : "insufficient";
             return new WmsAvailabilityResult(
                 request.Sku,
                 request.Uom,
                 balance.AvailableQuantity,
-                balance.AsOf >= freshAfter
-                    && balance.AsOf <= futureLimit
-                    && balance.AvailableQuantity >= request.RequiredQuantity,
-                balance.AsOf);
+                fresh && enough,
+                balance.AsOf,
+                fresh ? status : "stale");
         }).ToList();
     }
 
-    private static WmsAvailabilityResult Unavailable(WmsAvailabilityRequest request) =>
-        new(request.Sku, request.Uom, 0, false, null);
+    private static WmsAvailabilityResult Unavailable(WmsAvailabilityRequest request, string status) =>
+        new(request.Sku, request.Uom, 0, false, null, status);
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant();
 }

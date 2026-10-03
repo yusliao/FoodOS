@@ -68,7 +68,7 @@ function reservedOrder(over: Record<string, unknown> = {}) {
 
 async function mockShopApis(
   page: Page,
-  options: { available?: number; cartLines?: unknown[]; permissions?: string[] } = {},
+  options: { available?: number; availabilityStatus?: string; cartLines?: unknown[]; permissions?: string[] } = {},
 ) {
   await mockJsonResponse(page, "**/api/v1/identity/permissions", options.permissions ?? SHOP_PERMS);
   await mockJsonResponse(page, "**/api/v1/shop/stores**", [STORE]);
@@ -79,8 +79,8 @@ async function mockShopApis(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         url.pathname.endsWith(`/${PRODUCT.id}`)
-          ? { ...PRODUCT, isAvailable: (options.available ?? 20) > 0 }
-          : paged([{ ...PRODUCT, isAvailable: (options.available ?? 20) > 0 }]),
+          ? { ...PRODUCT, isAvailable: (options.available ?? 20) > 0, availabilityStatus: options.availabilityStatus ?? ((options.available ?? 20) > 0 ? "available" : "insufficient") }
+          : paged([{ ...PRODUCT, isAvailable: (options.available ?? 20) > 0, availabilityStatus: options.availabilityStatus ?? ((options.available ?? 20) > 0 ? "available" : "insufficient") }]),
       ),
     });
   });
@@ -104,6 +104,23 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("shop/catalog", () => {
+  for (const [availabilityStatus, label] of [
+    ["notConfigured", "Inventory pending sync"],
+    ["notSynced", "Inventory pending sync"],
+    ["stale", "Inventory awaiting update"],
+    ["warehouseMissing", "Delivery warehouse not configured"],
+    ["unknown", "Inventory not confirmed"],
+  ]) test(`does not report ${availabilityStatus} as out of stock`, async ({ page }) => {
+    await mockShopApis(page, { available: 0, availabilityStatus });
+    await page.goto("/shop/catalog");
+    await expect(page.getByText(label, { exact: true }).last()).toBeVisible();
+    await expect(page.getByText("Out of stock", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^add/i }).last()).toBeDisabled();
+    await page.goto(`/shop/products/${PRODUCT.id}`);
+    await expect(page.getByText(label, { exact: true }).last()).toBeVisible();
+    await expect(page.getByText("Out of stock", { exact: true })).toHaveCount(0);
+  });
+
   test("shows the quoted contract price and never the catalog list price", async ({ page }) => {
     await mockShopApis(page);
     const operatorRequests: string[] = [];

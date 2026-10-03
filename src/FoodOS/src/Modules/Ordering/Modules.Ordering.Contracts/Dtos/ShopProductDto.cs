@@ -13,4 +13,5 @@ public sealed record ShopProductDto(
     string BaseUom,
     bool CatchWeight,
     string? ThumbnailUrl,
-    bool IsAvailable);
+    bool IsAvailable,
+    string AvailabilityStatus = "unknown");

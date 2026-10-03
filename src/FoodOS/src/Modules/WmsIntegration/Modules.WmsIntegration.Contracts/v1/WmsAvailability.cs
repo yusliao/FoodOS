@@ -10,7 +10,8 @@ public sealed record WmsAvailabilityResult(
     string Uom,
     decimal AvailableQuantity,
     bool IsAvailable,
-    DateTimeOffset? AsOf);
+    DateTimeOffset? AsOf,
+    string Status = "unknown");
 
 public interface IWmsAvailabilityReader
 {

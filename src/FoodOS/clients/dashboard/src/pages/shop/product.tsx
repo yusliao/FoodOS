@@ -1,3 +1,4 @@
+import { availabilityLabelKey } from "./availability-label";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -119,7 +120,7 @@ export function ShopProductPage() {
                 <EntityDetailStat
                   icon={Package}
                   label={t("shop.colAvail", "Available")}
-                  value={product.isAvailable ? t("shop.yes", "Yes") : t("shop.no", "No")}
+                  value={t(availabilityLabelKey(product))}
                   tone={out ? "danger" : "default"}
                 />
               </>
@@ -127,7 +128,7 @@ export function ShopProductPage() {
           />
 
           {out ? (
-            <EntityStatusBadge tone="danger">{t("shop.outOfStock", "Out of stock")}</EntityStatusBadge>
+            <EntityStatusBadge tone="danger">{t(availabilityLabelKey(product))}</EntityStatusBadge>
           ) : null}
 
           <EntityDetailSection title={t("shop.order", "Order")} icon={ShoppingCart}>

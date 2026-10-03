@@ -36,6 +36,7 @@ export type ProductDto = {
   description?: string | null;
   brandId: string;
   categoryId: string;
+  baseUom: string;
   price: { amount: number; currency: string };
   isActive: boolean;
   createdAtUtc: string;

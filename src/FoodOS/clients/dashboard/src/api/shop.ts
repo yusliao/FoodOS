@@ -32,6 +32,7 @@ export type ShopProductDto = {
   catchWeight: boolean;
   thumbnailUrl?: string | null;
   isAvailable: boolean;
+  availabilityStatus?: string;
 };
 
 export type SearchShopProductsParams = {

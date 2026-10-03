@@ -51,6 +51,8 @@ export const InventoryPermissions = Object.freeze({
   Warehouses: { View: "Permissions.Inventory.Warehouses.View" },
 });
 
+export const WmsPermissions = Object.freeze({ View: "Permissions.WmsIntegration.View" });
+
 export const CatalogPermissions = Object.freeze({
   Brands: {
     View: "Permissions.Catalog.Brands.View", Create: "Permissions.Catalog.Brands.Create",

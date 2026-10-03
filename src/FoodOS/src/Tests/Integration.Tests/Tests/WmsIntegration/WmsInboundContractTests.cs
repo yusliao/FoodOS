@@ -29,6 +29,50 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Fact]
+    public async Task Inventory_Query_Should_Distinguish_Missing_Stale_And_Zero_Stock()
+    {
+        using var configured = CreateConfiguredFactory(factory);
+        using var client = configured.CreateClient();
+        string sku = $"SKU-{Guid.NewGuid():N}";
+        string url = $"/api/v1/wms/availability?sku={sku}&uom=EA";
+        (await client.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var token = await new AuthHelper(factory).GetRootAdminTokenAsync();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        client.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+
+        using var missingResponse = await client.GetAsync(url);
+        missingResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var missing = await missingResponse.DeserializeAsync<WmsProductAvailabilityDto>();
+        missing.WarehouseCode.ShouldBe("DC-01");
+        missing.Inventory.Status.ShouldBe("notSynced");
+        missing.Inventory.AsOf.ShouldBeNull();
+
+        string objectId = $"INV-{Guid.NewGuid():N}";
+        using var inbound = configured.CreateClient();
+        (await SendAsync(inbound, CreateInventoryEnvelope(objectId, $"event-{Guid.NewGuid():N}", 1, sku, 12m,
+            DateTimeOffset.UtcNow.AddMinutes(-10)))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var staleResponse = await client.GetAsync(url);
+        var stale = await staleResponse.DeserializeAsync<WmsProductAvailabilityDto>();
+        stale.Inventory.Status.ShouldBe("stale");
+        stale.Inventory.AvailableQuantity.ShouldBe(12m);
+        stale.Inventory.IsAvailable.ShouldBeFalse();
+
+        (await SendAsync(inbound, CreateInventoryEnvelope(objectId, $"event-{Guid.NewGuid():N}", 2, sku, 0m)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var emptyResponse = await client.GetAsync(url);
+        var empty = await emptyResponse.DeserializeAsync<WmsProductAvailabilityDto>();
+        empty.Inventory.Status.ShouldBe("insufficient");
+        empty.Inventory.AvailableQuantity.ShouldBe(0m);
+        empty.Inventory.AsOf.ShouldNotBeNull();
+
+        using var disabled = factory.CreateClient();
+        disabled.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        disabled.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+        using var disabledResponse = await disabled.GetAsync(url);
+        (await disabledResponse.DeserializeAsync<WmsProductAvailabilityDto>()).Inventory.Status.ShouldBe("notConfigured");
+    }
+
+    [Fact]
     public async Task Signed_Events_Should_Deduplicate_Order_And_Recover_A_Gap()
     {
         using var configured = CreateConfiguredFactory(factory);
@@ -417,6 +461,7 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
         var availability = result[0];
         availability.AvailableQuantity.ShouldBe(expectedQuantity);
         availability.IsAvailable.ShouldBe(expectedAvailable);
+        if (expectedAvailable) availability.Status.ShouldBe("available");
     }
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, WmsEventEnvelope envelope)

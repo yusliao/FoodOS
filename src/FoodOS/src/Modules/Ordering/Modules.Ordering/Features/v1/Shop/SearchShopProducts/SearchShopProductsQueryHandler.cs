@@ -123,7 +123,7 @@ public sealed class SearchShopProductsQueryHandler(
     private static ShopProductDto ToShopDto(
         FSH.Modules.Catalog.Contracts.Dtos.ProductDto product,
         FSH.Modules.Catalog.Contracts.Dtos.PriceQuoteDto quote,
-        bool isAvailable)
+        WmsAvailabilityResult availability)
         => new(
             product.Id,
             product.Sku,
@@ -137,7 +137,8 @@ public sealed class SearchShopProductsQueryHandler(
             product.BaseUom,
             product.CatchWeight,
             product.ThumbnailUrl,
-            IsAvailable: isAvailable);
+            IsAvailable: availability.IsAvailable,
+            AvailabilityStatus: availability.Status);
 
     private async Task<string?> ResolveWarehouseCodeAsync(
         Guid? requestedStoreId,
@@ -161,7 +162,7 @@ public sealed class SearchShopProductsQueryHandler(
         return warehouse?.Code;
     }
 
-    private async Task<IReadOnlyDictionary<(string Sku, string Uom), bool>> GetAvailabilityAsync(
+    private async Task<IReadOnlyDictionary<(string Sku, string Uom), WmsAvailabilityResult>> GetAvailabilityAsync(
         string? warehouseCode,
         IReadOnlyCollection<(string Sku, string Uom, decimal Quantity)> products,
         CancellationToken cancellationToken)
@@ -170,7 +171,7 @@ public sealed class SearchShopProductsQueryHandler(
         {
             return products.ToDictionary(
                 product => (Normalize(product.Sku), Normalize(product.Uom)),
-                _ => false);
+                product => new WmsAvailabilityResult(product.Sku, product.Uom, 0, false, null, "warehouseMissing"));
         }
 
         var result = await availabilityReader.GetAvailabilityAsync(
@@ -183,7 +184,7 @@ public sealed class SearchShopProductsQueryHandler(
             .ConfigureAwait(false);
         return result.ToDictionary(
             item => (Normalize(item.Sku), Normalize(item.Uom)),
-            item => item.IsAvailable);
+            item => item);
     }
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant();

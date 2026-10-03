@@ -64,6 +64,9 @@ public sealed partial class CustomerShopIsolationTests
             .Single(item => item.Id == productId);
         product.UnitPrice.ShouldBe(9.5m);
         product.IsAvailable.ShouldBeFalse();
+        product.AvailabilityStatus.ShouldBe("notConfigured");
+        using var inventoryResponse = await clientA.GetAsync("/api/v1/wms/availability?sku=probe&uom=EA");
+        inventoryResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         using var emptyProductsResponse = await clientA.GetAsync(
             $"{TestConstants.ShopBasePath}/products?storeId={storeA}&search=not-found-{Guid.NewGuid():N}&pageNumber=1&pageSize=20");
@@ -84,6 +87,7 @@ public sealed partial class CustomerShopIsolationTests
         productDetail.UnitPrice.ShouldBe(9.5m);
         productDetail.PriceSource.ShouldBe("Catalog");
         productDetail.IsAvailable.ShouldBeFalse();
+        productDetail.AvailabilityStatus.ShouldBe("notConfigured");
 
         using var foreignStoreProductResponse = await clientA.GetAsync(
             $"{TestConstants.ShopBasePath}/products/{productId}?storeId={storeB}&quantity=1");

@@ -260,6 +260,21 @@
       "root": "Root category",
       "child": "Child category"
     },
+    "inventory": {
+      "view": "View inventory",
+      "title": "WMS available inventory",
+      "hint": "Latest available quantity in the configured warehouse, not total physical stock. WMS maintains inventory; store availability uses its delivery warehouse.",
+      "warehouse": "Configured warehouse",
+      "quantity": "Last reported available quantity",
+      "asOf": "Inventory timestamp",
+      "refresh": "Refresh query",
+      "available": "Inventory is current and available to order.",
+      "insufficient": "Inventory is current; available quantity is insufficient.",
+      "notConfigured": "WMS is not configured; inventory quantity is unknown.",
+      "notSynced": "No inventory data received for this product and unit.",
+      "stale": "Inventory data is stale or has an invalid timestamp. Quantity is for reference only.",
+      "unknown": "Inventory status cannot be confirmed."
+    },
     "products": {
       "title": "Products and base prices",
       "description": "Maintain operator products and their base catalog price. Customer agreements, price lists, and locks are handled separately.",
