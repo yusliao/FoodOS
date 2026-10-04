@@ -72,17 +72,19 @@ test("employee role filter loads on demand, pages and preserves selected role du
   const filter = page.getByRole("region", { name: "Role", exact: true });
   await expect(filter).toBeVisible();
   expect(queries).toHaveLength(0);
-  await filter.getByRole("button", { name: /Any role/ }).click();
-  await filter.getByRole("button", { name: "Next", exact: true }).click();
+  await filter.getByRole("button", { name: "Role", exact: true }).click();
+  const menu = page.getByRole("menu");
+  await menu.getByRole("button", { name: "Next", exact: true }).click();
   const request = page.waitForRequest(req => req.url().includes("/users/search?") && new URL(req.url()).searchParams.get("RoleId") === "Later role");
-  await filter.getByRole("button", { name: "Later role", exact: true }).click();
+  await menu.getByRole("menuitemradio", { name: "Later role", exact: true }).click();
   expect((await request).headers().tenant).toBe("root");
-  await filter.getByRole("textbox").fill("remote");
-  await expect(filter.getByRole("button", { name: "Remote searched role", exact: true })).toBeVisible();
-  await expect(filter.getByRole("button", { name: "Role: Later role", exact: true })).toBeVisible();
+  await filter.getByRole("button", { name: "Role", exact: true }).click();
+  await menu.getByRole("searchbox").fill("remote");
+  await expect(menu.getByRole("menuitemradio", { name: "Remote searched role", exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitemradio", { checked: true })).toHaveText("Later role");
   expect(queries.at(-1)?.searchParams.get("PageNumber")).toBe("1");
-  await filter.getByRole("button", { name: "Any role", exact: true }).click();
-  await expect(filter.getByRole("button", { name: "Role: Any role", exact: true })).toBeVisible();
+  await menu.getByRole("menuitemradio", { name: "Any role", exact: true }).click();
+  await expect(filter.getByRole("button", { name: "Role", exact: true })).toHaveText("Any role");
 });
 
 test("employee viewer without role view never requests the role catalog or sees creation", async ({ page }) => {
@@ -109,6 +111,6 @@ test("employee role filter failure retries and Chinese mobile layout fits", asyn
   await expect(page.getByText("Cannot load roles")).toBeVisible();
   fail = false;
   await page.getByRole("button", { name: "重试", exact: true }).click();
-  await expect(filter.getByRole("button", { name: "First role", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitemradio", { name: "First role", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

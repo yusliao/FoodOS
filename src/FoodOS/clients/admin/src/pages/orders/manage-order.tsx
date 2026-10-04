@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { amendOrder, cancelOrder, type SalesOrder } from "@/api/orders";
 import { searchProducts } from "@/api/catalog";
+import { SearchableSelect } from "@/components/list/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -9,6 +10,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { ErrorBand, LoadingRow, Pagination } from "@/components/list";
 import { useFulfillmentCapabilities } from "@/api/fulfillment";
 import { WmsStatusNotice } from "@/components/wms-status";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "@/pages/customers/request-error";
 
@@ -47,8 +49,9 @@ function AmendDialog({ order, canReadProducts, onClose }: { order: SalesOrder; c
   const cache = useQueryClient();
   const [lines, setLines] = useState(() => order.lines.map(line => ({ productId: line.productId, quantity: String(line.orderedQty) })));
   const [search, setSearch] = useState("");
+  const [searchTerm, searchPending] = useDebouncedSearch(search);
   const [page, setPage] = useState(1);
-  const products = useQuery({ queryKey: ["catalog", "amend-products", search, page], queryFn: ({ signal }) => searchProducts({ search, pageNumber: page, pageSize: 20, isActive: true }, signal), enabled: canReadProducts });
+  const products = useQuery({ queryKey: ["catalog", "amend-products", searchTerm, page], queryFn: ({ signal }) => searchProducts({ search: searchTerm, pageNumber: page, pageSize: 20, isActive: true }, signal), enabled: canReadProducts && !searchPending });
   const attempt = useRef<{ body: string; key: string } | null>(null);
   const mutation = useMutation({ mutationFn: amendOrder, onSuccess: async () => { await cache.invalidateQueries({ queryKey: ["ordering"] }); onClose(); } });
   const valid = lines.length > 0 && lines.every(line => Number.isFinite(Number(line.quantity)) && Number(line.quantity) > 0);
@@ -68,14 +71,17 @@ function AmendDialog({ order, canReadProducts, onClose }: { order: SalesOrder; c
         <Button type="button" variant="outline" size="sm" onClick={() => setLines(current => current.filter(item => item.productId !== line.productId))}>{t("orderManage.remove")}</Button>
       </div>)}
       {canReadProducts ? <section className="space-y-3">
-        <label className="block space-y-2 text-sm"><span>{t("orderManage.search")}</span><Input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} /></label>
-        {products.isPending && <LoadingRow label={t("orders.loading")} />}
-        {products.isError && <><ErrorBand message={describe(products.error, t("orders.failed"))} /><Button type="button" onClick={() => void products.refetch()}>{t("workbench.retry")}</Button></>}
-        {products.isSuccess && <>
-          {products.data.items.length === 0 && <p>{t("orderManage.empty")}</p>}
-          {products.data.items.map(product => <div key={product.id} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 break-words">{product.sku} · {product.name}</span><Button type="button" size="sm" variant="outline" disabled={lines.some(line => line.productId === product.id)} onClick={() => setLines(current => [...current, { productId: product.id, quantity: "1" }])}>{t("orderManage.add")}</Button></div>)}
-          <Pagination page={page} totalPages={products.data.totalPages} totalCount={products.data.totalCount} shown={products.data.items.length} hasPrev={products.data.hasPrevious} hasNext={products.data.hasNext} fetching={products.isFetching} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
-        </>}
+        <SearchableSelect label={t("orderManage.search")} value="" search={search} searchLabel={t("orderManage.search")}
+          onSearchChange={value => { setSearch(value); setPage(1); }} disabled={mutation.isPending} loading={products.isFetching || searchPending}
+          options={(products.isSuccess ? products.data.items : []).map(product => ({ value: product.id, label: `${product.sku} · ${product.name}`, disabled: lines.some(line => line.productId === product.id) }))}
+          onChange={productId => setLines(current => [...current, { productId, quantity: "1" }])}>
+          {products.isPending && <LoadingRow label={t("orders.loading")} />}
+          {products.isError && <><ErrorBand message={describe(products.error, t("orders.failed"))} /><Button type="button" onClick={() => void products.refetch()}>{t("workbench.retry")}</Button></>}
+          {products.isSuccess && <>
+            {products.data.items.length === 0 && <p>{t("orderManage.empty")}</p>}
+            <Pagination page={page} totalPages={products.data.totalPages} totalCount={products.data.totalCount} shown={products.data.items.length} hasPrev={products.data.hasPrevious} hasNext={products.data.hasNext} fetching={products.isFetching || searchPending} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
+          </>}
+        </SearchableSelect>
       </section> : <p className="text-sm">{t("orderManage.productPermission")}</p>}
     </fieldset>{mutation.isError && <ErrorBand message={describe(mutation.error, t("orders.failed"))} />}</DialogBody>
     <DialogFooter><Button type="button" variant="outline" disabled={mutation.isPending} onClick={onClose}>{t("chrome.cancel")}</Button><Button type="submit" disabled={!valid || mutation.isPending}>{t("orderManage.save")}</Button></DialogFooter>

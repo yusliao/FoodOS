@@ -21,10 +21,13 @@ async function openAndFill(page: Page) {
   await page.goto("/procurement/purchase-orders");
   await page.getByRole("button", { name: "Create purchase order" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "SUP · Supplier One" }).click();
-  await dialog.getByRole("button", { name: "W1 · warehouse 1" }).click();
+  await dialog.getByRole("button", { name: "Supplier", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "SUP · Supplier One", exact: true }).click();
+  await dialog.getByRole("button", { name: "Warehouse", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "W1 · warehouse 1", exact: true }).click();
   await dialog.getByLabel("Expected arrival").fill("2026-09-20T10:30");
-  await dialog.getByRole("button", { name: "P1 · product 1" }).click();
+  await dialog.getByRole("button", { name: "Add product", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "P1 · product 1", exact: true }).click();
   return dialog;
 }
 
@@ -52,11 +55,14 @@ test("multi-line creation retains paged selections, temperature zones and root i
     await route.fulfill({ json: "created-po" });
   });
   const dialog = await openAndFill(page);
-  await dialog.getByRole("region", { name: "Warehouse", exact: true }).getByRole("button", { name: "Next" }).click();
-  await expect(dialog.getByText("Selected: W1 · warehouse 1")).toBeVisible();
-  await dialog.getByRole("button", { name: "W2 · warehouse 2" }).click();
-  await dialog.getByRole("region", { name: "Add product", exact: true }).getByRole("button", { name: "Next" }).click();
-  await dialog.getByRole("button", { name: "P2 · product 2" }).click();
+  await expect(dialog.getByRole("button", { name: "Warehouse", exact: true })).toHaveText("W1 · warehouse 1");
+  await dialog.getByRole("button", { name: "Warehouse", exact: true }).click();
+  await page.getByRole("menu").getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("menuitemradio", { checked: true })).toHaveText("W1 · warehouse 1");
+  await page.getByRole("menuitemradio", { name: "W2 · warehouse 2" }).click();
+  await dialog.getByRole("button", { name: "Add product", exact: true }).click();
+  await page.getByRole("menu").getByRole("button", { name: "Next" }).click();
+  await page.getByRole("menuitemradio", { name: "P2 · product 2" }).click();
   const line = dialog.getByRole("region", { name: "Purchase line 2", exact: true });
   await line.getByLabel("Ordered quantity").fill("2.5");
   await line.getByLabel("Temperature zone").click();
@@ -100,10 +106,12 @@ test("lookup failure retries to empty and prevents incomplete creation", async (
   await page.goto("/procurement/purchase-orders");
   await page.getByRole("button", { name: "Create purchase order" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Supplier lookup denied")).toBeVisible();
+  await dialog.getByRole("button", { name: "Supplier", exact: true }).click();
+  await expect(page.getByRole("menu").getByText("Supplier lookup denied")).toBeVisible();
   denied = false;
-  await dialog.getByRole("button", { name: "Retry", exact: true }).click();
-  await expect(dialog.getByText("No matching options.")).toBeVisible();
+  await page.getByRole("menu").getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("menu").getByText("No matching options.")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(dialog.getByRole("button", { name: "Create purchase order" })).toBeDisabled();
 });
 
@@ -117,11 +125,13 @@ test("search resets lookup pagination and removing the last line disables saving
     }
   });
   const dialog = await openAndFill(page);
-  const productLookup = dialog.getByRole("region", { name: "Add product", exact: true });
+  await dialog.getByRole("button", { name: "Add product", exact: true }).click();
+  const productLookup = page.getByRole("menu", { name: "Add product", exact: true });
   await productLookup.getByRole("button", { name: "Next" }).click();
-  await expect(dialog.getByRole("button", { name: "P2 · product 2" })).toBeVisible();
-  await productLookup.getByLabel("Add product").fill("apple");
+  await expect(productLookup.getByRole("menuitemradio", { name: "P2 · product 2" })).toBeVisible();
+  await productLookup.getByRole("searchbox").fill("apple");
   await expect.poll(() => requests.some(url => url.pathname.endsWith("/products") && url.searchParams.get("search") === "apple" && url.searchParams.get("pageNumber") === "1")).toBe(true);
+  await page.keyboard.press("Escape");
   await dialog.getByLabel("Ordered quantity").fill("0");
   await expect(dialog.getByRole("button", { name: "Create purchase order" })).toBeDisabled();
   await dialog.getByRole("button", { name: "Remove line" }).click();
@@ -137,7 +147,8 @@ test("Chinese mobile creation has usable labels and no horizontal overflow", asy
   await page.getByRole("button", { name: "新建采购单" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("预计到货")).toBeVisible();
-  await dialog.getByRole("button", { name: "P1 · product 1" }).click();
+  await dialog.getByRole("button", { name: "添加商品", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "P1 · product 1", exact: true }).click();
   await expect(dialog.getByText("移除明细")).toBeVisible();
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 });

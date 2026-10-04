@@ -5,8 +5,9 @@ import { searchRoutes } from "@/api/logistics";
 import { searchWarehouses, type WarehouseDto } from "@/api/inventory";
 import { useAuth } from "@/auth/use-auth";
 import { EntityPageHeader, ErrorBand, LoadingRow, Pagination } from "@/components/list";
+import { SearchableSelect } from "@/components/list/searchable-select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { InventoryPermissions, LogisticsPermissions, OrderingPermissions } from "@/lib/permissions";
 import { describe } from "@/pages/customers/request-error";
@@ -21,10 +22,11 @@ export function DeliveryRoutesPage() {
   const canCreate = grants.includes(LogisticsPermissions.Routes.Create);
   const canStores = grants.includes(OrderingPermissions.Stores.View);
   const [search, setSearch] = useState("");
+  const [searchTerm, searchPending] = useDebouncedSearch(search);
   const [page, setPage] = useState(1);
   const [warehouse, setWarehouse] = useState<WarehouseDto | null>(null);
   const [creating, setCreating] = useState(false);
-  const warehouses = useQuery({ queryKey: ["logistics", "route-warehouses", search, page], queryFn: ({ signal }) => searchWarehouses(search, page, signal), enabled: canChoose });
+  const warehouses = useQuery({ queryKey: ["logistics", "route-warehouses", searchTerm, page], queryFn: ({ signal }) => searchWarehouses(searchTerm, page, signal), enabled: canChoose && !searchPending });
   const routes = useQuery({ queryKey: ["logistics", "routes", warehouse?.id], queryFn: ({ signal }) => searchRoutes(warehouse!.id, signal), enabled: canChoose && !!warehouse });
   return <div className="space-y-6">
     <EntityPageHeader icon={Route} title={t("deliveryRoutes.title")} description={t("deliveryRoutes.description")}>
@@ -33,15 +35,17 @@ export function DeliveryRoutesPage() {
     {!canChoose && <p role="status">{t("deliveryRoutes.warehousePermission")}</p>}
     {canCreate && !canStores && <p role="status">{t("deliveryRoutes.storePermission")}</p>}
     {canChoose && <section className="space-y-3 rounded-xl border p-4" aria-label={t("deliveryRoutes.warehouse")}>
-      <label className="block space-y-2"><span>{t("deliveryRoutes.warehouse")}</span><Input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} /></label>
-      {warehouse && <p>{t("deliveryRoutes.selected")}: {warehouse.code} · {warehouse.name}</p>}
-      {warehouses.isPending && <LoadingRow label={t("deliveryRoutes.loading")} />}
-      {warehouses.isError && <><ErrorBand message={describe(warehouses.error, t("deliveryRoutes.failed"))} /><Button onClick={() => void warehouses.refetch()}>{t("workbench.retry")}</Button></>}
-      {warehouses.isSuccess && <>
-        {warehouses.data.items.length === 0 && <p role="status">{t("deliveryRoutes.noChoices")}</p>}
-        <div className="flex flex-wrap gap-2">{warehouses.data.items.map(item => <Button className="h-auto whitespace-normal text-left" variant="outline" key={item.id} aria-pressed={warehouse?.id === item.id} onClick={() => { setWarehouse(item); setCreating(false); }}>{item.code} · {item.name}</Button>)}</div>
-        <Pagination page={page} totalPages={warehouses.data.totalPages} totalCount={warehouses.data.totalCount} shown={warehouses.data.items.length} hasPrev={warehouses.data.hasPrevious} hasNext={warehouses.data.hasNext} fetching={warehouses.isFetching} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
-      </>}
+      <SearchableSelect label={t("deliveryRoutes.warehouse")} value={warehouse?.id ?? ""} selectedLabel={warehouse ? `${warehouse.code} · ${warehouse.name}` : undefined}
+        search={search} searchLabel={t("deliveryRoutes.warehouse")} onSearchChange={value => { setSearch(value); setPage(1); }} loading={warehouses.isFetching || searchPending}
+        options={(warehouses.isSuccess ? warehouses.data.items : []).map(item => ({ value: item.id, label: `${item.code} · ${item.name}` }))}
+        onChange={value => { const item = warehouses.data?.items.find(item => item.id === value); if (item) { setWarehouse(item); setCreating(false); } }}>
+        {warehouses.isPending && <LoadingRow label={t("deliveryRoutes.loading")} />}
+        {warehouses.isError && <><ErrorBand message={describe(warehouses.error, t("deliveryRoutes.failed"))} /><Button onClick={() => void warehouses.refetch()}>{t("workbench.retry")}</Button></>}
+        {warehouses.isSuccess && <>
+          {warehouses.data.items.length === 0 && <p role="status">{t("deliveryRoutes.noChoices")}</p>}
+          <Pagination page={page} totalPages={warehouses.data.totalPages} totalCount={warehouses.data.totalCount} shown={warehouses.data.items.length} hasPrev={warehouses.data.hasPrevious} hasNext={warehouses.data.hasNext} fetching={warehouses.isFetching || searchPending} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
+        </>}
+      </SearchableSelect>
     </section>}
     {canChoose && !warehouse && <p role="status">{t("deliveryRoutes.selectWarehouse")}</p>}
     {canChoose && warehouse && <>

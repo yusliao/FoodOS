@@ -46,8 +46,10 @@ for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) {
     await page.getByRole("button", { name: m.tickets.actions[action], exact: true }).click();
     const dialog = page.getByRole("dialog");
     if (action === "assign") {
-      await dialog.getByRole("button", { name: m.common.next, exact: true }).click();
-      await dialog.getByRole("combobox").selectOption("user-2");
+      await dialog.getByRole("button", { name: m.tickets.assignee, exact: true }).click();
+      await page.getByRole("menu").getByRole("button", { name: m.common.next, exact: true }).click();
+      await expect(page.getByRole("menuitemradio", { name: "Disabled", exact: true })).toHaveCount(0);
+      await page.getByRole("menuitemradio", { name: "Employee 2", exact: true }).click();
       await expect(dialog.getByRole("option", { name: "Disabled", exact: true })).toHaveCount(0);
     }
     if (action === "resolve") await dialog.getByRole("textbox", { name: m.tickets.resolution, exact: true }).fill(" Checked ");
@@ -82,9 +84,10 @@ test("Assign without employee view only clears an existing assignment without lo
   await page.goto(`/tickets/${id}`);
   await page.getByRole("button", { name: "Assign ticket" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("combobox")).toHaveValue("old-user");
-  await expect(dialog.getByText(en.tickets.assigneePermission)).toBeVisible();
-  await dialog.getByRole("combobox").selectOption("");
+  await expect(dialog.getByRole("button", { name: en.tickets.assignee, exact: true })).toHaveText("old-user");
+  await dialog.getByRole("button", { name: en.tickets.assignee, exact: true }).click();
+  await expect(page.getByRole("menu").getByText(en.tickets.assigneePermission)).toBeVisible();
+  await page.getByRole("menuitemradio", { name: en.tickets.unassigned, exact: true }).click();
   await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(body).toEqual({ assigneeUserId: null });

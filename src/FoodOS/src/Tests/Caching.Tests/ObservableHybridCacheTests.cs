@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using FSH.Framework.Caching;
 using FSH.Framework.Caching.Telemetry;
@@ -142,5 +143,70 @@ public sealed class ObservableHybridCacheTests : IDisposable
                 0,
                 static (s, ct) => throw new InvalidOperationException("boom"));
         }).ConfigureAwait(true);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Caller_cancellation_Should_Propagate_Without_Marking_Cache_Error(bool cancelBeforeCall)
+    {
+        Activity? stoppedActivity = null;
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == CachingTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity => stoppedActivity = activity
+        };
+        ActivitySource.AddActivityListener(activityListener);
+        var cache = CreateCache();
+        using var cancellation = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (cancelBeforeCall) await cancellation.CancelAsync().ConfigureAwait(true);
+
+        var operation = cache.GetOrCreateAsync<int, string>(
+            "obs:caller-canceled",
+            0,
+            async (_, token) =>
+            {
+                entered.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token).ConfigureAwait(false);
+                return "unused";
+            },
+            cancellationToken: cancellation.Token).AsTask();
+
+        if (!cancelBeforeCall)
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(true);
+            await cancellation.CancelAsync().ConfigureAwait(true);
+        }
+
+        await Should.ThrowAsync<OperationCanceledException>(() => operation).ConfigureAwait(true);
+        stoppedActivity.ShouldNotBeNull();
+        stoppedActivity.Status.ShouldBe(ActivityStatusCode.Unset);
+        stoppedActivity.GetTagItem("cache.canceled").ShouldBe(true);
+        _hits.ShouldBe(0);
+        _misses.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Unrelated_cancellation_Should_Still_Mark_Cache_Error()
+    {
+        Activity? stoppedActivity = null;
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == CachingTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity => stoppedActivity = activity
+        };
+        ActivitySource.AddActivityListener(activityListener);
+        var cache = CreateCache();
+
+        await Should.ThrowAsync<OperationCanceledException>(() => cache.GetOrCreateAsync<int, string>(
+            "obs:unrelated-cancellation", 0,
+            static (_, _) => throw new OperationCanceledException("Factory canceled independently")).AsTask()).ConfigureAwait(true);
+
+        stoppedActivity.ShouldNotBeNull();
+        stoppedActivity.Status.ShouldBe(ActivityStatusCode.Error);
+        stoppedActivity.GetTagItem("cache.canceled").ShouldBeNull();
     }
 }

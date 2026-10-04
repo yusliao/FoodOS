@@ -69,6 +69,13 @@ internal sealed class ObservableHybridCache : HybridCache
                 tags,
                 cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Caller cancellation (for example an aborted HTTP request) is not a cache failure.
+            // Propagate it so the request pipeline can finish its normal cancellation handling.
+            activity?.SetTag("cache.canceled", true);
+            throw;
+        }
         catch
         {
             activity?.SetStatus(ActivityStatusCode.Error);

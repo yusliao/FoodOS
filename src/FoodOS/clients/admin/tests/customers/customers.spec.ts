@@ -205,8 +205,9 @@ test("store creation uses the current customer and paged warehouse, refreshes th
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Beta Main");
   await dialog.getByRole("textbox", { name: "Address", exact: true }).fill("456 Main Street");
   await dialog.getByLabel("Delivery window", { exact: true }).fill("06:00–08:00");
-  await dialog.getByRole("button", { name: "Next", exact: true }).click();
-  await dialog.getByRole("button", { name: "WH2 · Second warehouse" }).click();
+  await dialog.getByRole("button", { name: "Search warehouses", exact: true }).click();
+  await page.getByRole("menu").getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "WH2 · Second warehouse" }).click();
   expect(posts).toHaveLength(0);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -244,12 +245,13 @@ test("warehouse lookup failure blocks creation until retry succeeds; server reje
   await dialog.getByRole("textbox", { name: "Code", exact: true }).fill("A2");
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Acme Second");
   await dialog.getByRole("textbox", { name: "Address", exact: true }).fill("Address");
-  // Allow the application's existing transient-error retry/backoff to finish.
-  await expect(dialog.getByRole("alert")).toContainText("Warehouse lookup unavailable", { timeout: 15_000 });
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Search warehouses", exact: true }).click();
+  // Allow the application's existing transient-error retry/backoff to finish.
+  await expect(page.getByRole("menu").getByRole("alert")).toContainText("Warehouse lookup unavailable", { timeout: 15_000 });
   failed = false;
-  await dialog.getByRole("button", { name: "Retry", exact: true }).click();
-  await dialog.getByRole("button", { name: "WH1 · Main warehouse" }).click();
+  await page.getByRole("menu").getByRole("button", { name: "Retry", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "WH1 · Main warehouse" }).click();
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("Create permission revoked");
   await expect(dialog.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Acme Second");
@@ -269,7 +271,9 @@ test("unlinked or operator-owned legacy customers cannot be selected for a new r
   await dialog.getByRole("button", { name: "Partner customer", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /Unlinked customer|Operator record/ })).toHaveCount(0);
   await page.getByRole("menuitem", { name: /ACME/ }).click();
-  await expect(dialog.getByRole("button", { name: "WH1 · Main warehouse" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Search warehouses", exact: true }).click();
+  await expect(page.getByRole("menuitemradio", { name: "WH1 · Main warehouse" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await page.screenshot({ path: info.outputPath("store-create.png"), fullPage: true });
 });

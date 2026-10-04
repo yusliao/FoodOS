@@ -30,7 +30,8 @@ for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) {
     await page.goto("/catalog/pricing");
     await page.getByRole("button", { name: mode === "tier" ? m.pricing.addOrReplaceTier : m.pricing.setLock, exact: true }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("combobox", { name: m.pricing.product, exact: true }).selectOption("product-1");
+    await dialog.getByRole("button", { name: m.pricing.product, exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Spinach", exact: true }).click();
     if (mode === "lock") {
       await dialog.getByRole("combobox", { name: m.pricing.customer, exact: true }).selectOption("customer-1");
       await dialog.getByLabel(m.pricing.lockUntil).fill("2027-01-01T12:00");
@@ -75,18 +76,19 @@ for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) {
     await page.goto("/catalog/pricing");
     const panel = page.getByRole("heading", { name: m.pricing.quoteTitle, exact: true }).locator("..").locator("..");
     const customer = panel.getByRole("combobox", { name: m.pricing.customer, exact: true });
-    const product = panel.getByRole("combobox", { name: m.pricing.product, exact: true });
+    const product = panel.getByRole("button", { name: m.pricing.product, exact: true });
     const quantity = panel.getByRole("spinbutton", { name: m.pricing.quantity, exact: true });
     const result = panel.getByRole("status").filter({ hasText: "Catalog" });
     const submit = panel.getByRole("button", { name: m.pricing.quote, exact: true });
     await customer.selectOption("customer-1");
-    await product.selectOption("product-1");
+    await product.click();
+    await page.getByRole("menuitemradio", { name: "Spinach", exact: true }).click();
     await submit.click();
     await expect.poll(() => calls).toBe(1);
     for (const field of [customer, product, quantity]) await expect(field).toBeDisabled();
     release();
     await expect(result).toBeVisible();
-    for (const change of [() => quantity.fill("2"), () => customer.selectOption("customer-2"), () => product.selectOption("product-2")]) {
+    for (const change of [() => quantity.fill("2"), () => customer.selectOption("customer-2"), async () => { await product.click(); await page.getByRole("menuitemradio", { name: "Kale", exact: true }).click(); }]) {
       await change();
       await expect(result).toHaveCount(0);
       await submit.click();

@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createStore, searchCustomers, type CreateStoreInput } from "@/api/customers";
 import { searchWarehouses, type WarehouseDto } from "@/api/inventory";
+import { SearchableSelect } from "@/components/list/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, LoadingRow, Pagination, Select } from "@/components/list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from "@/components/ui/dialog";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "./request-error";
 
@@ -20,11 +22,12 @@ export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string;
   const [deliveryWindow, setDeliveryWindow] = useState("");
   const [warehouse, setWarehouse] = useState<WarehouseDto | null>(null);
   const [search, setSearch] = useState("");
+  const [searchTerm, searchPending] = useDebouncedSearch(search);
   const [page, setPage] = useState(1);
   const customers = useQuery({ queryKey: ["customers", ""], queryFn: ({ signal }) => searchCustomers("", signal) });
   const eligibleCustomers = customers.isSuccess ? customers.data.filter(c =>
     c.customerTenantId?.trim() && c.customerTenantId.trim().toLowerCase() !== "root") : [];
-  const warehouses = useQuery({ queryKey: ["inventory", "warehouses", search, page], queryFn: ({ signal }) => searchWarehouses(search, page, signal) });
+  const warehouses = useQuery({ queryKey: ["inventory", "warehouses", searchTerm, page], queryFn: ({ signal }) => searchWarehouses(searchTerm, page, signal), enabled: !searchPending });
   const attempt = useRef<{ body: string; key: string } | null>(null);
   const mutation = useMutation({
     mutationFn: ({ input, key }: { input: CreateStoreInput; key: string }) => createStore(input, key),
@@ -59,17 +62,19 @@ export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string;
           <Field id="store-address" label={t("partners.address")} required><Input id="store-address" required maxLength={256} value={address} onChange={e => setAddress(e.target.value)} /></Field>
           <Field id="store-window" label={t("partners.deliveryWindow")}><Input id="store-window" maxLength={64} value={deliveryWindow} onChange={e => setDeliveryWindow(e.target.value)} /></Field>
           <Field id="warehouse-search" label={t("partners.searchWarehouse")} hint={t("partners.warehouseHint")}>
-            <Input id="warehouse-search" type="search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+            <SearchableSelect id="warehouse-search" label={t("partners.searchWarehouse")} value={warehouse?.id ?? ""} selectedLabel={warehouse ? `${warehouse.code} · ${warehouse.name}` : undefined}
+              search={search} searchLabel={t("partners.searchWarehouse")} onSearchChange={value => { setSearch(value); setPage(1); }} disabled={mutation.isPending} loading={warehouses.isFetching || searchPending}
+              options={(warehouses.isSuccess ? warehouses.data.items : []).map(item => ({ value: item.id, label: `${item.code} · ${item.name}` }))}
+              onChange={value => { const item = warehouses.data?.items.find(item => item.id === value); if (item) setWarehouse(item); }}>
+              {warehouses.isPending && <LoadingRow label={t("partners.loading")} />}
+              {warehouses.isError && <div role="alert"><p>{describe(warehouses.error, t("partners.requestFailed"))}</p><Button type="button" variant="outline" onClick={() => void warehouses.refetch()}>{t("workbench.retry")}</Button></div>}
+              {warehouses.isSuccess && <div className="space-y-2">
+                {warehouses.data.items.length === 0 && <p>{t("partners.noWarehouses")}</p>}
+                <Pagination page={page} totalPages={warehouses.data.totalPages} totalCount={warehouses.data.totalCount} shown={warehouses.data.items.length} fetching={warehouses.isFetching || searchPending}
+                  hasPrev={warehouses.data.hasPrevious} hasNext={warehouses.data.hasNext} onPrev={() => setPage(p => p - 1)} onNext={() => setPage(p => p + 1)} />
+              </div>}
+            </SearchableSelect>
           </Field>
-          <p className="text-sm" role="status">{t("partners.selectedWarehouse")}: {warehouse ? `${warehouse.code} · ${warehouse.name}` : t("partners.noneSelected")}</p>
-          {warehouses.isPending && <LoadingRow label={t("partners.loading")} />}
-          {warehouses.isError && <div role="alert"><p>{describe(warehouses.error, t("partners.requestFailed"))}</p><Button type="button" variant="outline" onClick={() => void warehouses.refetch()}>{t("workbench.retry")}</Button></div>}
-          {warehouses.isSuccess && <div className="space-y-2">
-            {warehouses.data.items.length === 0 && <p>{t("partners.noWarehouses")}</p>}
-            <div className="grid gap-2 sm:grid-cols-2">{warehouses.data.items.map(w => <Button key={w.id} type="button" variant="outline" className="h-auto justify-start whitespace-normal break-words text-left" aria-pressed={warehouse?.id === w.id} onClick={() => setWarehouse(w)}>{w.code} · {w.name}</Button>)}</div>
-            <Pagination page={page} totalPages={warehouses.data.totalPages} totalCount={warehouses.data.totalCount} shown={warehouses.data.items.length} fetching={warehouses.isFetching}
-              hasPrev={warehouses.data.hasPrevious} hasNext={warehouses.data.hasNext} onPrev={() => setPage(p => p - 1)} onNext={() => setPage(p => p + 1)} />
-          </div>}
         </fieldset>
         {mutation.isError && <p role="alert" className="text-sm text-[var(--color-destructive)]">{describe(mutation.error, t("partners.requestFailed"))}</p>}
       </DialogBody><DialogFooter>

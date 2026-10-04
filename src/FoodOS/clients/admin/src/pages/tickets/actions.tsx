@@ -4,9 +4,10 @@ import { actOnTicket, type Ticket, type TicketAction } from "@/api/tickets";
 import { searchUsers } from "@/api/users";
 import { useAuth } from "@/auth/use-auth";
 import { IdentityPermissions, TicketsPermissions } from "@/lib/permissions";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
+import { SearchableSelect } from "@/components/list/searchable-select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Field } from "@/components/list";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { describe } from "@/pages/customers/request-error";
@@ -34,6 +35,7 @@ function ActionDialog({ ticket, action, onClose }: { ticket: Ticket; action: Tic
   const [assignee, setAssignee] = useState(ticket.assignedToUserId ?? "");
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
+  const [searchTerm, searchPending] = useDebouncedSearch(search);
   const [page, setPage] = useState(1);
   const canWrite = user?.tenant === "root" && user.permissions.includes(TicketsPermissions.View) && user.permissions.includes(grants[action]) && stateAllows(ticket, action);
   const canSearch = !!canWrite && action === "assign" && !!user?.permissions.includes(IdentityPermissions.Users.View);
@@ -42,7 +44,7 @@ function ActionDialog({ ticket, action, onClose }: { ticket: Ticket; action: Tic
     if (error instanceof ApiRequestError && error.status === 409) await cache.invalidateQueries({ queryKey: ["tickets", "detail", ticket.id], exact: true });
   } });
   const busy = useIsMutating({ mutationKey: ["tickets", "write", ticket.id] }) > 0;
-  const users = useQuery({ queryKey: ["tickets", "assignees", search.trim(), page], queryFn: ({ signal }) => searchUsers({ search, pageNumber: page, pageSize: 20, isActive: true }, signal), enabled: canSearch && !busy });
+  const users = useQuery({ queryKey: ["tickets", "assignees", searchTerm, page], queryFn: ({ signal }) => searchUsers({ search: searchTerm, pageNumber: page, pageSize: 20, isActive: true }, signal), enabled: canSearch && !busy && !searchPending });
   const choices = users.isSuccess ? users.data.items.filter(item => item.isActive) : [];
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -57,19 +59,17 @@ function ActionDialog({ ticket, action, onClose }: { ticket: Ticket; action: Tic
     <form onSubmit={submit}><DialogBody className="space-y-4"><fieldset className="space-y-3" disabled={busy}>
       {action === "assign" && <>
         <Field id="ticket-assignee" label={t("tickets.assignee")}>
-          <select id="ticket-assignee" value={assignee} onChange={event => setAssignee(event.target.value)} className="h-10 w-full rounded-lg border bg-[var(--color-card)] px-3">
-            <option value="">{t("tickets.unassigned")}</option>
-            {assignee && !choices.some(item => item.id === assignee) && <option value={assignee}>{assignee}</option>}
-            {choices.map(item => <option key={item.id} value={item.id}>{item.userName || item.email || item.id}</option>)}
-          </select>
+          <SearchableSelect id="ticket-assignee" label={t("tickets.assignee")} value={assignee} onChange={setAssignee} disabled={busy} searchable={canSearch}
+            search={search} searchLabel={t("tickets.searchAssignees")} onSearchChange={canSearch ? value => { setSearch(value); setPage(1); } : undefined} loading={users.isFetching || searchPending}
+            options={[{ value: "", label: t("tickets.unassigned") }, ...choices.map(item => ({ value: item.id, label: item.userName || item.email || item.id }))]}>
+            {canSearch ? <>
+              {(users.isFetching || searchPending) && <p role="status">{t("common.loading")}</p>}
+              {users.isError && <div><p role="alert">{describe(users.error, t("tickets.failed"))}</p><Button type="button" variant="outline" disabled={busy || users.isFetching || searchPending} onClick={() => { if (canSearch) void users.refetch(); }}>{t("workbench.retry")}</Button></div>}
+              {!searchPending && !users.isFetching && users.isSuccess && choices.length === 0 && <p role="status">{t("common.emptyDefault")}</p>}
+              <div className="flex gap-2"><Button type="button" variant="outline" disabled={page <= 1 || users.isFetching || searchPending} onClick={() => setPage(value => value - 1)}>{t("common.previous")}</Button><Button type="button" variant="outline" disabled={!users.isSuccess || !users.data.hasNext || users.isFetching || searchPending} onClick={() => setPage(value => value + 1)}>{t("common.next")}</Button></div>
+            </> : <p>{t("tickets.assigneePermission")}</p>}
+          </SearchableSelect>
         </Field>
-        {canSearch ? <>
-          <Input aria-label={t("tickets.searchAssignees")} value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} />
-          {users.isFetching && <p role="status">{t("common.loading")}</p>}
-          {users.isError && <div><p role="alert">{describe(users.error, t("tickets.failed"))}</p><Button type="button" variant="outline" disabled={busy || users.isFetching} onClick={() => { if (canSearch) void users.refetch(); }}>{t("workbench.retry")}</Button></div>}
-          {users.isSuccess && choices.length === 0 && <p role="status">{t("common.emptyDefault")}</p>}
-          <div className="flex gap-2"><Button type="button" variant="outline" disabled={page <= 1 || users.isFetching} onClick={() => setPage(value => value - 1)}>{t("common.previous")}</Button><Button type="button" variant="outline" disabled={!users.isSuccess || !users.data.hasNext || users.isFetching} onClick={() => setPage(value => value + 1)}>{t("common.next")}</Button></div>
-        </> : <p>{t("tickets.assigneePermission")}</p>}
       </>}
       {action === "resolve" && <Field id="ticket-resolution" label={t("tickets.resolution")}><textarea id="ticket-resolution" className="min-h-28 w-full rounded-lg border bg-transparent p-3" value={note} onChange={event => setNote(event.target.value)} /></Field>}
       {(action === "close" || action === "reopen") && <p>{t("tickets.confirmState")}</p>}

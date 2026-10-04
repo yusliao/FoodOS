@@ -4,6 +4,7 @@ import { listStores, type StoreDto } from "@/api/customers";
 import { createRoute, searchVehicles } from "@/api/logistics";
 import type { WarehouseDto } from "@/api/inventory";
 import { ErrorBand, Field, LoadingRow } from "@/components/list";
+import { SearchableSelect } from "@/components/list/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,7 +15,6 @@ export function CreateRouteDialog({ warehouse, canVehicles, onClose }: { warehou
   const t = useT();
   const cache = useQueryClient();
   const [code, setCode] = useState("");
-  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<StoreDto[]>([]);
   const [vehicle, setVehicle] = useState<string | null>(null);
   const stores = useQuery({ queryKey: ["logistics", "route-stores"], queryFn: ({ signal }) => listStores("", signal) });
@@ -31,16 +31,19 @@ export function CreateRouteDialog({ warehouse, canVehicles, onClose }: { warehou
     mutation.mutate({ body, key: attempt.current.key });
   }
   function move(index: number, offset: number) { setSelected(current => { const next = [...current]; [next[index], next[index + offset]] = [next[index + offset], next[index]]; return next; }); }
-  const matches = stores.data?.filter(store => `${store.code} ${store.name}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) ?? [];
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent className="sm:max-w-2xl">
     <DialogHeader><DialogTitle>{t("deliveryRoutes.create")}</DialogTitle><DialogDescription>{t("deliveryRoutes.createHint")}</DialogDescription></DialogHeader>
     <form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="min-w-0 space-y-4">
       <p>{t("deliveryRoutes.warehouse")}: {warehouse.code} · {warehouse.name}</p>
       <Field id="route-code" label={t("deliveryRoutes.code")} required><Input id="route-code" required maxLength={16} value={code} onChange={event => setCode(event.target.value)} /></Field>
-      <Field id="route-store-search" label={t("deliveryRoutes.searchStores")}><Input id="route-store-search" value={search} onChange={event => setSearch(event.target.value)} /></Field>
-      {stores.isPending && <LoadingRow label={t("deliveryRoutes.loading")} />}
-      {stores.isError && <><ErrorBand message={describe(stores.error, t("deliveryRoutes.failed"))} /><Button type="button" onClick={() => void stores.refetch()}>{t("workbench.retry")}</Button></>}
-      {stores.isSuccess && <div className="max-h-40 space-y-2 overflow-y-auto">{matches.length === 0 && <p role="status">{t("deliveryRoutes.noChoices")}</p>}{matches.map(store => <Button type="button" variant="outline" className="h-auto w-full justify-start whitespace-normal text-left" key={store.id} disabled={selected.some(item => item.id === store.id)} onClick={() => setSelected(current => [...current, store])}>{store.code} · {store.name}</Button>)}</div>}
+      <Field id="route-store-search" label={t("deliveryRoutes.searchStores")}>
+        <SearchableSelect id="route-store-search" label={t("deliveryRoutes.searchStores")} value="" searchLabel={t("deliveryRoutes.searchStores")} disabled={mutation.isPending} loading={stores.isFetching}
+          options={(stores.isSuccess ? stores.data : []).map(store => ({ value: store.id, label: `${store.code} · ${store.name}`, disabled: selected.some(item => item.id === store.id) }))}
+          onChange={value => { const store = stores.data?.find(item => item.id === value); if (store) setSelected(current => [...current, store]); }}>
+          {stores.isPending && <LoadingRow label={t("deliveryRoutes.loading")} />}
+          {stores.isError && <><ErrorBand message={describe(stores.error, t("deliveryRoutes.failed"))} /><Button type="button" onClick={() => void stores.refetch()}>{t("workbench.retry")}</Button></>}
+        </SearchableSelect>
+      </Field>
       <h3>{t("deliveryRoutes.stops")}</h3>
       <ol className="space-y-3">{selected.map((store, index) => <li key={store.id} className="space-y-2 rounded-lg border p-3"><p className="break-words">{index + 1}. {store.code} · {store.name}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={index === 0} onClick={() => move(index, -1)}>{t("deliveryRoutes.up")}</Button><Button type="button" variant="outline" disabled={index === selected.length - 1} onClick={() => move(index, 1)}>{t("deliveryRoutes.down")}</Button><Button type="button" variant="outline" onClick={() => setSelected(current => current.filter(item => item.id !== store.id))}>{t("deliveryRoutes.remove")}</Button></div></li>)}</ol>
       {!canVehicles && <p>{t("deliveryRoutes.vehiclePermission")}</p>}

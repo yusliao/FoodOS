@@ -53,16 +53,26 @@ for (const [culture, messages] of [["en-US", en], ["zh-CN", zh]] as const) {
     for (const mode of ["tier", "lock", "quote"]) {
       if (mode !== "quote") await page.getByRole("button", { name: mode === "tier" ? messages.pricing.addOrReplaceTier : messages.pricing.setLock, exact: true }).click();
       const container = mode === "quote" ? page.getByRole("heading", { name: messages.pricing.quoteTitle, exact: true }).locator("..").locator("..") : page.getByRole("dialog");
-      const choice = container.getByRole("region", { name: messages.pricing.product, exact: true });
+      const trigger = container.getByRole("button", { name: messages.pricing.product, exact: true });
+      await expect(container.getByRole("searchbox")).toHaveCount(0);
+      await trigger.click();
+      const choice = page.getByRole("menu", { name: messages.pricing.product, exact: true });
+      await expect(choice.getByRole("searchbox")).toBeFocused();
       await choice.getByRole("button", { name: messages.common.next, exact: true }).click();
       if (mode === "tier") {
         await expect(choice.getByRole("alert")).toHaveText(messages.pricing.productsFailed);
         await choice.getByRole("button", { name: messages.workbench.retry, exact: true }).click();
       }
-      await choice.getByRole("combobox").selectOption("product-2");
+      await choice.getByRole("menuitemradio", { name: "SKU-2 · Product 2", exact: true }).click();
+      await expect(choice).toHaveCount(0);
+      await trigger.click();
       await choice.getByRole("searchbox").fill("missing");
       await expect(choice.getByRole("status")).toHaveText(messages.common.emptyDefault);
-      await expect(choice.getByRole("combobox")).toHaveValue("product-2");
+      await expect(choice.getByRole("menuitemradio", { checked: true })).toHaveText("SKU-2 · Product 2");
+      await choice.getByRole("searchbox").press("Enter");
+      await expect(choice).toBeVisible();
+      await choice.getByRole("searchbox").press("Escape");
+      await expect(trigger).toHaveText("SKU-2 · Product 2");
       if (mode !== "tier") await container.getByRole("combobox", { name: messages.pricing.customer, exact: true }).selectOption(customer.id);
       if (mode !== "quote") await container.getByRole("spinbutton", { name: messages.pricing.unitPriceUsd, exact: true }).fill("2");
       if (mode === "lock") await container.getByLabel(messages.pricing.lockUntil).fill("2027-01-01T12:00");
@@ -73,6 +83,64 @@ for (const [culture, messages] of [["en-US", en], ["zh-CN", zh]] as const) {
     expect(writes).toHaveLength(2);
     expect(writes.every(body => body.productId === "product-2" && body.currency === "USD")).toBe(true);
     expect(customers).toBe(failedCustomerReads + 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+for (const [culture, messages] of [["en-US", en], ["zh-CN", zh]] as const) {
+  test(`${culture} product dropdown searches partial names and SKUs without an external input`, async ({ page }, info) => {
+    await seedAuthedSession(page, { ...TEST_USER, permissions });
+    await installAdminShellMocks(page, permissions);
+    await page.addInitScript(value => localStorage.setItem("foodos.culture", value), culture);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.route("**/api/v1/catalog/price-lists**", route => route.fulfill({ json: [list] }));
+    await page.route("**/api/v1/ordering/customer-orgs**", route => route.fulfill({ json: [customer] }));
+    const product = { id: "spinach", name: "嫩菠菜 Spinach", sku: "VEG-SP-12" };
+    const searches: string[] = [];
+    await page.route("**/api/v1/catalog/products?**", route => {
+      const params = new URL(route.request().url()).searchParams;
+      const search = params.get("search") ?? "";
+      searches.push(search);
+      if (search) expect(params.get("pageNumber")).toBe("1");
+      return route.fulfill({ json: paged(`${product.name} ${product.sku}`.toLowerCase().includes(search.toLowerCase()) ? [product] : []) });
+    });
+    await page.goto("/catalog/pricing");
+    const trigger = page.getByRole("button", { name: messages.pricing.product, exact: true });
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+    await trigger.click();
+    const menu = page.getByRole("menu", { name: messages.pricing.product, exact: true });
+    const input = menu.getByRole("searchbox");
+    await expect(input).toBeFocused();
+    const option = menu.getByRole("menuitemradio", { name: "VEG-SP-12 · 嫩菠菜 Spinach" });
+    await expect(option).toBeEnabled();
+    const now = new Date();
+    await page.clock.install({ time: now });
+    await page.clock.pauseAt(new Date(now.getTime() + 1000));
+    for (const term of ["s", "sp", "spi"]) {
+      await input.fill(term);
+      await page.clock.runFor(100);
+    }
+    expect(searches.filter(Boolean)).toEqual([]);
+    await expect(option).toBeDisabled();
+    await page.clock.runFor(150);
+    await expect.poll(() => searches.filter(Boolean)).toEqual(["spi"]);
+    await page.clock.resume();
+    await expect(option).toBeEnabled();
+    for (const term of ["菠菜", "sp-12"]) {
+      await input.fill(term);
+      await expect.poll(() => searches.includes(term)).toBe(true);
+      await expect(menu.getByRole("menuitemradio", { name: "VEG-SP-12 · 嫩菠菜 Spinach" })).toBeEnabled();
+    }
+    await page.screenshot({ path: info.outputPath("product-search-dropdown.png"), fullPage: true });
+    await input.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(menu).toHaveCount(0);
+    await expect(trigger).toHaveText("VEG-SP-12 · 嫩菠菜 Spinach");
+    await expect(trigger).toBeFocused();
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+    await trigger.click();
+    await input.press("Tab");
+    await expect(menu).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }

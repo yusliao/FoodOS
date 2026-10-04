@@ -4,9 +4,11 @@ import { searchProducts } from "@/api/catalog";
 import { searchWarehouses } from "@/api/inventory";
 import { createPurchaseOrder, searchSuppliers } from "@/api/procurement";
 import { ErrorBand, Field, LoadingRow, Pagination, Select } from "@/components/list";
+import { SearchableSelect } from "@/components/list/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "@/pages/customers/request-error";
 
@@ -26,21 +28,26 @@ const products: Loader = async (search, page, signal) => {
   return { ...data, items: data.items.map(item => ({ id: item.id, label: item.sku + " · " + item.name })) };
 };
 
-function Lookup({ kind, load, selected, onChoose }: { kind: string; load: Loader; selected?: Choice | null; onChoose: (choice: Choice) => void }) {
+function Lookup({ kind, load, selected, onChoose, disabled }: { kind: string; load: Loader; selected?: Choice | null; onChoose: (choice: Choice) => void; disabled: boolean }) {
   const t = useT();
   const [search, setSearch] = useState("");
+  const [searchTerm, searchPending] = useDebouncedSearch(search);
   const [page, setPage] = useState(1);
-  const query = useQuery({ queryKey: ["procurement", "create-lookup", kind, search, page], queryFn: ({ signal }) => load(search, page, signal) });
+  const query = useQuery({ queryKey: ["procurement", "create-lookup", kind, searchTerm, page], queryFn: ({ signal }) => load(searchTerm, page, signal), enabled: !searchPending });
   return <section aria-label={t("purchase." + kind)} className="min-w-0 space-y-3 rounded-lg border p-3">
-    <Field id={"po-search-" + kind} label={t("purchase." + kind)}><Input id={"po-search-" + kind} value={search} placeholder={t("purchase.lookupSearch")} onChange={event => { setSearch(event.target.value); setPage(1); }} /></Field>
-    {selected && <p className="break-words text-sm">{t("purchase.selected")}: {selected.label}</p>}
-    {query.isPending && <LoadingRow label={t("purchase.loading")} />}
-    {query.isError && <><ErrorBand message={describe(query.error, t("purchase.failed"))} /><Button type="button" onClick={() => void query.refetch()}>{t("workbench.retry")}</Button></>}
-    {query.isSuccess && <>
-      {query.data.items.length === 0 && <p role="status">{t("purchase.noChoices")}</p>}
-      <div className="max-h-40 space-y-2 overflow-y-auto">{query.data.items.map(item => <Button className="h-auto w-full justify-start whitespace-normal text-left break-words" type="button" variant="outline" key={item.id} aria-pressed={selected?.id === item.id} onClick={() => onChoose(item)}>{item.label}</Button>)}</div>
-      <Pagination page={page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} shown={query.data.items.length} hasPrev={query.data.hasPrevious} hasNext={query.data.hasNext} fetching={query.isFetching} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
-    </>}
+    <Field id={"po-search-" + kind} label={t("purchase." + kind)}>
+      <SearchableSelect id={"po-search-" + kind} label={t("purchase." + kind)} value={selected?.id ?? ""} selectedLabel={selected?.label}
+        search={search} searchLabel={t("purchase.lookupSearch")} onSearchChange={value => { setSearch(value); setPage(1); }} disabled={disabled} loading={query.isFetching || searchPending}
+        options={(query.isSuccess ? query.data.items : []).map(item => ({ value: item.id, label: item.label }))}
+        onChange={value => { const choice = query.data?.items.find(item => item.id === value); if (choice) onChoose(choice); }}>
+        {query.isPending && <LoadingRow label={t("purchase.loading")} />}
+        {query.isError && <><ErrorBand message={describe(query.error, t("purchase.failed"))} /><Button type="button" onClick={() => void query.refetch()}>{t("workbench.retry")}</Button></>}
+        {query.isSuccess && <>
+          {query.data.items.length === 0 && <p role="status">{t("purchase.noChoices")}</p>}
+          <Pagination page={page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} shown={query.data.items.length} hasPrev={query.data.hasPrevious} hasNext={query.data.hasNext} fetching={query.isFetching || searchPending} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
+        </>}
+      </SearchableSelect>
+    </Field>
   </section>;
 }
 
@@ -65,10 +72,10 @@ export function CreatePurchaseOrderDialog({ onClose }: { onClose: () => void }) 
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent className="sm:max-w-2xl">
     <DialogHeader><DialogTitle>{t("purchase.create")}</DialogTitle><DialogDescription>{t("purchase.createHint")}</DialogDescription></DialogHeader>
     <form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="min-w-0 space-y-4">
-      <Lookup kind="supplier" load={suppliers} selected={supplier} onChoose={setSupplier} />
-      <Lookup kind="warehouse" load={warehouses} selected={warehouse} onChoose={setWarehouse} />
+      <Lookup disabled={mutation.isPending} kind="supplier" load={suppliers} selected={supplier} onChoose={setSupplier} />
+      <Lookup disabled={mutation.isPending} kind="warehouse" load={warehouses} selected={warehouse} onChoose={setWarehouse} />
       <Field id="po-expected" label={t("purchase.expected")} required><Input id="po-expected" type="datetime-local" required value={expectedAt} onChange={event => setExpectedAt(event.target.value)} /></Field>
-      <Lookup kind="product" load={products} onChoose={product => setLines(current => [...current, { key: crypto.randomUUID(), product, zone: "Ambient", quantity: "1" }])} />
+      <Lookup disabled={mutation.isPending} kind="product" load={products} onChoose={product => setLines(current => [...current, { key: crypto.randomUUID(), product, zone: "Ambient", quantity: "1" }])} />
       {lines.length === 0 && <p role="status">{t("purchase.noLines")}</p>}
       {lines.map((line, index) => <section key={line.key} aria-label={t("purchase.line") + " " + (index + 1)} className="space-y-3 rounded-lg border p-3">
         <p className="break-words text-sm font-medium">{index + 1}. {line.product.label}</p>
