@@ -1,12 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installAdminShellMocks, paged } from "../helpers/shell-mocks";
+import { catalog, mockPermissionCatalog } from "./permission-catalog";
 
 const role = { id: "role-manager", name: "Manager", description: "Operations", permissions: ["Permissions.Users.View", "Permissions.Future.Existing"] };
 const view = "Permissions.Roles.View";
 async function setup(page: Page, permissions: string[]) {
   await seedAuthedSession(page, { ...TEST_USER, permissions });
   await installAdminShellMocks(page, permissions);
+  await mockPermissionCatalog(page);
   const writes: { method: string; body: unknown }[] = [];
   await page.route("**/api/v1/identity/**", async route => {
     const request = route.request();
@@ -35,7 +37,7 @@ test("read-only role viewer has no create, profile, grant or delete action", asy
 test("no view permission blocks list, detail and old create URL without role requests", async ({ page }) => {
   await setup(page, ["Permissions.Roles.Create", "Permissions.Roles.Update", "Permissions.Roles.Delete"]);
   const requests: string[] = [];
-  page.on("request", request => { if (/identity\/(roles|role-manager)/.test(request.url())) requests.push(request.url()); });
+  page.on("request", request => { if (/identity\/(roles|role-manager|permissions\/catalog)/.test(request.url())) requests.push(request.url()); });
   for (const path of ["/roles", `/roles/${role.id}`, "/roles/new"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "You don't hold the permissions to view this surface." })).toBeVisible();
@@ -107,6 +109,8 @@ test("Chinese mobile read-only profile remains within the viewport", async ({ pa
   await page.goto(`/roles/${role.id}`);
   await expect(page.getByText("只读：编辑资料需要角色创建权限，且仅支持自定义角色。")).toBeVisible();
   await expect(page.getByRole("checkbox").first()).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "WMS 对接", exact: true })).toBeVisible();
+  await expect(page.getByText("查看 WMS 对接", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -152,4 +156,44 @@ test("profile write failure preserves inputs for explicit retry", async ({ page 
   failing = false;
   await page.getByRole("button", { name: "Save profile", exact: true }).click();
   await expect.poll(() => attempts).toBe(2);
+});
+
+test("server catalog exposes new business permissions and excludes unregistered static entries", async ({ page }) => {
+  const writes = await setup(page, [view, "Permissions.Roles.Update"]);
+  await page.goto(`/roles/${role.id}`);
+  await page.getByText("Permissions.WmsIntegration.View", { exact: true }).click();
+  await page.getByText("Permissions.Ordering.Customers.View", { exact: true }).click();
+  await expect(page.getByText("Permissions.Users.Delete", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save permissions", exact: true }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toEqual({ method: "PUT", body: { roleId: role.id,
+    permissions: [...role.permissions, "Permissions.WmsIntegration.View", "Permissions.Ordering.Customers.View"] } });
+});
+
+for (const status of [403, 500]) test(`catalog ${status} hides permission writes and can be retried without losing assigned grants`, async ({ page }) => {
+  const writes = await setup(page, [view, "Permissions.Roles.Update"]);
+  let failing = true;
+  await page.route("**/api/v1/identity/permissions/catalog", route => route.fulfill(failing
+    ? { status, json: { detail: "Catalog failed" } } : { json: catalog }));
+  await page.goto(`/roles/${role.id}`);
+  await expect(page.getByText("Failed to load available permissions.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save permissions", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  expect(writes).toEqual([]);
+  failing = false;
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await page.getByText("Permissions.WmsIntegration.View", { exact: true }).click();
+  await page.getByRole("button", { name: "Save permissions", exact: true }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].body).toEqual({ roleId: role.id, permissions: [...role.permissions, "Permissions.WmsIntegration.View"] });
+});
+
+test("empty server catalog never offers static grants or permission writes", async ({ page }) => {
+  const writes = await setup(page, [view, "Permissions.Roles.Update"]);
+  await page.route("**/api/v1/identity/permissions/catalog", route => route.fulfill({ json: [] }));
+  await page.goto(`/roles/${role.id}`);
+  await expect(page.getByText("No permissions are available to assign.")).toBeVisible();
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save permissions", exact: true })).toHaveCount(0);
+  expect(writes).toEqual([]);
 });

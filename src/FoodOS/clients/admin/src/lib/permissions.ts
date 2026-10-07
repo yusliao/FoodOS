@@ -1,14 +1,10 @@
 /**
- * Permission strings + catalog mirrored from the server's *Permissions.cs
- * registries. Kept here so:
- *   1. Route guards stay typo-proof (`IdentityPermissions.Users.View`).
- *   2. The Role editor can render every assignable permission grouped
- *      by category without an extra round-trip.
- *
- * If the server registry adds permissions, mirror them here — there is no
- * runtime fetch (no /permissions catalog endpoint exists).
+ * Permission constants for route guards, plus display hints for the role editor.
+ * Assignable permissions always come from the server's permission catalog.
  * Convention follows the server: `Permissions.{Resource}.{Action}`.
  */
+
+import type { PermissionCatalogEntryDto } from "@/api/roles";
 
 export const FilesPermissions = Object.freeze({ Upload: "Permissions.Files.Upload", DeleteOwn: "Permissions.Files.DeleteOwn" });
 export const ChatPermissions = Object.freeze({ View: "Permissions.Chat.Channels.View", Create: "Permissions.Chat.Channels.Create", ManageAll: "Permissions.Chat.Channels.ManageAll", Send: "Permissions.Chat.Messages.Send", EditOwn: "Permissions.Chat.Messages.EditOwn", DeleteOwn: "Permissions.Chat.Messages.DeleteOwn", DeleteAny: "Permissions.Chat.Messages.DeleteAny" });
@@ -176,7 +172,7 @@ export type PermissionGroup = {
   entries: PermissionEntry[];
 };
 
-export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
+const PERMISSION_DISPLAY_GROUPS: readonly PermissionGroup[] = [
   { category: "Chat", blurb: "Read channels you have joined in your identity domain.", entries: [
     { name: ChatPermissions.View, description: "View chat channels", basic: true },
     { name: ChatPermissions.Create, description: "Create and administer owned chat channels", basic: true },
@@ -355,6 +351,22 @@ export const PERMISSION_CATALOG: readonly PermissionGroup[] = [
   },
 ];
 
-export const ALL_PERMISSION_NAMES: readonly string[] = PERMISSION_CATALOG.flatMap((g) =>
-  g.entries.map((e) => e.name),
-);
+export function groupPermissions(catalog: readonly PermissionCatalogEntryDto[]): PermissionGroup[] {
+  const groups = new Map<string, PermissionGroup>();
+  for (const permission of catalog) {
+    const display = PERMISSION_DISPLAY_GROUPS.find(group => group.entries.some(entry => entry.name === permission.name));
+    const category = display?.category ?? permission.resource;
+    let group = groups.get(category);
+    if (!group) {
+      group = { category, blurb: display?.blurb ?? "", entries: [] };
+      groups.set(category, group);
+    }
+    group.entries.push({
+      name: permission.name,
+      description: permission.description,
+      root: permission.isRoot,
+      basic: permission.isBasic,
+    });
+  }
+  return [...groups.values()];
+}

@@ -8,7 +8,6 @@ using FSH.Modules.Identity.Contracts.DTOs;
 using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Identity.Contracts.v1.Tokens.TokenGeneration;
 using FSH.Modules.Identity.Features.v1.Tokens.TokenGeneration;
-using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using System.Security.Claims;
@@ -27,7 +26,6 @@ public sealed class GenerateTokenCommandHandlerTests
     private readonly IOutboxStore _outboxStore;
     private readonly IMultiTenantContextAccessor<AppTenantInfo> _multiTenantContextAccessor;
     private readonly ISessionService _sessionService;
-    private readonly ILogger<GenerateTokenCommandHandler> _logger;
     private readonly GenerateTokenCommandHandler _sut;
     private readonly IFixture _fixture;
 
@@ -40,7 +38,6 @@ public sealed class GenerateTokenCommandHandlerTests
         _outboxStore = Substitute.For<IOutboxStore>();
         _multiTenantContextAccessor = Substitute.For<IMultiTenantContextAccessor<AppTenantInfo>>();
         _sessionService = Substitute.For<ISessionService>();
-        _logger = Substitute.For<ILogger<GenerateTokenCommandHandler>>();
 
         _sut = new GenerateTokenCommandHandler(
             _identityService,
@@ -49,8 +46,7 @@ public sealed class GenerateTokenCommandHandlerTests
             _requestContext,
             _outboxStore,
             _multiTenantContextAccessor,
-            _sessionService,
-            _logger);
+            _sessionService);
 
         _fixture = new Fixture();
     }
@@ -231,7 +227,7 @@ public sealed class GenerateTokenCommandHandlerTests
     #region Handle - Session Creation Exception Tests
 
     [Fact]
-    public async Task Handle_Should_ContinueSuccessfully_When_SessionCreationFails()
+    public async Task Handle_Should_RejectLogin_When_SessionCreationFails()
     {
         // Arrange
         var command = new GenerateTokenCommand("user@example.com", "password123");
@@ -252,12 +248,11 @@ public sealed class GenerateTokenCommandHandlerTests
         _sessionService.CreateSessionAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Database not available"));
 
-        // Act
-        var result = await _sut.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.ShouldNotBeNull();
-        result.AccessToken.ShouldBe(token.AccessToken);
+        // Never return an access token that has no revocable session.
+        await Should.ThrowAsync<InvalidOperationException>(async () =>
+            await _sut.Handle(command, CancellationToken.None));
+        await _outboxStore.DidNotReceive().AddAsync(
+            Arg.Any<FSH.Framework.Eventing.Abstractions.IIntegrationEvent>(), Arg.Any<CancellationToken>());
     }
 
     #endregion

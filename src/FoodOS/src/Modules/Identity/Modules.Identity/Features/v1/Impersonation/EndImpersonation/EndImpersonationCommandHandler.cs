@@ -9,6 +9,14 @@ using Mediator;
 using Microsoft.Extensions.Logging;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Identity.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FSH.Modules.Identity.Features.v1.Impersonation.EndImpersonation;
 
@@ -22,6 +30,7 @@ public sealed class EndImpersonationCommandHandler
     private readonly IRequestContext _requestContext;
     private readonly IImpersonationGrantService _grantService;
     private readonly ILogger<EndImpersonationCommandHandler> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public EndImpersonationCommandHandler(
         IIdentityService identityService,
@@ -30,7 +39,8 @@ public sealed class EndImpersonationCommandHandler
         ICurrentUser currentUser,
         IRequestContext requestContext,
         IImpersonationGrantService grantService,
-        ILogger<EndImpersonationCommandHandler> logger)
+        ILogger<EndImpersonationCommandHandler> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _identityService = identityService;
         _tokenService = tokenService;
@@ -39,6 +49,7 @@ public sealed class EndImpersonationCommandHandler
         _requestContext = requestContext;
         _grantService = grantService;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     public async ValueTask<TokenResponse> Handle(
@@ -97,8 +108,12 @@ public sealed class EndImpersonationCommandHandler
         }
 
         var (subject, actorClaims) = actorClaimsResult.Value;
-
+        var sessionId = Guid.NewGuid();
+        actorClaims = actorClaims.Where(claim => claim.Type != SessionClaimTypes.SessionId)
+            .Append(new Claim(SessionClaimTypes.SessionId, sessionId.ToString())).ToList();
         var token = await _tokenService.IssueAsync(subject, actorClaims, actorTenantId, cancellationToken);
+
+        await CreateActorSessionAsync(subject, actorTenantId, sessionId, token, cancellationToken).ConfigureAwait(false);
         await _identityService.StoreRefreshTokenAsync(subject, token.RefreshToken, token.RefreshTokenExpiresAt, cancellationToken);
 
         await _securityAudit.ImpersonationEndedAsync(
@@ -117,5 +132,23 @@ public sealed class EndImpersonationCommandHandler
         }
 
         return token;
+    }
+
+    private async Task CreateActorSessionAsync(string subject, string actorTenantId, Guid sessionId,
+        TokenResponse token, CancellationToken cancellationToken)
+    {
+        // Keep the actor tenant's AsyncLocal context inside this async call. The caller
+        // must retain the impersonated tenant for the remaining audit operations.
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(actorTenantId).ConfigureAwait(false)
+            ?? throw new NotFoundException("original actor tenant not found");
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+            new MultiTenantContext<AppTenantInfo>(tenant);
+        var refreshHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token.RefreshToken)).AsSpan(0, 8));
+        await scope.ServiceProvider.GetRequiredService<ISessionService>().CreateSessionAsync(
+            subject, refreshHash, _requestContext.IpAddress ?? string.Empty,
+            _requestContext.UserAgent ?? string.Empty, token.RefreshTokenExpiresAt,
+            sessionId, cancellationToken).ConfigureAwait(false);
     }
 }

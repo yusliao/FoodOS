@@ -22,6 +22,20 @@ export type UpdateRolePermissionsInput = {
 
 const ROOT = "/api/v1/identity";
 
+export type PermissionCatalogEntryDto = {
+  name: string;
+  description: string;
+  resource: string;
+  action: string;
+  isBasic: boolean;
+  isRoot: boolean;
+  isCustomer: boolean;
+};
+
+export function getPermissionsCatalog(signal?: AbortSignal): Promise<PermissionCatalogEntryDto[]> {
+  return apiFetch<PermissionCatalogEntryDto[]>(`${ROOT}/permissions/catalog`, { signal });
+}
+
 export function searchRoles(params: { pageNumber: number; pageSize: number; search?: string }, signal?: AbortSignal): Promise<PagedResponse<RoleDto>> {
   const query = new URLSearchParams({ PageNumber: String(params.pageNumber), PageSize: String(params.pageSize) });
   if (params.search?.trim()) query.set("Search", params.search.trim());

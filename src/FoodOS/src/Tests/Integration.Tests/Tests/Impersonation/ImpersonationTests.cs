@@ -295,6 +295,22 @@ public sealed partial class ImpersonationTests : IAsyncLifetime
         jwt.Subject.ShouldBe(_rootAdminUserId);
         // Restored actor token must NOT carry act_sub, else the user still appears impersonated to perms.
         jwt.Claims.ShouldNotContain(c => c.Type == "act_sub");
+        var sessionId = Guid.Parse(jwt.Claims.Single(c => c.Type == "session_id").Value);
+        using var restored = ClientWithBearer(body.AccessToken, TestConstants.RootTenantId);
+        using var profile = await restored.GetAsync($"{TestConstants.IdentityBasePath}/profile");
+        profile.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var refreshed = await restored.PostAsJsonAsync($"{TestConstants.IdentityBasePath}/token/refresh",
+            new { token = body.AccessToken, refreshToken = body.RefreshToken });
+        refreshed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rotated = await refreshed.Content.ReadFromJsonAsync<TokenRefreshResult>();
+        rotated.ShouldNotBeNull();
+        using var rotatedClient = ClientWithBearer(rotated.Token, TestConstants.RootTenantId);
+        using var rotatedProfile = await rotatedClient.GetAsync($"{TestConstants.IdentityBasePath}/profile");
+        rotatedProfile.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var revoke = await rootClient.DeleteAsync($"{TestConstants.IdentityBasePath}/users/{_rootAdminUserId}/sessions/{sessionId}");
+        revoke.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var afterRevoke = await rotatedClient.GetAsync($"{TestConstants.IdentityBasePath}/profile");
+        afterRevoke.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

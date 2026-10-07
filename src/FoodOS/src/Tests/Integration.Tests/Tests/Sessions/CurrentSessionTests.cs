@@ -90,17 +90,18 @@ public sealed class CurrentSessionTests(FshWebApplicationFactory factory)
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("tenant", "root");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", legacyAccess);
-        var before = await client.GetFromJsonAsync<List<UserSessionDto>>($"{TestConstants.IdentityBasePath}/sessions/me");
+        var before = await admin.GetFromJsonAsync<List<UserSessionDto>>($"{TestConstants.IdentityBasePath}/users/{user.UserId}/sessions");
         before.ShouldNotBeNull();
         before.Count.ShouldBe(2);
-        before.ShouldAllBe(session => !session.IsCurrentSession);
+        using var unidentifiedRead = await client.GetAsync($"{TestConstants.IdentityBasePath}/sessions/me");
+        unidentifiedRead.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         foreach (Guid? excluded in new Guid?[] { null, currentId })
         {
             using var denied = await client.PostAsJsonAsync($"{TestConstants.IdentityBasePath}/sessions/revoke-all", new { exceptSessionId = excluded });
-            denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            denied.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         }
-        var unchanged = await client.GetFromJsonAsync<List<UserSessionDto>>($"{TestConstants.IdentityBasePath}/sessions/me");
+        var unchanged = await admin.GetFromJsonAsync<List<UserSessionDto>>($"{TestConstants.IdentityBasePath}/users/{user.UserId}/sessions");
         unchanged!.Select(session => session.Id).Order().ShouldBe(before.Select(session => session.Id).Order());
 
         using var refreshed = await client.PostAsJsonAsync($"{TestConstants.IdentityBasePath}/token/refresh",

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mockJsonResponse } from "../helpers/api-mocks";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installAdminShellMocks, ADMIN_PERMS, paged } from "../helpers/shell-mocks";
+import { mockPermissionCatalog } from "./permission-catalog";
 
 // Role search preserves the server's paged response and stable ordering.
 const ROLES = [
@@ -13,6 +14,7 @@ const ROLES = [
 test.beforeEach(async ({ page }) => {
   await seedAuthedSession(page, { ...TEST_USER, permissions: [...ADMIN_PERMS] });
   await installAdminShellMocks(page);
+  await mockPermissionCatalog(page);
 });
 
 test.describe("roles list", () => {
@@ -183,7 +185,7 @@ test.describe("role detail permission matrix", () => {
     // Hydrated profile name field.
     await expect(main.getByLabel(/^Name/)).toHaveValue("Manager");
 
-    // Section heading + catalog groups (rendered client-side from PERMISSION_CATALOG).
+    // Section heading + groups from the server permission catalog.
     // SettingsSection renders the title as a plain <h2>Permissions</h2>.
     await expect(
       main.getByRole("heading", { name: "Permissions", exact: true }),

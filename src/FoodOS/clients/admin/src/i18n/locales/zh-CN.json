@@ -1080,6 +1080,9 @@
     "registry": "角色登记",
     "loadRoleFailed": "无法加载角色。",
     "loadingRole": "正在加载角色",
+    "loadingCatalog": "正在加载权限",
+    "catalogFailed": "无法加载可分配的权限。",
+    "emptyCatalog": "当前没有可分配的权限。",
     "builtInTitle": "内置角色 — 只读",
     "builtInBody": "{name} 随框架提供。名称、描述和权限由系统统一管理。如需不同授权组合，请创建自定义角色。",
     "atLeast2": "至少 2 个字符。",
@@ -1134,6 +1137,12 @@
       "Webhooks": "Webhooks",
       "Operations": "运营"
     },
+    "resource": {
+      "Ordering": { "Customers": "客户", "Stores": "门店" },
+      "Inventory": { "Warehouses": "仓库" },
+      "WmsIntegration": "WMS 对接",
+      "Notifications": { "Inbox": "通知" }
+    },
     "blurb": {
       "Chat": "查看当前身份域内已加入的频道。",
       "Files": "上传文件和删除本人文件，仍需具备所属业务资源权限。",
@@ -1150,6 +1159,13 @@
     },
     "perm": {
       "Permissions": {
+        "Ordering": {
+          "Customers": { "View": "查看客户", "Create": "创建客户", "Update": "更新客户" },
+          "Stores": { "View": "查看门店", "Create": "创建门店", "Update": "更新门店" }
+        },
+        "Inventory": { "Warehouses": { "View": "查看仓库" } },
+        "WmsIntegration": { "View": "查看 WMS 对接" },
+        "Notifications": { "Inbox": { "View": "查看通知", "MarkRead": "将通知标记为已读" } },
         "Chat": { "Channels": { "View": "查看聊天频道", "Create": "创建并管理本人拥有的聊天频道", "ManageAll": "恢复已归档聊天频道" }, "Messages": {"Send":"发送聊天消息","EditOwn":"编辑本人聊天消息","DeleteOwn":"删除本人聊天消息","DeleteAny":"删除他人聊天消息（还需删除本人权限）"} },
         "Files": { "Upload": "上传文件", "DeleteOwn": "删除本人文件" },
         "Tickets": { "View": "查看工单", "Comment": "回复工单", "Assign": "指派工单", "Resolve": "解决工单", "Reopen": "重开工单", "Close": "关闭工单", "Create": "新建工单", "Update": "编辑工单", "Delete": "删除工单", "Restore": "恢复工单" },

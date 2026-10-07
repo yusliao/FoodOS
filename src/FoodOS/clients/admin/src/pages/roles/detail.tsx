@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   deleteRole,
   getRoleWithPermissions,
+  getPermissionsCatalog,
   updateRolePermissions,
   upsertRole,
   type RoleDto,
@@ -24,7 +25,7 @@ import {
   SettingsSection,
 } from "@/components/list";
 import {
-  PERMISSION_CATALOG,
+  groupPermissions,
   IdentityPermissions,
   type PermissionGroup,
 } from "@/lib/permissions";
@@ -256,6 +257,12 @@ function ProfileSection({ role, disabled }: { role: RoleDto; disabled: boolean }
 function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean }) {
   const t = useT();
   const queryClient = useQueryClient();
+  const catalogQuery = useQuery({
+    queryKey: ["identity", "permissions", "catalog"],
+    queryFn: ({ signal }) => getPermissionsCatalog(signal),
+    staleTime: 10 * 60 * 1000,
+  });
+  const groups = useMemo(() => groupPermissions(catalogQuery.data ?? []), [catalogQuery.data]);
   const initial = useMemo(() => new Set(role.permissions ?? []), [role.permissions]);
   const [selected, setSelected] = useState<Set<string>>(initial);
 
@@ -281,8 +288,8 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
   });
 
   const total = useMemo(
-    () => PERMISSION_CATALOG.reduce((sum, g) => sum + g.entries.length, 0),
-    [],
+    () => groups.reduce((sum, g) => sum + g.entries.length, 0),
+    [groups],
   );
   const dirty = useMemo(() => !sameSet(selected, initial), [selected, initial]);
 
@@ -308,6 +315,17 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
 
   const granted = String(selected.size).padStart(2, "0");
   const totalLabel = String(total).padStart(2, "0");
+
+  if (catalogQuery.isPending || catalogQuery.isError || total === 0) {
+    return <SettingsSection title={t("roles.permissions")} icon={ShieldCheck}>
+      {catalogQuery.isPending ? <LoadingRow label={t("roles.loadingCatalog")} /> : catalogQuery.isError ? (
+        <div className="space-y-2">
+          <ErrorBand message={t("roles.catalogFailed")} />
+          <Button variant="outline" disabled={catalogQuery.isFetching} onClick={() => void catalogQuery.refetch()}>{t("workbench.retry")}</Button>
+        </div>
+      ) : <p>{t("roles.emptyCatalog")}</p>}
+    </SettingsSection>;
+  }
 
   return (
     <SettingsSection
@@ -360,7 +378,7 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
       }
     >
       <div className="space-y-4">
-        {PERMISSION_CATALOG.map((group) => {
+        {groups.map((group) => {
           const groupCount = group.entries.filter((e) => selected.has(e.name)).length;
           const allOn = groupCount === group.entries.length;
           const someOn = groupCount > 0 && groupCount < group.entries.length;
@@ -373,15 +391,15 @@ function PermissionEditor({ role, disabled }: { role: RoleDto; disabled: boolean
                 <div className="min-w-0">
                   <div className="flex items-baseline gap-3">
                     <h3 className="text-[13px] font-semibold tracking-tight text-[var(--color-foreground)]">
-                      {t(`roles.cat.${group.category}`, group.category)}
+                      {t(`roles.cat.${group.category}`, t(`roles.resource.${group.category}`, group.category))}
                     </h3>
                     <span className="font-mono text-[11px] tabular-nums text-[var(--color-muted-foreground)]">
                       {String(groupCount).padStart(2, "0")} / {String(group.entries.length).padStart(2, "0")}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-[11.5px] text-[var(--color-muted-foreground)]">
+                  {group.blurb && <p className="mt-0.5 text-[11.5px] text-[var(--color-muted-foreground)]">
                     {t(`roles.blurb.${group.category}`, group.blurb)}
-                  </p>
+                  </p>}
                 </div>
                 <button
                   type="button"

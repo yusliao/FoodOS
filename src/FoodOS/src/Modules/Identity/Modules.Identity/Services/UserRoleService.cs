@@ -72,7 +72,8 @@ internal sealed class UserRoleService(
 
     private async Task ValidateAdminRoleChangeAsync(FshUser user, List<UserRoleDto> userRoles)
     {
-        bool isRemovingAdminRole = userRoles.Exists(a => !a.Enabled && a.RoleName == RoleConstants.Admin);
+        bool isRemovingAdminRole = userRoles.Exists(a => !a.Enabled
+            && roleManager.NormalizeKey(a.RoleName) == roleManager.NormalizeKey(RoleConstants.Admin));
         if (!isRemovingAdminRole)
         {
             return;

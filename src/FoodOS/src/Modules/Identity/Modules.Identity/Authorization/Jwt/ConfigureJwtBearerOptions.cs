@@ -1,5 +1,11 @@
 ﻿using FSH.Framework.Core.Exceptions;
 using FSH.Framework.Shared.Constants;
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Identity.Data;
+using FSH.Modules.Identity.Services;
+using Microsoft.EntityFrameworkCore;
 using FSH.Modules.Identity.Contracts.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
@@ -151,14 +157,51 @@ public class ConfigureJwtBearerOptions : IConfigureNamedOptions<JwtBearerOptions
                 }
                 return Task.CompletedTask;
             },
-            // Server-side teeth behind /impersonation/revoke: for an impersonation token, reject if its
-            // grant is revoked/ended — otherwise revocation wouldn't stop tokens already in flight.
             OnTokenValidated = async context =>
             {
+                // Authentication precedes request tenant resolution. Resolve a child scope from
+                // the signed tenant claim so a request DbContext never captures a null tenant.
+                var tenantId = context.Principal?.FindFirstValue(ClaimConstants.Tenant);
+                var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(tenantId) || string.IsNullOrWhiteSpace(userId))
+                {
+                    context.Fail("missing identity context");
+                    return;
+                }
+
+                await using var hookScope = context.HttpContext.RequestServices.CreateAsyncScope();
+                var services = hookScope.ServiceProvider;
+                var tenant = await services.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+                    .GetAsync(tenantId).ConfigureAwait(false);
+                if (tenant is null)
+                {
+                    context.Fail("tenant not found");
+                    return;
+                }
+                services.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
+                    new MultiTenantContext<AppTenantInfo>(tenant);
+                var db = services.GetRequiredService<IdentityDbContext>();
+                var ct = context.HttpContext.RequestAborted;
                 var actSub = context.Principal?.FindFirstValue(ClaimConstants.ActorSubject);
                 if (string.IsNullOrEmpty(actSub))
                 {
-                    // Not an impersonation token — zero cost for normal sessions.
+                    var sessionClaim = context.Principal?.FindFirstValue(SessionClaimTypes.SessionId);
+                    var now = services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
+                    // Do not let permission caches extend disabled accounts or revoked sessions.
+                    if (!Guid.TryParse(sessionClaim, out var sessionId)
+                        || !await db.UserSessions.AnyAsync(session => session.Id == sessionId
+                            && session.UserId == userId && !session.IsRevoked && session.ExpiresAt > now
+                            && session.User != null && session.User.IsActive, ct).ConfigureAwait(false))
+                    {
+                        context.Fail("user session is no longer active");
+                    }
+                    return;
+                }
+
+                // Impersonation tokens use their grant instead of an ordinary session.
+                if (!await db.Users.AnyAsync(user => user.Id == userId && user.IsActive, ct).ConfigureAwait(false))
+                {
+                    context.Fail("user is no longer active");
                     return;
                 }
 
@@ -172,9 +215,6 @@ public class ConfigureJwtBearerOptions : IConfigureNamedOptions<JwtBearerOptions
                     return;
                 }
 
-                // Resolve in a CHILD scope: this hook runs before Finbuckle resolves the tenant, so a request-
-                // scoped IdentityDbContext would cache a null-tenant context and NRE later tenant query filters.
-                await using var hookScope = context.HttpContext.RequestServices.CreateAsyncScope();
                 var grants = hookScope.ServiceProvider
                     .GetRequiredService<IImpersonationGrantService>();
                 var revoked = await grants

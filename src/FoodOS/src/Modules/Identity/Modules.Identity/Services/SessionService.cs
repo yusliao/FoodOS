@@ -366,7 +366,7 @@ public sealed class SessionService : ISessionService
 
         if (session is null)
         {
-            return true; // No session tracking for this token (backwards compatibility)
+            return false;
         }
 
         return !session.IsRevoked && session.ExpiresAt > _timeProvider.GetUtcNow().UtcDateTime;

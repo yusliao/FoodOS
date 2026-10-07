@@ -129,7 +129,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
 
             role.Name = name;
             role.Description = description;
-            await roleManager.UpdateAsync(role);
+            EnsureSucceeded(await roleManager.UpdateAsync(role).ConfigureAwait(false));
         }
         else
         {
@@ -141,7 +141,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
                 ? RoleAudiences.Operator
                 : RoleAudiences.Customer;
             role = new FshRole(name, description, audience);
-            await roleManager.CreateAsync(role);
+            EnsureSucceeded(await roleManager.CreateAsync(role).ConfigureAwait(false));
         }
 
         return new RoleDto { Id = role.Id, Name = role.Name!, Description = role.Description, Audience = role.Audience };
@@ -160,7 +160,7 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
         // otherwise the lookup returns an empty set after delete.
         await InvalidateAffectedUsersAsync(id, cancellationToken).ConfigureAwait(false);
 
-        await roleManager.DeleteAsync(role);
+        EnsureSucceeded(await roleManager.DeleteAsync(role).ConfigureAwait(false));
     }
 
     public async Task<RoleDto> GetWithPermissionsAsync(string id, CancellationToken cancellationToken = default)
@@ -206,9 +206,18 @@ public sealed class RoleService(RoleManager<FshRole> roleManager,
 
     private static void EnsureNotSystemRole(string? roleName, string message)
     {
-        if (!string.IsNullOrEmpty(roleName) && RoleConstants.IsDefault(roleName))
+        if (!string.IsNullOrEmpty(roleName) && RoleConstants.DefaultRoles.Contains(roleName, StringComparer.OrdinalIgnoreCase))
         {
             throw new CustomException(message, Array.Empty<string>(), HttpStatusCode.BadRequest);
+        }
+    }
+
+    private static void EnsureSucceeded(IdentityResult result)
+    {
+        if (!result.Succeeded)
+        {
+            throw new CustomException("Role operation failed.",
+                result.Errors.Select(error => error.Description).ToArray(), HttpStatusCode.BadRequest);
         }
     }
 

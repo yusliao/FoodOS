@@ -8,7 +8,6 @@ using FSH.Modules.Identity.Contracts.Events;
 using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Identity.Contracts.v1.Tokens.TokenGeneration;
 using Mediator;
-using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 using FSH.Modules.Identity.Services;
 
@@ -24,7 +23,6 @@ public sealed class GenerateTokenCommandHandler
     private readonly IOutboxStore _outboxStore;
     private readonly IMultiTenantContextAccessor<AppTenantInfo> _multiTenantContextAccessor;
     private readonly ISessionService _sessionService;
-    private readonly ILogger<GenerateTokenCommandHandler> _logger;
 
     public GenerateTokenCommandHandler(
         IIdentityService identityService,
@@ -33,8 +31,7 @@ public sealed class GenerateTokenCommandHandler
         IRequestContext requestContext,
         IOutboxStore outboxStore,
         IMultiTenantContextAccessor<AppTenantInfo> multiTenantContextAccessor,
-        ISessionService sessionService,
-        ILogger<GenerateTokenCommandHandler> logger)
+        ISessionService sessionService)
     {
         _identityService = identityService;
         _tokenService = tokenService;
@@ -43,7 +40,6 @@ public sealed class GenerateTokenCommandHandler
         _outboxStore = outboxStore;
         _multiTenantContextAccessor = multiTenantContextAccessor;
         _sessionService = sessionService;
-        _logger = logger;
     }
 
     public async ValueTask<TokenResponse> Handle(
@@ -96,25 +92,16 @@ public sealed class GenerateTokenCommandHandler
         // Persist refresh token (hashed) for this user
         await _identityService.StoreRefreshTokenAsync(subject, token.RefreshToken, token.RefreshTokenExpiresAt, cancellationToken);
 
-        // Create user session for session management (non-blocking, fail gracefully)
-        try
-        {
-            var refreshTokenHash = Sha256Short(token.RefreshToken);
-            await _sessionService.CreateSessionAsync(
-                subject,
-                refreshTokenHash,
-                ip,
-                ua,
-                token.RefreshTokenExpiresAt,
-                sessionId,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // Session creation is non-critical - don't fail the login
-            // This can happen if migrations haven't been applied yet
-            _logger.LogWarning(ex, "Failed to create user session for user {UserId}. Login will continue without session tracking.", subject);
-        }
+        // Access tokens require a persisted session so revocation cannot be bypassed.
+        var refreshTokenHash = Sha256Short(token.RefreshToken);
+        await _sessionService.CreateSessionAsync(
+            subject,
+            refreshTokenHash,
+            ip,
+            ua,
+            token.RefreshTokenExpiresAt,
+            sessionId,
+            cancellationToken);
 
         // 3) Audit token issuance with a fingerprint (never raw token)
         var fingerprint = Sha256Short(token.AccessToken);

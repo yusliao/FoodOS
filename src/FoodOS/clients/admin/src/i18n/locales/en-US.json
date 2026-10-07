@@ -1080,6 +1080,9 @@
     "registry": "Registry",
     "loadRoleFailed": "Failed to load role.",
     "loadingRole": "Loading role",
+    "loadingCatalog": "Loading permissions",
+    "catalogFailed": "Failed to load available permissions.",
+    "emptyCatalog": "No permissions are available to assign.",
     "builtInTitle": "Built-in role — read only",
     "builtInBody": "{name} ships with the framework. Its name, description, and permissions are managed centrally. Create a custom role if you need a different set of grants.",
     "atLeast2": "At least 2 characters.",
@@ -1134,6 +1137,12 @@
       "Webhooks": "Webhooks",
       "Operations": "Operations"
     },
+    "resource": {
+      "Ordering": { "Customers": "Customers", "Stores": "Stores" },
+      "Inventory": { "Warehouses": "Warehouses" },
+      "WmsIntegration": "WMS integration",
+      "Notifications": { "Inbox": "Notifications" }
+    },
     "blurb": {
       "Chat": "Read channels you have joined in your identity domain.",
       "Files": "Upload files and delete own files; resource permissions still apply.",
@@ -1150,6 +1159,13 @@
     },
     "perm": {
       "Permissions": {
+        "Ordering": {
+          "Customers": { "View": "View customers", "Create": "Create customers", "Update": "Update customers" },
+          "Stores": { "View": "View stores", "Create": "Create stores", "Update": "Update stores" }
+        },
+        "Inventory": { "Warehouses": { "View": "View warehouses" } },
+        "WmsIntegration": { "View": "View WMS integration" },
+        "Notifications": { "Inbox": { "View": "View notifications", "MarkRead": "Mark notifications read" } },
         "Chat": { "Channels": { "View": "View chat channels", "Create": "Create and administer owned chat channels", "ManageAll": "Restore archived chat channels" }, "Messages": {"Send":"Send chat messages","EditOwn":"Edit own chat messages","DeleteOwn":"Delete own chat messages","DeleteAny":"Delete others' chat messages (also requires DeleteOwn)"} },
         "Files": { "Upload": "Upload files", "DeleteOwn": "Delete own files" },
         "Tickets": { "View": "View tickets", "Comment": "Reply to tickets", "Assign": "Assign ticket", "Resolve": "Resolve ticket", "Reopen": "Reopen ticket", "Close": "Close ticket", "Create": "New ticket", "Update": "Edit ticket", "Delete": "Delete ticket", "Restore": "Restore ticket" },
