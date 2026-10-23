@@ -99,6 +99,42 @@ public sealed class WmsInboundContractTests(FshWebApplicationFactory factory) : 
     }
 
     [Fact]
+    public async Task New_Document_Object_Should_Wait_For_Sequence_One_Before_Accepting_Later_Events()
+    {
+        using var configured = CreateConfiguredFactory(factory);
+        using var client = configured.CreateClient();
+        string objectId = $"OUT-{Guid.NewGuid():N}";
+
+        var second = CreateEnvelope(objectId, $"event-{Guid.NewGuid():N}", 2);
+        using var early = await SendAsync(client, second);
+        early.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var earlyReceipt = await ReadReceiptAsync(early);
+        earlyReceipt.Status.ShouldBe("awaitingGap");
+        earlyReceipt.LastAcceptedSequence.ShouldBeNull();
+
+        // Resending before the gap is filled must keep asking for a resend, not report delivery.
+        using var stillWaiting = await SendAsync(client, second);
+        stillWaiting.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await ReadReceiptAsync(stillWaiting)).Status.ShouldBe("awaitingGap");
+
+        var first = CreateEnvelope(objectId, $"event-{Guid.NewGuid():N}", 1);
+        (await ReadReceiptAsync(await SendAsync(client, first))).Status.ShouldBe("accepted");
+        var recovered = await ReadReceiptAsync(await SendAsync(client, second));
+        recovered.Status.ShouldBe("accepted");
+        recovered.LastAcceptedSequence.ShouldBe(2);
+        (await ReadReceiptAsync(await SendAsync(client, second))).Status.ShouldBe("duplicate");
+
+        // Inventory balances are absolute, so a long-lived bucket may start at any version.
+        var inventory = CreateInventoryEnvelope(
+            $"INV-{Guid.NewGuid():N}", $"event-{Guid.NewGuid():N}", 57, $"SKU-{Guid.NewGuid():N}", 3m);
+        using var inventoryResponse = await SendAsync(client, inventory);
+        inventoryResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var inventoryReceipt = await ReadReceiptAsync(inventoryResponse);
+        inventoryReceipt.Status.ShouldBe("accepted");
+        inventoryReceipt.LastAcceptedSequence.ShouldBe(57);
+    }
+
+    [Fact]
     public async Task Accepted_Inventory_Events_Should_Project_Availability_In_Sequence()
     {
         using var configured = CreateConfiguredFactory(factory);

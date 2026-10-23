@@ -135,53 +135,43 @@ public sealed partial class CustomerShopIsolationTests
         (await confirmedResponse.DeserializeAsync<ShopOrderDto>()).WarehouseConfirmationStatus.ShouldBe("Confirmed");
 
         var orderLine = order.Lines.ShouldHaveSingleItem();
-        var feedback = new WmsEventEnvelope(
-            Guid.CreateVersion7(),
-            "reference-wms",
-            "shop-placement",
-            WmsEventTypes.OutboundShortage,
-            WmsEntityTypes.OutboundOrder,
-            "1.0",
-            $"event-{Guid.NewGuid():N}",
-            orderId.ToString(),
-            1,
-            DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow,
-            $"corr-{orderId:N}",
-            null,
-            $"shortage:{orderId:N}:1",
-            JsonSerializer.SerializeToElement(new
-            {
-                outboundOrderId = orderId,
-                warehouseId = warehouse.Code,
-                ownerId = "root",
-                occurredAt = DateTimeOffset.UtcNow,
-                reasonCode = "short_stock",
-                lines = new[]
-                {
-                    new { lineId = orderLine.Id, sku = product.Sku, uom = product.BaseUom, quantity = 1m },
-                },
-            }));
-        byte[] feedbackBody = JsonSerializer.SerializeToUtf8Bytes(
-            feedback,
-            JsonOptions);
-        string timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-        using var feedbackRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/wms/inbound/events")
-        {
-            Content = new ByteArrayContent(feedbackBody),
-        };
-        feedbackRequest.Content.Headers.ContentType = new("application/json");
-        feedbackRequest.Headers.Add("X-FoodOS-WMS-Timestamp", timestamp);
-        feedbackRequest.Headers.Add(
-            "X-FoodOS-WMS-Signature",
-            WmsSignature.Sign(timestamp, feedbackBody, "shop-placement-integration-secret"));
-        using var feedbackResponse = await rootClient.SendAsync(feedbackRequest);
+        object OrderLine(object lineId, decimal quantity) =>
+            new { lineId, sku = product.Sku, uom = product.BaseUom, quantity };
+
+        using var feedbackResponse = await SendShopWmsEventAsync(rootClient, CreateShopOutboundEvent(
+            orderId, warehouse.Code, WmsEventTypes.OutboundShortage, 1, "short_stock",
+            OrderLine(orderLine.Id, 1m)));
         feedbackResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await feedbackResponse.Content.ReadAsStringAsync());
 
         using var exceptionResponse = await customer.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
         var exceptionOrder = await exceptionResponse.DeserializeAsync<ShopOrderDto>();
         exceptionOrder.WarehouseConfirmationStatus.ShouldBe("Exception");
         exceptionOrder.Lines.ShouldHaveSingleItem().ShortageQty.ShouldBe(1m);
+
+        // A later progress event must not clear the shortage exception.
+        using var pickedResponse = await SendShopWmsEventAsync(rootClient, CreateShopOutboundEvent(
+            orderId, warehouse.Code, WmsEventTypes.OutboundPicked, 2, null,
+            OrderLine(orderLine.Id, 2m)));
+        pickedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await pickedResponse.Content.ReadAsStringAsync());
+        using var afterPickedResponse = await customer.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
+        (await afterPickedResponse.DeserializeAsync<ShopOrderDto>())
+            .WarehouseConfirmationStatus.ShouldBe("Exception");
+
+        // Lines that do not belong to the order are reported, not thrown: the accepted event and
+        // every retry of it must answer 200 instead of 400.
+        var mixedShortage = CreateShopOutboundEvent(
+            orderId, warehouse.Code, WmsEventTypes.OutboundShortage, 3, "short_stock",
+            OrderLine(orderLine.Id, 2m),
+            OrderLine(Guid.NewGuid(), 1m),
+            OrderLine("not-a-foodos-line", 1m));
+        using var mixedResponse = await SendShopWmsEventAsync(rootClient, mixedShortage);
+        mixedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await mixedResponse.Content.ReadAsStringAsync());
+        using var mixedRetry = await SendShopWmsEventAsync(rootClient, mixedShortage);
+        mixedRetry.StatusCode.ShouldBe(HttpStatusCode.OK, await mixedRetry.Content.ReadAsStringAsync());
+        using var mixedOrderResponse = await customer.GetAsync($"{TestConstants.ShopBasePath}/orders/{orderId}");
+        var mixedOrder = await mixedOrderResponse.DeserializeAsync<ShopOrderDto>();
+        mixedOrder.WarehouseConfirmationStatus.ShouldBe("Exception");
+        mixedOrder.Lines.ShouldHaveSingleItem().ShortageQty.ShouldBe(2m);
 
         using var amend = await PostShopAmendAsync(customer, orderId, productId, 4m);
         amend.StatusCode.ShouldBe(HttpStatusCode.OK, await amend.Content.ReadAsStringAsync());
@@ -229,6 +219,52 @@ public sealed partial class CustomerShopIsolationTests
             new MultiTenantContext<AppTenantInfo>(verificationRootTenant);
         var inventory = verificationScope.ServiceProvider.GetRequiredService<InventoryDbContext>();
         (await inventory.Reservations.AnyAsync(reservation => reservation.OrderId == orderId)).ShouldBeFalse();
+    }
+
+    private static WmsEventEnvelope CreateShopOutboundEvent(
+        Guid orderId,
+        string warehouseCode,
+        string eventType,
+        long sequence,
+        string? reasonCode,
+        params object[] lines)
+    {
+        string eventId = $"event-{Guid.NewGuid():N}";
+        object payload = reasonCode is null
+            ? new { outboundOrderId = orderId, warehouseId = warehouseCode, ownerId = "root", occurredAt = DateTimeOffset.UtcNow, lines }
+            : new { outboundOrderId = orderId, warehouseId = warehouseCode, ownerId = "root", occurredAt = DateTimeOffset.UtcNow, reasonCode, lines };
+        return new WmsEventEnvelope(
+            Guid.CreateVersion7(),
+            "reference-wms",
+            "shop-placement",
+            eventType,
+            WmsEntityTypes.OutboundOrder,
+            "1.0",
+            eventId,
+            orderId.ToString(),
+            sequence,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            $"corr-{orderId:N}",
+            null,
+            eventId,
+            JsonSerializer.SerializeToElement(payload));
+    }
+
+    private static Task<HttpResponseMessage> SendShopWmsEventAsync(HttpClient client, WmsEventEnvelope envelope)
+    {
+        byte[] body = JsonSerializer.SerializeToUtf8Bytes(envelope, JsonOptions);
+        string timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/wms/inbound/events")
+        {
+            Content = new ByteArrayContent(body),
+        };
+        request.Content.Headers.ContentType = new("application/json");
+        request.Headers.Add("X-FoodOS-WMS-Timestamp", timestamp);
+        request.Headers.Add(
+            "X-FoodOS-WMS-Signature",
+            WmsSignature.Sign(timestamp, body, "shop-placement-integration-secret"));
+        return client.SendAsync(request);
     }
 
     private static Task<HttpResponseMessage> PostShopOrderAsync(

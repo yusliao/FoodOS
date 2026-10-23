@@ -92,11 +92,13 @@ FoodOS 按 `provider + connectionId + entityType + externalObjectId` 为每个�
 | 序号等于"当前最大值 + 1" | `accepted` | 200 | 生效 |
 | 序号小于或等于当前最大值 | `stale` | 200 | 存档，不生效 |
 | 序号大于"当前最大值 + 1" | `awaitingGap` | **202** | 存档，暂不生效 |
+| 单据类对象（`outboundOrder` / `inboundOrder` / `return`）的首条事件，序号不是 1 | `awaitingGap` | **202** | 存档，等待序号 1 |
+| 处于等待状态的事件在缺口补齐前被重发 | `awaitingGap` | **202** | 仍然等待 |
 
 仓库方需要遵守这几条：
 
-1. **每个对象的序号从 1 开始，每次加 1，中间不能跳号。** FoodOS 会直接接受一个对象收到的第一条事件，所以如果首条丢失、后面的事件先到，丢失的那条以后再到就会被判为 `stale`。
-2. 收到 `202 awaitingGap` 后，先按序补发缺失的事件。补齐后，**用原来的 `externalEventId` 重发**那条等待中的事件，它才会转为 `accepted`。
+1. **每个对象的序号从 1 开始，每次加 1，中间不能跳号。** 单据类对象的首条事件序号必须是 1，否则 FoodOS 会等待序号 1 到达。库存余额桶（`inventory`）例外：余额是绝对值，接入前已经存在的余额桶，首条事件可以从任意序号开始。
+2. 收到 `202 awaitingGap` 后，先按序补发缺失的事件。补齐后，**用原来的 `externalEventId` 重发**那条等待中的事件，它才会转为 `accepted`。缺口补齐之前重发，仍然返回 202。
 3. 同一个 `externalEventId` 无论重发多少次，请求体内容都要相同。
 4. 不同对象之间不保证顺序，可以并行发送；同一对象请串行发送。
 
@@ -107,9 +109,9 @@ FoodOS 按 `provider + connectionId + entityType + externalObjectId` 为每个�
 - `warehouseId`、`ownerId`、`sku`、`uom` 都填 **FoodOS 的值**，也就是映射表里的 FoodOS 端取值。`external*` 字段可选，填仓库自己的编码，用于对账。
 - 一期 `ownerId` 固定为 `root`。
 - 数量必须是 JSON 数字类型，不能用字符串。**一期所有单位映射的换算系数都是 1**，所以事件数量和 FoodOS 单位数量相等。多单位换算的口径待二期评审后再启用。
-- 出库类事件的明细行，`lineId` 必须**原样回传 FoodOS 下发的订单行 UUID**：
-  - 格式不是 UUID 的行会被忽略；
-  - 缺货事件里如果引用了不属于该订单的行 UUID，FoodOS 会返回 400，联调时务必避免。
+- 出库类事件的明细行，`lineId` 必须**原样回传 FoodOS 下发的订单行 UUID**。对不上的行（不是 UUID，或者不属于该订单）不会入账：
+  - 进度类事件里的这些行直接忽略；
+  - 缺货事件里的这些行不会记为缺货，但订单仍会标记为"仓库异常"，并注明有几行没对上，由运营人工核对。
 - 字符串不能为空，长度不超过 200（另有更短上限的以 OpenAPI 为准）；日期使用 `yyyy-MM-dd`。
 
 ### 7.2 事件清单
@@ -128,6 +130,8 @@ FoodOS 按 `provider + connectionId + entityType + externalObjectId` 为每个�
 | `inbound.qualityCompleted` | inboundOrder | `inboundOrderId` `warehouseId` `ownerId` `completedAt` `lines` | `lineId` `sku` `uom` `acceptedQuantity` `rejectedQuantity`（两者之和 > 0） | 校验后存档，业务处理待上线 |
 | `inbound.putawayCompleted` | inboundOrder | 同 received，时间字段为 `completedAt` | `lineId` `sku` `uom` `quantity` `locationCode` | 校验后存档，业务处理待上线 |
 | `return.received` | return | `returnId` `outboundOrderId` `warehouseId` `ownerId` `receivedAt` `lines` | `lineId` `sku` `uom` `quantity` `disposition`（`quarantine` / `accepted` / `rejected`） | 校验后存档，业务处理待上线 |
+
+订单一旦因为缺货被标记为"仓库异常"，之后再收到分配、拣货、装车、出库事件，也**不会**自动改回"已确认"，异常要由运营人工处理。FoodOS 改单或取消后，订单会回到"待确认"，重新走下发流程。
 
 "校验后存档"的事件现在就可以发，用于联调报文格式。FoodOS 会正常回执，并保存原始报文。采购入库、退货等功能上线后，存档事件是由 FoodOS 重放还是请仓库方补发，届时另行通知。
 

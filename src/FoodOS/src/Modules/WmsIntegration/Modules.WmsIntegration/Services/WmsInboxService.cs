@@ -40,6 +40,14 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db, IWarehouseOrderF
                     await ApplyWarehouseFeedbackAsync(envelope, cancellationToken).ConfigureAwait(false);
                     return new(envelope.MessageId, "accepted", waitingCursor.LastAcceptedSequence, null);
                 }
+
+                // Still waiting: answering "duplicate" (200) would tell the sender the event was
+                // delivered, and it would never be resent after the gap is filled.
+                return new(
+                    envelope.MessageId,
+                    "awaitingGap",
+                    waitingCursor?.LastAcceptedSequence,
+                    $"Expected sequence {(waitingCursor?.LastAcceptedSequence ?? 0) + 1}; resend this event after the gap is filled.");
             }
             if (duplicate.Status == "accepted")
             {
@@ -57,7 +65,15 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db, IWarehouseOrderF
 
         string status;
         string? detail = null;
-        if (cursor is null)
+        if (cursor is null && envelope.Sequence > 1 && envelope.EntityType != WmsEntityTypes.Inventory)
+        {
+            // Document objects (orders, returns) are created by FoodOS or the WMS during the
+            // integration, so their history starts at 1. Accepting a later first event would turn a
+            // lost earlier event into "stale". Inventory balances are absolute, so any first version is safe.
+            status = "awaitingGap";
+            detail = "Expected sequence 1 for a new object; resend this event after the gap is filled.";
+        }
+        else if (cursor is null)
         {
             status = "accepted";
             cursor = WmsObjectCursor.Create(
@@ -123,7 +139,7 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db, IWarehouseOrderF
             await ApplyWarehouseFeedbackAsync(envelope, cancellationToken).ConfigureAwait(false);
         }
 
-        return new(envelope.MessageId, status, cursor.LastAcceptedSequence, detail);
+        return new(envelope.MessageId, status, cursor?.LastAcceptedSequence, detail);
     }
 
     private Task ApplyWarehouseFeedbackAsync(
@@ -149,21 +165,27 @@ public sealed class WmsInboxService(WmsIntegrationDbContext db, IWarehouseOrderF
             && reasonCode.ValueKind == JsonValueKind.String
                 ? reasonCode.GetString()
                 : null;
-        var lines = payload.GetProperty("lines").EnumerateArray().Select(line =>
+        var lines = new List<WarehouseOrderFeedbackLine>();
+        int unresolved = 0;
+        foreach (JsonElement line in payload.GetProperty("lines").EnumerateArray())
         {
-            if (!Guid.TryParse(line.GetProperty("lineId").GetString(), out Guid lineId))
+            if (Guid.TryParse(line.GetProperty("lineId").GetString(), out Guid lineId))
             {
-                return null;
+                lines.Add(new WarehouseOrderFeedbackLine(lineId, line.GetProperty("quantity").GetDecimal()));
             }
+            else
+            {
+                unresolved++;
+            }
+        }
 
-            return new WarehouseOrderFeedbackLine(lineId, line.GetProperty("quantity").GetDecimal());
-        }).Where(line => line is not null).Select(line => line!).ToList();
-        if (lines.Count == 0)
+        // A shortage whose lines cannot be matched must still raise a warehouse exception.
+        if (lines.Count == 0 && envelope.EventType != WmsEventTypes.OutboundShortage)
         {
             return Task.CompletedTask;
         }
         return orderFeedback.ApplyAsync(
-            new WarehouseOrderFeedback(orderId, envelope.EventType, reason, envelope.OccurredAt, lines),
+            new WarehouseOrderFeedback(orderId, envelope.EventType, reason, envelope.OccurredAt, lines, unresolved),
             cancellationToken);
     }
 

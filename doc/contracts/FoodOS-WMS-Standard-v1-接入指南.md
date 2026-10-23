@@ -54,7 +54,8 @@ FoodOS 内部管理端点：
 - 等于当前序列加一：`accepted`。
 - 已接收的 `externalEventId`：`duplicate`。
 - 不高于当前序列：`stale`。
-- 高于当前序列加一：`awaitingGap`，仓库方先补发缺失事件，再使用相同事件 ID 重放等待事件。
+- 高于当前序列加一：`awaitingGap`，仓库方先补发缺失事件，再使用相同事件 ID 重放等待事件；补齐前重放仍返回 `awaitingGap`。
+- 单据类对象（`outboundOrder`、`inboundOrder`、`return`）的首条事件序列必须为 1，否则为 `awaitingGap`；`inventory` 余额桶首条事件可从任意序列开始。
 
 支持的事件类型和 payload 字段以 OpenAPI 为准。每个 payload 必须携带 `warehouseId`、`ownerId`，明细必须携带 `lineId`、`sku`、`uom` 和对应数量；外部编码字段用于双方对账，不替代 FoodOS 主键。
 
