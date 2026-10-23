@@ -4,9 +4,10 @@ import { Warehouse } from "lucide-react";
 import { searchWarehouses, type WarehouseDto } from "@/api/inventory";
 import { Combobox } from "@/components/list";
 import { useT } from "@/i18n/locale-provider";
+import { newUuid } from "@/lib/uuid";
 
 export function newIdempotencyKey(): string {
-  return crypto.randomUUID();
+  return newUuid();
 }
 
 export function todayIsoDate(): string {

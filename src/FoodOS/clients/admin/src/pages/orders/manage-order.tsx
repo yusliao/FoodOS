@@ -13,6 +13,7 @@ import { WmsStatusNotice } from "@/components/wms-status";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function ManageOrder({ order, canReadProducts }: { order: SalesOrder; canReadProducts: boolean }) {
   const t = useT();
@@ -37,7 +38,7 @@ export function ManageOrder({ order, canReadProducts }: { order: SalesOrder; can
     <Button variant="destructive" onClick={() => { mutation.reset(); setCancelling(true); }}>{t("orderManage.cancel")}</Button>
     <ConfirmDialog open={cancelling} onOpenChange={setCancelling} title={t("orderManage.cancel")} confirmLabel={t("orderManage.cancel")} destructive pending={mutation.isPending} description={<>{t("orderManage.cancelHint")}{mutation.isError && <span role="alert" className="block">{describe(mutation.error, t("orders.failed"))}</span>}</>} onConfirm={() => {
       if (mutation.isPending || Date.now() >= Date.parse(order.cutoffAt)) return;
-      attempt.current ??= crypto.randomUUID();
+      attempt.current ??= newUuid();
       mutation.mutate({ id: order.id, key: attempt.current });
     }} />
     {editing && <AmendDialog order={order} canReadProducts={canReadProducts} onClose={() => setEditing(false)} />}
@@ -60,7 +61,7 @@ function AmendDialog({ order, canReadProducts, onClose }: { order: SalesOrder; c
     if (!valid || mutation.isPending || Date.now() >= Date.parse(order.cutoffAt)) return;
     const payload = lines.map(line => ({ productId: line.productId, quantity: Number(line.quantity) }));
     const body = JSON.stringify(payload);
-    if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() };
+    if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ id: order.id, key: attempt.current.key, lines: payload });
   }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent>

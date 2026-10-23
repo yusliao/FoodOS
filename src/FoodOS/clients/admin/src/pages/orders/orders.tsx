@@ -14,6 +14,7 @@ import { describe } from "@/pages/customers/request-error";
 import { AfterSales } from "./after-sales";
 import { listStores } from "@/api/customers";
 import { ManageOrder } from "./manage-order";
+import { newUuid } from "@/lib/uuid";
 
 const key = ["ordering", "orders"] as const;
 
@@ -88,7 +89,7 @@ export function OrderDetailPage() {
     </>}
     <ConfirmDialog open={confirming && !!canReconcile} onOpenChange={setConfirming} title={t("orders.reconcile")} description={<>{t("orders.reconcileHint")}{mutation.isError && <span role="alert" className="block text-[var(--color-destructive)]">{describe(mutation.error, t("orders.failed"))}</span>}</>} confirmLabel={t("orders.reconcile")} pending={mutation.isPending} onConfirm={() => {
       if (!canReconcile || mutation.isPending) return;
-      if (attempt.current?.id !== id) attempt.current = { id, key: crypto.randomUUID() };
+      if (attempt.current?.id !== id) attempt.current = { id, key: newUuid() };
       mutation.mutate(attempt.current);
     }} />
   </div>;

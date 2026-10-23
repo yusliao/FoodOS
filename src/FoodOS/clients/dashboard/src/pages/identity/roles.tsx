@@ -37,6 +37,7 @@ import {
 import { cn } from "@/lib/cn";
 import { describe } from "@/lib/list-helpers";
 import { useT } from "@/i18n/locale-provider";
+import { newUuid } from "@/lib/uuid";
 
 const SYSTEM_ROLE_NAMES = new Set(["admin", "administrator", "basic", "user"]);
 
@@ -45,12 +46,7 @@ const DESKTOP_COLS =
   "grid-cols-[1fr_120px_24px] lg:grid-cols-[1.4fr_2fr_120px_24px]";
 
 function newGuid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return "00000000-0000-0000-0000-000000000000".replace(/0/g, () =>
-    Math.floor(Math.random() * 16).toString(16),
-  );
+  return newUuid();
 }
 
 export function RolesPage() {

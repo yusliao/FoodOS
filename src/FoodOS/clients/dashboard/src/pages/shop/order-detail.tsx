@@ -42,6 +42,7 @@ import { useT } from "@/i18n/locale-provider";
 import { formatCountdown, isAmendable, orderStatusTone } from "./shop-helpers";
 import { useShopStore } from "./store-context";
 import { useShopProducts } from "./use-shop-data";
+import { newUuid } from "@/lib/uuid";
 
 const DESKTOP_GRID = "grid-cols-[1fr_90px_110px_110px]";
 
@@ -121,7 +122,7 @@ export function ShopOrderDetailPage() {
     amendMutation.mutate({
       orderId: order.id,
       lines,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: newUuid(),
     });
   };
 
@@ -304,7 +305,7 @@ export function ShopOrderDetailPage() {
                 order &&
                 canEdit && cancelMutation.mutate({
                   orderId: order.id,
-                  idempotencyKey: crypto.randomUUID(),
+                  idempotencyKey: newUuid(),
                 })
               }
             >

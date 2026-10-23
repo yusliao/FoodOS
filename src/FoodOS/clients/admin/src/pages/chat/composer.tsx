@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ErrorBand, Field } from "@/components/list";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 // The parent only mounts this after the channel membership check succeeds.
 export function ChatComposer({ channelId, parentMessageId = null }: { channelId: string; parentMessageId?: string | null }) {
@@ -69,7 +70,7 @@ function ComposerForm({ channelId, parentMessageId }: { channelId: string; paren
     if (user?.tenant !== "root" || !user.permissions.includes(ChatPermissions.View) || !user.permissions.includes(ChatPermissions.Send)
       || busy || submitting.current || (!text && !attachment) || text.length > 32768) return;
     const signature = JSON.stringify({ text, fileAssetId: attachment?.fileAssetId ?? null });
-    if (attempt.current?.signature !== signature) attempt.current = { signature, key: crypto.randomUUID() };
+    if (attempt.current?.signature !== signature) attempt.current = { signature, key: newUuid() };
     submitting.current = true;
     mutation.mutate({ channelId, parentMessageId, body: text, key: attempt.current.key, attachments: attachment ? [attachment] : [] });
   }

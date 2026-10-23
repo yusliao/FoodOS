@@ -26,6 +26,7 @@ import { useShopStore } from "./store-context";
 import { ShopOrderAccess } from "./order-access";
 import { useShopProducts } from "./use-shop-data";
 import { orderStatusTone } from "./shop-helpers";
+import { newUuid } from "@/lib/uuid";
 
 const TYPES: ShopAfterSalesTicketType[] = ["Shortage", "Damage", "Return"];
 
@@ -84,7 +85,7 @@ function ShopAfterSalesBody() {
           quantity: Number(quantity),
           reason: reason.trim(),
         },
-        crypto.randomUUID(),
+        newUuid(),
       ),
     onSuccess: async () => {
       toast.success(t("shop.afterSalesFiled", "Claim filed"));

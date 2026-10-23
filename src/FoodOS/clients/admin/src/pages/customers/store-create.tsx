@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "./request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string; onClose: () => void }) {
   const t = useT();
@@ -41,7 +42,7 @@ export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string;
     const input: CreateStoreInput = { customerOrgId: customer, code: code.trim(), name: name.trim(),
       address: address.trim(), defaultWarehouseId: warehouse.id, defaultRouteId: null, deliveryWindow: deliveryWindow.trim() || null };
     const body = JSON.stringify(input);
-    if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() };
+    if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ input, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => { if (!open && !mutation.isPending) onClose(); }}>

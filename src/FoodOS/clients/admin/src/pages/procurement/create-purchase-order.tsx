@@ -11,6 +11,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 type Choice = { id: string; label: string };
 type Choices = { items: Choice[]; totalCount: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
@@ -66,7 +67,7 @@ export function CreatePurchaseOrderDialog({ onClose }: { onClose: () => void }) 
     if (!valid || !supplier || !warehouse || mutation.isPending) return;
     const body = { supplierId: supplier.id, warehouseId: warehouse.id, expectedAt: new Date(expectedAt).toISOString(), lines: lines.map(line => ({ productId: line.product.id, zone: line.zone, quantity: Number(line.quantity) })) };
     const serialized = JSON.stringify(body);
-    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: crypto.randomUUID() };
+    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newUuid() };
     mutation.mutate({ body, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent className="sm:max-w-2xl">
@@ -75,7 +76,7 @@ export function CreatePurchaseOrderDialog({ onClose }: { onClose: () => void }) 
       <Lookup disabled={mutation.isPending} kind="supplier" load={suppliers} selected={supplier} onChoose={setSupplier} />
       <Lookup disabled={mutation.isPending} kind="warehouse" load={warehouses} selected={warehouse} onChoose={setWarehouse} />
       <Field id="po-expected" label={t("purchase.expected")} required><Input id="po-expected" type="datetime-local" required value={expectedAt} onChange={event => setExpectedAt(event.target.value)} /></Field>
-      <Lookup disabled={mutation.isPending} kind="product" load={products} onChoose={product => setLines(current => [...current, { key: crypto.randomUUID(), product, zone: "Ambient", quantity: "1" }])} />
+      <Lookup disabled={mutation.isPending} kind="product" load={products} onChoose={product => setLines(current => [...current, { key: newUuid(), product, zone: "Ambient", quantity: "1" }])} />
       {lines.length === 0 && <p role="status">{t("purchase.noLines")}</p>}
       {lines.map((line, index) => <section key={line.key} aria-label={t("purchase.line") + " " + (index + 1)} className="space-y-3 rounded-lg border p-3">
         <p className="break-words text-sm font-medium">{index + 1}. {line.product.label}</p>

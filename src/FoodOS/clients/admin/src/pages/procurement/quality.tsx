@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function QualityDialog({ purchaseOrderId, lineId, result, onClose }: { purchaseOrderId: string; lineId: string; result: "pass" | "fail"; onClose: () => void }) {
   const t = useT();
@@ -27,7 +28,7 @@ export function QualityDialog({ purchaseOrderId, lineId, result, onClose }: { pu
     if (!valid || mutation.isPending) return;
     const body = { purchaseOrderId, lineId, quantity: Number(quantity), sampleQty: Number(sampleQty), lotNo: lotNo.trim(), expiryDate, manufacturedOn: manufacturedOn || null, note: note.trim() || null };
     const serialized = JSON.stringify(body);
-    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: crypto.randomUUID() };
+    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newUuid() };
     mutation.mutate({ body, result, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent>

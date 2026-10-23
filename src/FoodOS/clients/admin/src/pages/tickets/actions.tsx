@@ -12,6 +12,7 @@ import { Field } from "@/components/list";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { describe } from "@/pages/customers/request-error";
 import { ApiRequestError } from "@/lib/api-client";
+import { newUuid } from "@/lib/uuid";
 
 const grants = { assign: TicketsPermissions.Assign, resolve: TicketsPermissions.Resolve, reopen: TicketsPermissions.Reopen, close: TicketsPermissions.Close };
 function stateAllows(ticket: Ticket, action: TicketAction) {
@@ -51,7 +52,7 @@ function ActionDialog({ ticket, action, onClose }: { ticket: Ticket; action: Tic
     if (!canWrite || busy) return;
     const payload = action === "assign" ? { assigneeUserId: assignee || null } : action === "resolve" ? { resolutionNote: note.trim() || null } : {};
     const body = JSON.stringify(payload);
-    if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() };
+    if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ ticketId: ticket.id, action, payload, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent>

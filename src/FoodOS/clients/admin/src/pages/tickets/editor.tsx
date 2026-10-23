@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/list";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function TicketEditor({ ticket }: { ticket?: Ticket }) {
   const t = useT();
@@ -41,7 +42,7 @@ function EditorDialog({ ticket, onClose }: { ticket?: Ticket; onClose: () => voi
     if (!allowed || !valid || busy) return;
     const payload = { ticketId: ticket?.id, title: title.trim(), description: description.trim() || null, priority };
     const body = JSON.stringify(payload);
-    if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() };
+    if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ ...payload, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent>

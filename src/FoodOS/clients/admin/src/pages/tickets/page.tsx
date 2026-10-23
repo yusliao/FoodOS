@@ -14,6 +14,7 @@ import { TicketActions } from "./actions";
 import { TicketEditor } from "./editor";
 import { DeleteTicketButton } from "./trash";
 import { TicketAttachments } from "./attachments";
+import { newUuid } from "@/lib/uuid";
 
 export function TicketsPage() {
   const { t } = useLocale();
@@ -71,7 +72,7 @@ function TicketContent({ ticket }: { ticket: Ticket }) {
     event.preventDefault();
     const text = body.trim();
     if (!canReply || busy || !text || text.length > 8192) return;
-    if (attempt.current?.body !== text) attempt.current = { body: text, key: crypto.randomUUID() };
+    if (attempt.current?.body !== text) attempt.current = { body: text, key: newUuid() };
     mutation.mutate({ ticketId: ticket.id, body: text, key: attempt.current.key });
   }
   return <>

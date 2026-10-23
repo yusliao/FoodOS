@@ -12,6 +12,7 @@ import { env } from "@/env";
 import { tokenStore } from "@/auth/token-store";
 import { issueSseToken } from "@/sse/sse-api";
 import { getCulture } from "@/i18n/locale-store";
+import { newUuid } from "@/lib/uuid";
 
 export type SseStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 
@@ -45,9 +46,7 @@ const INITIAL_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30_000;
 
 function randomId() {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return newUuid();
 }
 
 function tryParseJson(raw: string): unknown {

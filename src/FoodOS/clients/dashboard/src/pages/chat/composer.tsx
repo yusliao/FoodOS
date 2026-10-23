@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
 import { useUserDisplay } from "@/lib/use-user-display";
 import { MentionPicker } from "@/pages/chat/mention-picker";
+import { newUuid } from "@/lib/uuid";
 
 type PendingAttachment = {
   fileAssetId: string;
@@ -188,7 +189,7 @@ export function Composer({
         channelId,
         body: text,
         parentMessageId,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: newUuid(),
         attachments: attachment ? [attachment] : [],
       }),
     onMutate: ({ text, clientId, attachment }) => {
@@ -263,7 +264,7 @@ export function Composer({
     if (!trimmed && !pendingAttachment) return;
     mutation.mutate({
       text: trimmed,
-      clientId: crypto.randomUUID(),
+      clientId: newUuid(),
       attachment: pendingAttachment,
     });
   };

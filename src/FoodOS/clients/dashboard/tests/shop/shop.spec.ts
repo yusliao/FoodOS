@@ -262,6 +262,36 @@ test.describe("shop/cart", () => {
     expect(operatorRequests).toEqual([]);
   });
 
+  test("places an order when crypto.randomUUID is unavailable over plain HTTP", async ({ page }) => {
+    // Browsers only expose crypto.randomUUID in secure contexts; an IP-only HTTP deployment has none.
+    await page.addInitScript(() => {
+      Object.defineProperty(Crypto.prototype, "randomUUID", { value: undefined, configurable: true });
+    });
+    await mockShopApis(page, { cartLines: [{ productId: PRODUCT.id, quantity: 2 }] });
+    const idempotencyKeys: string[] = [];
+    await page.route("**/api/v1/shop/orders", async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      idempotencyKeys.push(route.request().headers()["idempotency-key"] ?? "");
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ORDER_ID),
+      });
+    });
+    await mockJsonResponse(page, `**/api/v1/shop/orders/${ORDER_ID}`, reservedOrder());
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    await page.goto("/shop/cart");
+    expect(await page.evaluate(() => typeof crypto.randomUUID)).toBe("undefined");
+    await page.getByRole("button", { name: "Place order" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/shop/orders/${ORDER_ID}$`));
+    expect(idempotencyKeys).toHaveLength(1);
+    expect(idempotencyKeys[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(pageErrors).toEqual([]);
+  });
+
   test("blocks direct cart access before the cart request when Shop.Order is absent", async ({ page }) => {
     await mockShopApis(page, { permissions: ["Permissions.Ordering.Shop.View"] });
     const cartRequests: string[] = [];

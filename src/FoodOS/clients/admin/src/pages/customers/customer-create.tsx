@@ -8,6 +8,7 @@ import { Field } from "@/components/list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "./request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function CustomerCreate({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -28,7 +29,7 @@ export function CustomerCreate({ onClose }: { onClose: () => void }) {
     if (mutation.isPending || !tenantValid || !code.trim() || !name.trim()) return;
     const input = { customerTenantId: tenant.trim(), code: code.trim(), name: name.trim(), creditHold };
     const body = JSON.stringify(input);
-    if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() };
+    if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ input, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => { if (!open && !mutation.isPending) onClose(); }}>

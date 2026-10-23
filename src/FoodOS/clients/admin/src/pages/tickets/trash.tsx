@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EntityPageHeader, ErrorBand, LoadingRow, Pagination } from "@/components/list";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function DeleteTicketButton({ ticket }: { ticket: Ticket }) {
   const t = useT();
@@ -49,7 +50,7 @@ export function TicketTrashPage() {
     {query.isError && <div><ErrorBand message={describe(query.error, t("tickets.failed"))} /><Button variant="outline" onClick={() => { if (allowed) void query.refetch(); }} disabled={query.isFetching}>{t("workbench.retry")}</Button></div>}
     {query.isSuccess && <>
       {query.data.items.length === 0 && <p role="status">{t("tickets.trashEmpty")}</p>}
-      <div className="grid gap-4 md:grid-cols-2">{query.data.items.map(ticket => <article key={ticket.id} className="min-w-0 space-y-2 rounded-xl border p-4"><h2 className="break-words font-semibold">{ticket.title}</h2><p className="break-all">{ticket.number} · {ticket.customerTenantId ?? "—"}</p><Button variant="outline" disabled={!allowed || mutation.isPending} onClick={() => { mutation.reset(); key.current = crypto.randomUUID(); setTarget(ticket); }}>{t("tickets.restore")}</Button></article>)}</div>
+      <div className="grid gap-4 md:grid-cols-2">{query.data.items.map(ticket => <article key={ticket.id} className="min-w-0 space-y-2 rounded-xl border p-4"><h2 className="break-words font-semibold">{ticket.title}</h2><p className="break-all">{ticket.number} · {ticket.customerTenantId ?? "—"}</p><Button variant="outline" disabled={!allowed || mutation.isPending} onClick={() => { mutation.reset(); key.current = newUuid(); setTarget(ticket); }}>{t("tickets.restore")}</Button></article>)}</div>
       <Pagination page={page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} shown={query.data.items.length} hasPrev={query.data.hasPrevious} hasNext={query.data.hasNext} fetching={query.isFetching || mutation.isPending} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
     </>}
     <ConfirmDialog open={!!target && allowed} title={t("tickets.restore")} description={<>{target?.number} · {target?.title}{mutation.isError && <span role="alert" className="mt-3 block">{describe(mutation.error, t("tickets.failed"))}</span>}</>} confirmLabel={t("tickets.restore")} pending={mutation.isPending} onOpenChange={open => { if (!open && !mutation.isPending) { setTarget(null); mutation.reset(); } }} onConfirm={() => { if (allowed && target && !mutation.isPending) mutation.mutate({ id: target.id, key: key.current }); }} />

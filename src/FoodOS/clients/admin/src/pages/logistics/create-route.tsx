@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function CreateRouteDialog({ warehouse, canVehicles, onClose }: { warehouse: WarehouseDto; canVehicles: boolean; onClose: () => void }) {
   const t = useT();
@@ -27,7 +28,7 @@ export function CreateRouteDialog({ warehouse, canVehicles, onClose }: { warehou
     if (!valid || mutation.isPending) return;
     const body = { warehouseId: warehouse.id, code: code.trim(), storeIds: selected.map(store => store.id), defaultVehicleId: canVehicles ? vehicle : null };
     const serialized = JSON.stringify(body);
-    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: crypto.randomUUID() };
+    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newUuid() };
     mutation.mutate({ body, key: attempt.current.key });
   }
   function move(index: number, offset: number) { setSelected(current => { const next = [...current]; [next[index], next[index + offset]] = [next[index + offset], next[index]]; return next; }); }

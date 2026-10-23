@@ -10,6 +10,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { useT } from "@/i18n/locale-provider";
 import { LogisticsPermissions } from "@/lib/permissions";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 const key = ["logistics", "vehicles"] as const;
 export function VehiclesPage() {
@@ -53,7 +54,7 @@ function CreateVehicleDialog({ onClose }: { onClose: () => void }) {
     if (!valid || mutation.isPending) return;
     const body = { plate: plate.trim(), compartmentZones: zones.trim(), payloadKg: Number(payload) };
     const serialized = JSON.stringify(body);
-    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: crypto.randomUUID() };
+    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newUuid() };
     mutation.mutate({ body, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent>

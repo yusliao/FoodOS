@@ -27,6 +27,7 @@ import { useShopStore } from "./store-context";
 import { ShopOrderAccess } from "./order-access";
 import { quoteSourceLabel } from "./shop-helpers";
 import { useShopProducts } from "./use-shop-data";
+import { newUuid } from "@/lib/uuid";
 
 const DESKTOP_GRID = "grid-cols-[1fr_90px_120px_110px_40px]";
 
@@ -237,7 +238,7 @@ function ShopCartBody() {
               disabled={!canPlace || !store || lines.length === 0 || placeMutation.isPending}
               onClick={() =>
                 store &&
-                canPlace && placeMutation.mutate({ storeId: store.id, idempotencyKey: crypto.randomUUID() })
+                canPlace && placeMutation.mutate({ storeId: store.id, idempotencyKey: newUuid() })
               }
             >
               {placeMutation.isPending

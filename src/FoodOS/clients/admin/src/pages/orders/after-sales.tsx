@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocale, useT } from "@/i18n/locale-provider";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 export function AfterSales({ order, canManage }: { order: SalesOrder; canManage: boolean }) {
   const { t, culture } = useLocale();
@@ -47,7 +48,7 @@ function AfterSalesDialog({ order, onClose }: { order: SalesOrder; onClose: () =
     if (!valid || mutation.isPending) return;
     const body = { orderId: order.id, orderLineId: lineId, type, quantity: Number(quantity), reason: reason.trim() };
     const serialized = JSON.stringify(body);
-    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: crypto.randomUUID() };
+    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newUuid() };
     mutation.mutate({ body, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent>

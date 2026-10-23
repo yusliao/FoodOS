@@ -13,6 +13,7 @@ import { CatalogPermissions, InventoryPermissions, ProcurementPermissions } from
 import { describe } from "@/pages/customers/request-error";
 import { WmsStatusNotice } from "@/components/wms-status";
 import { CreatePurchaseOrderDialog } from "./create-purchase-order";
+import { newUuid } from "@/lib/uuid";
 
 const key = ["procurement", "purchase-orders"] as const;
 export function PurchaseOrdersPage() {
@@ -59,7 +60,7 @@ function SendButton({ order }: { order: PurchaseOrder }) {
   const [open, setOpen] = useState(false);
   const attempt = useRef<string | null>(null);
   const mutation = useMutation({ mutationFn: sendPurchaseOrder, onSuccess: async () => { await cache.invalidateQueries({ queryKey: key }); setOpen(false); } });
-  return <><Button onClick={() => setOpen(true)}>{t("purchase.send")}</Button><ConfirmDialog open={open} onOpenChange={setOpen} title={t("purchase.send")} description={<>{t("purchase.sendHint")}{mutation.isError && <span role="alert" className="block">{describe(mutation.error, t("purchase.failed"))}</span>}</>} confirmLabel={t("purchase.send")} pending={mutation.isPending} onConfirm={() => { attempt.current ??= crypto.randomUUID(); mutation.mutate({ id: order.id, key: attempt.current }); }} /></>;
+  return <><Button onClick={() => setOpen(true)}>{t("purchase.send")}</Button><ConfirmDialog open={open} onOpenChange={setOpen} title={t("purchase.send")} description={<>{t("purchase.sendHint")}{mutation.isError && <span role="alert" className="block">{describe(mutation.error, t("purchase.failed"))}</span>}</>} confirmLabel={t("purchase.send")} pending={mutation.isPending} onConfirm={() => { attempt.current ??= newUuid(); mutation.mutate({ id: order.id, key: attempt.current }); }} /></>;
 }
 
 function AppointmentDialog({ order, onClose }: { order: PurchaseOrder; onClose: () => void }) {
@@ -74,7 +75,7 @@ function AppointmentDialog({ order, onClose }: { order: PurchaseOrder; onClose: 
     if (!dockSlot.trim() || mutation.isPending) return;
     const input = { id: order.id, dockSlot: dockSlot.trim(), vehicleNo: vehicleNo.trim() || null };
     const body = JSON.stringify(input);
-    if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() };
+    if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ ...input, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent><DialogHeader><DialogTitle>{t("purchase.appoint")}</DialogTitle><DialogDescription>{t("purchase.appointHint")}</DialogDescription></DialogHeader><form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="space-y-4"><Field id="po-dock" label={t("purchase.dock")} required><Input id="po-dock" required value={dockSlot} onChange={event => setDockSlot(event.target.value)} /></Field><Field id="po-vehicle" label={t("purchase.vehicle")}><Input id="po-vehicle" value={vehicleNo} onChange={event => setVehicleNo(event.target.value)} /></Field></fieldset>{mutation.isError && <ErrorBand message={describe(mutation.error, t("purchase.failed"))} />}</DialogBody><DialogFooter><Button variant="outline" type="button" onClick={onClose} disabled={mutation.isPending}>{t("chrome.cancel")}</Button><Button type="submit" disabled={!dockSlot.trim() || mutation.isPending}>{t("purchase.appoint")}</Button></DialogFooter></form></DialogContent></Dialog>;

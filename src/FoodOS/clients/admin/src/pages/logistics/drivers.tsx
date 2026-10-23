@@ -13,6 +13,7 @@ import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { IdentityPermissions, LogisticsPermissions } from "@/lib/permissions";
 import { describe } from "@/pages/customers/request-error";
+import { newUuid } from "@/lib/uuid";
 
 const key = ["logistics", "drivers"] as const;
 function label(user: UserDto) { return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.userName || user.id; }
@@ -56,7 +57,7 @@ function CreateDriverDialog({ onClose }: { onClose: () => void }) {
     if (!valid || !selected || mutation.isPending) return;
     const body = { userId: selected.id, phone: phone.trim() };
     const serialized = JSON.stringify(body);
-    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: crypto.randomUUID() };
+    if (attempt.current?.body !== serialized) attempt.current = { body: serialized, key: newUuid() };
     mutation.mutate({ body, key: attempt.current.key });
   }
   return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent>
