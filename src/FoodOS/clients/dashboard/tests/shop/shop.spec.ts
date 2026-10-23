@@ -115,7 +115,7 @@ test.describe("shop/catalog", () => {
     await page.goto("/shop/catalog");
     await expect(page.getByText(label, { exact: true }).last()).toBeVisible();
     await expect(page.getByText("Out of stock", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^add/i }).last()).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^add/i }).last()).toBeEnabled();
     await page.goto(`/shop/products/${PRODUCT.id}`);
     await expect(page.getByText(label, { exact: true }).last()).toBeVisible();
     await expect(page.getByText("Out of stock", { exact: true })).toHaveCount(0);
@@ -138,12 +138,12 @@ test.describe("shop/catalog", () => {
     expect(operatorRequests).toEqual([]);
   });
 
-  test("disables add when the customer product is unavailable", async ({ page }) => {
+  test("keeps add enabled when the customer product is unavailable", async ({ page }) => {
     await mockShopApis(page, { available: 0 });
     await page.goto("/shop/catalog");
 
     await expect(page.getByText("Out of stock").last()).toBeVisible();
-    await expect(page.getByRole("button", { name: /^add/i }).last()).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^add/i }).last()).toBeEnabled();
   });
 
   test("adds the quoted SKU to the cart", async ({ page }) => {

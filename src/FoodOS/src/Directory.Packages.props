@@ -77,12 +77,12 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Identity.Stores" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.8" />
     <PackageVersion Include="MimeKit" Version="4.17.0" />
@@ -122,13 +122,22 @@
   </ItemGroup>
   <ItemGroup Label="Transitive security pins">
     <!-- Pulled transitively by Microsoft.AspNetCore.SignalR.StackExchangeRedis; versions
-         below 2.5.301 fail NuGet audit (NU1903, GHSA-hv8m-jj95-wg3x: LZ4 decompression
-         AccessViolation). Transitive pinning is enabled, so this entry alone bumps it.
+         below 2.5.303 fail NuGet audit (GHSA-hv8m-jj95-wg3x: LZ4 decompression
+         AccessViolation; GHSA-qhrr-8q5h-9q3h: nested arrays exceed buffer limits).
+         Transitive pinning is enabled, so this entry alone bumps it.
          Remove once the SignalR backplane package depends on a patched version itself. -->
-    <PackageVersion Include="MessagePack" Version="2.5.301" />
+    <PackageVersion Include="MessagePack" Version="2.5.303" />
     <!-- Servicing fixes for transitive dependencies. Keep these pins until their
          direct parents require the patched versions. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
+    <!-- 10.0.0–10.0.12 fail NuGet audit (Xml: GHSA-7hqp-7c5m-4vq6, GHSA-c399-9853-6jmj,
+         GHSA-r955-8q5j-3h83; Pkcs: GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7). -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+    <!-- Pulled by Microsoft.AspNetCore.SignalR.Client 10.0.8 (Integration.Tests only);
+         10.0.0–10.0.12 fail NuGet audit (GHSA-334f-vvp4-7g6p). 10.0.13 requires
+         Microsoft.Extensions.Options and DependencyInjection.Abstractions >= 10.0.13,
+         which is why only those two Extensions pins above are on 10.0.13. -->
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Common" Version="10.0.13" />
   </ItemGroup>
 </Project>

@@ -81,7 +81,7 @@ export function ShopProductPage() {
     addMutation.mutate({ storeId: store.id, lines });
   };
 
-  const canAdd = canOrder && !!store && !!product && !out && qty > 0;
+  const canAdd = canOrder && !!store && !!product && qty > 0;
 
   return (
     <div className="space-y-5">

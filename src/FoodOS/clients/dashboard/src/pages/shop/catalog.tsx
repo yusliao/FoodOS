@@ -202,7 +202,7 @@ export function ShopCatalogPage() {
                     <Button
                       size="sm"
                       className="ml-auto h-8"
-                      disabled={!canOrder || !store || out || addMutation.isPending}
+                      disabled={!canOrder || !store || addMutation.isPending}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -252,7 +252,7 @@ export function ShopCatalogPage() {
                     <Button
                       size="sm"
                       className="h-8"
-                      disabled={!canOrder || !store || out || addMutation.isPending}
+                      disabled={!canOrder || !store || addMutation.isPending}
                       onClick={() => onAdd(product)}
                     >
                       <Plus className="size-3.5" />

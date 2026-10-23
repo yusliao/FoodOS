@@ -2,6 +2,10 @@
 
 本指南与 [OpenAPI 契约](foodos-wms-v1.openapi.yaml) 一并交付仓库方。OpenAPI 是报文与接口的权威定义；本文说明双方职责、映射口径和联调顺序。
 
+分方向的开发说明：
+- [FoodOS 仓储事实回传接口说明](FoodOS-WMS-回传接口说明.md)：WMS 调用 FoodOS。
+- [FoodOS 需要 WMS 提供的接口与模型信息](FoodOS-WMS-需对方提供的接口与模型.md)：FoodOS 调用 WMS，以及需要仓库方提供的资料。
+
 ## 1. 权威边界
 
 - WMS 是实物库存、质检和仓内执行的唯一权威；仓内是否实际占用库存以 WMS 为准。
