@@ -54,7 +54,11 @@ services:
       HangfireOptions__Password: ${FOODOS_HANGFIRE_PASSWORD:?set FOODOS_HANGFIRE_PASSWORD}
       CorsOptions__AllowedOrigins__0: ${FOODOS_ADMIN_URL:?set FOODOS_ADMIN_URL}
       CorsOptions__AllowedOrigins__1: ${FOODOS_DASHBOARD_URL:?set FOODOS_DASHBOARD_URL}
+      # SignalR negotiate is credentialed, so "*" does not cover these headers; list them explicitly.
+      # Indexes 0-4 come from appsettings; keep these for releases built before the list included them.
       CorsOptions__AllowedHeaders__5: x-requested-with
+      CorsOptions__AllowedHeaders__6: x-signalr-user-agent
+      CorsOptions__AllowedHeaders__7: x-fsh-app
       OriginOptions__OriginUrl: ${FOODOS_API_URL:?set FOODOS_API_URL}
       Storage__Provider: s3
       Storage__S3__ServiceUrl: ${FOODOS_MINIO_URL:?set FOODOS_MINIO_URL}
