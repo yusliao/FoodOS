@@ -5,6 +5,7 @@ using FSH.Modules.Inventory.Contracts.v1.Stock;
 using FSH.Modules.Ordering.Contracts.v1.AfterSales;
 using FSH.Modules.Ordering.Contracts.v1.Carts;
 using FSH.Modules.Ordering.Contracts.v1.CustomerOrgs;
+using FSH.Modules.Ordering.Contracts.v1.OrderDesk;
 using FSH.Modules.Ordering.Contracts.v1.Orders;
 using FSH.Modules.Ordering.Contracts.v1.Shop;
 using FSH.Modules.Ordering.Contracts.v1.StoreAccess;
@@ -49,6 +50,7 @@ public sealed class ExternalWmsBoundaryTests(FshWebApplicationFactory factory)
             typeof(AmendOrderCommand), typeof(CancelOrderCommand),
             typeof(CreateStoreCommand), typeof(UpdateStoreCommand), typeof(SetUserStoreAccessCommand),
             typeof(UpdateCustomerOrgCommand),
+            typeof(ReplaceStoreContactsCommand), typeof(PlaceOrderDeskOrderCommand),
             typeof(CreateCustomerOrgCommand), typeof(CreateAfterSalesTicketCommand),
             typeof(CreateShopAfterSalesCommand), typeof(ReconcileOrderCommand),
             typeof(CreateVehicleCommand), typeof(CreateDriverCommand), typeof(CreateRouteCommand),

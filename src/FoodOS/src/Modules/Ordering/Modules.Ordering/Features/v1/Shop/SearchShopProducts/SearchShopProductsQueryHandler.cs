@@ -76,7 +76,7 @@ public sealed class SearchShopProductsQueryHandler(
             Items = products.Items.Select(product =>
             {
                 var quote = quoteByProduct[product.Id];
-                return ToShopDto(product, quote, availability[(Normalize(product.Sku), Normalize(product.BaseUom))]);
+                return ToShopDto(product, quote, ProductAvailability.For(availability, product.Sku, product.BaseUom));
             }).ToList(),
             PageNumber = products.PageNumber,
             PageSize = products.PageSize,
@@ -117,7 +117,7 @@ public sealed class SearchShopProductsQueryHandler(
         return ToShopDto(
             product,
             quote,
-            availability[(Normalize(product.Sku), Normalize(product.BaseUom))]);
+            ProductAvailability.For(availability, product.Sku, product.BaseUom));
     }
 
     private static ShopProductDto ToShopDto(
@@ -162,30 +162,9 @@ public sealed class SearchShopProductsQueryHandler(
         return warehouse?.Code;
     }
 
-    private async Task<IReadOnlyDictionary<(string Sku, string Uom), WmsAvailabilityResult>> GetAvailabilityAsync(
+    private Task<IReadOnlyDictionary<(string Sku, string Uom), WmsAvailabilityResult>> GetAvailabilityAsync(
         string? warehouseCode,
         IReadOnlyCollection<(string Sku, string Uom, decimal Quantity)> products,
-        CancellationToken cancellationToken)
-    {
-        if (warehouseCode is null)
-        {
-            return products.ToDictionary(
-                product => (Normalize(product.Sku), Normalize(product.Uom)),
-                product => new WmsAvailabilityResult(product.Sku, product.Uom, 0, false, null, "warehouseMissing"));
-        }
-
-        var result = await availabilityReader.GetAvailabilityAsync(
-                warehouseCode,
-                products.Select(product => new WmsAvailabilityRequest(
-                    product.Sku,
-                    product.Uom,
-                    product.Quantity)).ToList(),
-                cancellationToken)
-            .ConfigureAwait(false);
-        return result.ToDictionary(
-            item => (Normalize(item.Sku), Normalize(item.Uom)),
-            item => item);
-    }
-
-    private static string Normalize(string value) => value.Trim().ToUpperInvariant();
+        CancellationToken cancellationToken) =>
+        ProductAvailability.GetAsync(availabilityReader, warehouseCode, products, cancellationToken);
 }

@@ -35,6 +35,14 @@ public static class OrderingPermissions
         public const string Reconcile = $"Permissions.{Resource}.Reconcile";
     }
 
+    /// <summary>Operator order desk: take restaurant orders by phone on the customer's behalf.</summary>
+    public static class OrderDesk
+    {
+        public const string Resource = "Ordering.OrderDesk";
+        public const string View = $"Permissions.{Resource}.View";
+        public const string Place = $"Permissions.{Resource}.Place";
+    }
+
     public static class StoreAccess
     {
         public const string Resource = "Ordering.StoreAccess";
@@ -57,5 +65,7 @@ public static class OrderingPermissions
         new("View Orders", ActionConstants.View, Orders.Resource),
         new("Manage Orders", "Manage", Orders.Resource),
         new("Reconcile Orders", "Reconcile", Orders.Resource),
+        new("Use Order Desk", ActionConstants.View, OrderDesk.Resource),
+        new("Place Order Desk Orders", "Place", OrderDesk.Resource),
     ];
 }

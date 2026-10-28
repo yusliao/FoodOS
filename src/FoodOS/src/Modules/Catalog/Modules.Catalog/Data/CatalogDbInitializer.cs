@@ -18,11 +18,40 @@ public sealed class CatalogDbInitializer(
     }
 
     /// <summary>
-    /// Catalog has NO per-tenant auto-seed. A fresh tenant comes up with an empty
+    /// Catalog has NO per-tenant content seed. A fresh tenant comes up with an empty
     /// catalog and is expected to be populated by the operator via the API / UI.
     /// Demo content for the <c>acme</c> and <c>globex</c> tenants lives in the
     /// DbMigrator's <c>seed-demo</c> command, which calls
     /// <see cref="CatalogSeedData"/> directly under a tenant-scoped DbContext.
+    /// The only work here is the search text backfill below.
     /// </summary>
-    public Task SeedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task SeedAsync(CancellationToken cancellationToken)
+    {
+        // Idempotent backfill: products created before Product.SearchText existed get it computed once.
+        int updated = 0;
+        while (true)
+        {
+            var batch = await dbContext.Products
+                .Where(product => product.SearchText == string.Empty)
+                .OrderBy(product => product.Id)
+                .Take(500)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (batch.Count == 0) break;
+
+            foreach (var product in batch)
+            {
+                product.RefreshSearchText();
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            dbContext.ChangeTracker.Clear();
+            updated += batch.Count;
+        }
+
+        if (updated > 0 && logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("[Catalog] backfilled search text for {Count} product(s)", updated);
+        }
+    }
 }

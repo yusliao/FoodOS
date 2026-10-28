@@ -14,4 +14,8 @@
 		<ProjectReference Include="..\..\Files\Modules.Files.Contracts\Modules.Files.Contracts.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<PackageReference Include="ToolGood.Words.Pinyin" />
+	</ItemGroup>
+
 </Project>

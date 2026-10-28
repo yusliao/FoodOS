@@ -62,7 +62,8 @@ internal static class OrderingMappings
                     lot.ShippedQty,
                     lot.DeliveredQty,
                     lot.ReturnedQty)).ToList())).ToList(),
-            routeId);
+            routeId,
+            order.PlacementChannel?.ToString());
 
     public static AfterSalesTicketDto ToDto(this AfterSalesTicket ticket)
         => new(

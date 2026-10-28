@@ -35,16 +35,11 @@ public sealed class SearchProductsQueryHandler(CatalogDbContext dbContext)
             q = q.Where(p => p.IsActive == active);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            string term = query.Search.Trim();
-            q = q.Where(p =>
-                EF.Functions.ILike(p.Name, $"%{term}%") ||
-                EF.Functions.ILike(p.Sku, $"%{term}%") ||
-                EF.Functions.ILike(p.Slug, $"%{term}%"));
-        }
-
-        q = ApplySort(q, query.SortBy, query.SortDir);
+        var words = ProductSearch.Words(query.Search);
+        q = ProductSearch.Match(q, words);
+        q = words.Length > 0 && string.Equals(query.SortBy, "relevance", StringComparison.OrdinalIgnoreCase)
+            ? ProductSearch.OrderByRelevance(q, words)
+            : ApplySort(q, query.SortBy, query.SortDir);
 
         long total = await q.LongCountAsync(cancellationToken).ConfigureAwait(false);
         var products = await q

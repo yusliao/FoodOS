@@ -2,6 +2,7 @@ using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Persistence;
 using FSH.Framework.Shared.Constants;
 using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Identity.Contracts.Authorization;
 using FSH.Modules.Identity.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,8 @@ internal sealed class IdentityDbInitializer(
     TimeProvider timeProvider,
     IMultiTenantContextAccessor<AppTenantInfo> multiTenantContextAccessor,
     ITenantInitialPasswordBuffer passwordBuffer,
-    IConfiguration configuration) : IDbInitializer
+    IConfiguration configuration,
+    IEnumerable<IOperatorRoleTemplateSource> operatorRoleTemplates) : IDbInitializer
 {
     public async Task MigrateAsync(CancellationToken cancellationToken)
     {
@@ -35,6 +37,7 @@ internal sealed class IdentityDbInitializer(
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
         await SeedRolesAsync(cancellationToken);
+        await SeedOperatorRoleTemplatesAsync(cancellationToken);
         await SeedSystemGroupsAsync(cancellationToken);
         await SeedAdminUserAsync(cancellationToken);
     }
@@ -69,6 +72,43 @@ internal sealed class IdentityDbInitializer(
                     ? PermissionConstants.Admin.Concat(PermissionConstants.Root).DistinctBy(p => p.Name).ToList()
                     : PermissionConstants.CustomerAdmin.ToList();
                 await AssignPermissionsToRoleAsync(context, permissions, role, cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates the operator positions modules contribute (for example customer service) in the root
+    /// tenant. Only missing roles are created, so permissions an administrator changed later are kept.
+    /// </summary>
+    private async Task SeedOperatorRoleTemplatesAsync(CancellationToken cancellationToken)
+    {
+        if (multiTenantContextAccessor.MultiTenantContext.TenantInfo?.Id != MultitenancyConstants.Root.Id)
+        {
+            return;
+        }
+
+        foreach (var template in operatorRoleTemplates.SelectMany(source => source.GetTemplates()))
+        {
+            if (await roleManager.Roles.AnyAsync(role => role.Name == template.Name, cancellationToken))
+            {
+                continue;
+            }
+
+            var role = new FshRole(template.Name, template.Description, RoleAudiences.Operator);
+            var created = await roleManager.CreateAsync(role);
+            if (!created.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Could not create operator role '{template.Name}': {string.Join("; ", created.Errors.Select(error => error.Description))}");
+            }
+
+            var permissions = PermissionConstants.Admin
+                .Where(permission => template.Permissions.Contains(permission.Name, StringComparer.Ordinal))
+                .ToList();
+            await AssignPermissionsToRoleAsync(context, permissions, role, cancellationToken);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Seeded operator role '{Role}' with {Count} permission(s).", template.Name, permissions.Count);
             }
         }
     }

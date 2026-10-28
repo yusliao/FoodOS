@@ -23,4 +23,5 @@ public sealed record ShopOrderDto(
     string WarehouseConfirmationStatus,
     string? WarehouseConfirmationDetail,
     DateTimeOffset? WarehouseConfirmationUpdatedAt,
-    IReadOnlyList<ShopOrderLineDto> Lines);
+    IReadOnlyList<ShopOrderLineDto> Lines,
+    string? PlacementChannel = null);

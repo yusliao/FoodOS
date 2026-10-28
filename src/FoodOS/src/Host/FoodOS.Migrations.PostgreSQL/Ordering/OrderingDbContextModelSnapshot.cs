@@ -306,6 +306,13 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.Property<DateTimeOffset?>("PlacedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("PlacedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PlacementChannel")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("PlacementIdempotencyKey")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -538,6 +545,46 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                     b.ToTable("Stores", "ordering");
                 });
 
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.StoreContact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("PhoneDigits")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PhoneDigits");
+
+                    b.HasIndex("StoreId", "PhoneDigits", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_StoreContacts_StoreId_PhoneDigits");
+
+                    b.ToTable("StoreContacts", "ordering");
+                });
+
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.CartLine", b =>
                 {
                     b.HasOne("FSH.Modules.Ordering.Domain.Cart", null)
@@ -580,6 +627,15 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.StoreContact", b =>
+                {
+                    b.HasOne("FSH.Modules.Ordering.Domain.Store", null)
+                        .WithMany("Contacts")
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.Cart", b =>
                 {
                     b.Navigation("Lines");
@@ -593,6 +649,11 @@ namespace FoodOS.Migrations.PostgreSQL.Ordering
             modelBuilder.Entity("FSH.Modules.Ordering.Domain.SalesOrderLine", b =>
                 {
                     b.Navigation("Lots");
+                });
+
+            modelBuilder.Entity("FSH.Modules.Ordering.Domain.Store", b =>
+                {
+                    b.Navigation("Contacts");
                 });
 #pragma warning restore 612, 618
         }

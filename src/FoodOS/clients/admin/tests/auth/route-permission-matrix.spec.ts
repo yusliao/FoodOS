@@ -11,7 +11,7 @@ const restricted = [
   "/tickets/trash",
   "/procurement/purchase-orders", "/procurement/suppliers",
   "/logistics/vehicles", "/logistics/drivers", "/logistics/routes",
-  "/orders", "/orders/:id", "/customers", "/stores",
+  "/orders", "/orders/:id", "/order-desk", "/customers", "/stores",
   "/catalog", "/catalog/products", "/catalog/brands", "/catalog/categories", "/catalog/pricing",
   "/tenants", "/tenants/new", "/tenants/:id",
   "/users", "/users/new", "/users/:id",

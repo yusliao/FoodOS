@@ -55,6 +55,7 @@ const DriversPage = lazyNamed(() => import("@/pages/logistics/drivers"), "Driver
 const DeliveryRoutesPage = lazyNamed(() => import("@/pages/logistics/routes"), "DeliveryRoutesPage");
 const PurchaseOrdersPage = lazyNamed(() => import("@/pages/procurement/purchase-orders"), "PurchaseOrdersPage");
 const OrderDetailPage = lazyNamed(() => import("@/pages/orders/orders"), "OrderDetailPage");
+const OrderDeskPage = lazyNamed(() => import("@/pages/order-desk/order-desk"), "OrderDeskPage");
 const TenantDetailPage = lazyNamed(() => import("@/pages/tenants/detail"), "TenantDetailPage");
 const UsersListPage = lazyNamed(() => import("@/pages/users/list"), "UsersListPage");
 const UserDetailPage = lazyNamed(() => import("@/pages/users/detail"), "UserDetailPage");
@@ -118,6 +119,7 @@ export const router = createBrowserRouter([
           { path: "logistics/routes", element: <RouteGuard perms={[LogisticsPermissions.Routes.View]}><DeliveryRoutesPage /></RouteGuard> },
           { path: "orders", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrdersPage /></RouteGuard> },
           { path: "orders/:id", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrderDetailPage /></RouteGuard> },
+          { path: "order-desk", element: <RouteGuard perms={[OrderingPermissions.OrderDesk.View]}><OrderDeskPage /></RouteGuard> },
           { path: "customers", element: <RouteGuard perms={[OrderingPermissions.Customers.View]}><CustomersPage /></RouteGuard> },
           { path: "stores", element: <RouteGuard perms={[OrderingPermissions.Stores.View]}><StoresPage /></RouteGuard> },
           { path: "catalog", element: <Navigate to="/catalog/products" replace /> },

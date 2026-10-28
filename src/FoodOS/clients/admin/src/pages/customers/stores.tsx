@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "./request-error";
 import { StoreCreate } from "./store-create";
+import { StoreContacts } from "./store-contacts";
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,6 +77,7 @@ export function StoresPage() {
         {update.isError && <ErrorBand message={describe(update.error, t("partners.requestFailed"))} />}
         <div className="flex gap-2"><Button type="submit" disabled={update.isPending || !draftName.trim() || !draftAddress.trim()}>{t("partners.saveChanges")}</Button><Button type="button" variant="outline" onClick={() => setEditingId(null)}>{t("partners.cancel")}</Button></div>
       </form>}
+      <StoreContacts storeId={store.id} canEdit={canEdit} />
     </article>)}</div>}
     {creating && canCreate && canChoose && <StoreCreate customerOrgId={customer} onClose={() => setCreating(false)} />}
   </div>;

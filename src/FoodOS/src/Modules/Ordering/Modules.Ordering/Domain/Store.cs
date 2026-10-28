@@ -14,6 +14,9 @@ public sealed class Store : AggregateRoot<Guid>, IOperatorOwnedEntity
     public string? DeliveryWindow { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
+    private readonly List<StoreContact> _contacts = [];
+    public IReadOnlyList<StoreContact> Contacts => _contacts;
+
     private Store() { }
 
     public static Store Create(
@@ -88,6 +91,26 @@ public sealed class Store : AggregateRoot<Guid>, IOperatorOwnedEntity
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
         Name = name.Trim();
         Address = address.Trim();
+    }
+
+    /// <summary>Replaces the caller contacts. Phones are unique per store by their digits.</summary>
+    public IReadOnlyList<StoreContact> ReplaceContacts(IReadOnlyCollection<(string Name, string Phone)> contacts)
+    {
+        ArgumentNullException.ThrowIfNull(contacts);
+        if (contacts.Count > StoreContact.MaxPerStore)
+        {
+            throw new ArgumentException($"A store can have at most {StoreContact.MaxPerStore} contacts.", nameof(contacts));
+        }
+
+        var replacement = contacts.Select(contact => StoreContact.Create(Id, contact.Name, contact.Phone)).ToList();
+        if (replacement.Select(contact => contact.PhoneDigits).Distinct(StringComparer.Ordinal).Count() != replacement.Count)
+        {
+            throw new ArgumentException("Each contact phone can only be listed once per store.", nameof(contacts));
+        }
+
+        _contacts.Clear();
+        _contacts.AddRange(replacement);
+        return _contacts;
     }
 
     public void AssignCustomerTenant(string customerTenantId)

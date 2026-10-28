@@ -1,3 +1,6 @@
+using FSH.Modules.Identity.Contracts.Authorization;
+using FSH.Modules.Ordering.Features.v1.Stores.StoreContacts;
+using FSH.Modules.Ordering.Features.v1.OrderDesk;
 using Asp.Versioning;
 using FSH.Framework.Persistence;
 using FSH.Framework.Shared.Constants;
@@ -60,6 +63,8 @@ public sealed class OrderingModule : IModule
         builder.Services.AddScoped<ICustomerTemplateService, CustomerTemplateService>();
         builder.Services.AddScoped<ICustomerDeliveryNotificationAudience, CustomerDeliveryNotificationAudience>();
         builder.Services.AddScoped<IWarehouseOrderFeedbackSink, WarehouseOrderFeedbackSink>();
+        builder.Services.AddScoped<PlatformOrderPlacement>();
+        builder.Services.AddSingleton<IOperatorRoleTemplateSource, OrderingRoleTemplateSource>();
         builder.Services.AddScoped<IDbInitializer, OrderingDbInitializer>();
         builder.Services.AddTransient<ReconcileReminderJob>();
         builder.Services.AddTransient<WmsOrderNotificationJob>();
@@ -97,6 +102,7 @@ public sealed class OrderingModule : IModule
         group.MapCreateStoreEndpoint();
         group.MapUpdateStoreEndpoint();
         group.MapGetStoreByIdEndpoint();
+        group.MapStoreContactsEndpoints();
         group.MapGetMyStoreAccessEndpoint();
         group.MapSetUserStoreAccessEndpoint();
         group.MapGetCartEndpoint();
@@ -109,6 +115,13 @@ public sealed class OrderingModule : IModule
         group.MapConfirmReconcileOrderEndpoint();
         group.MapSearchAfterSalesTicketsEndpoint();
         group.MapCreateAfterSalesTicketEndpoint();
+
+        endpoints
+            .MapGroup("api/v{version:apiVersion}/ordering/order-desk")
+            .WithTags("Order Desk")
+            .WithApiVersionSet(versionSet)
+            .RequireAuthorization()
+            .MapOrderDeskEndpoints();
 
         var shopGroup = endpoints
             .MapGroup("api/v{version:apiVersion}/shop")

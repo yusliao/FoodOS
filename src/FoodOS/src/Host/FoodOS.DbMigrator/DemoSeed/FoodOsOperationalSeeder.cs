@@ -527,6 +527,7 @@ internal static class FoodOsOperationalSeeder
             await GetOrCreateStoreAsync(ordering, campus.Id, DemoSeeder.Globex.Id, "CD-NK", "Campus North Kiosk", "88 Hampshire St, Cambridge", warehouseId, cancellationToken).ConfigureAwait(false),
         };
         await ordering.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureDemoStoreContactsAsync(ordering, cancellationToken).ConfigureAwait(false);
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
@@ -564,6 +565,30 @@ internal static class FoodOsOperationalSeeder
         var org = CustomerOrg.Create(normalized, name, customerTenantId: customerTenantId);
         ordering.CustomerOrgs.Add(org);
         return org;
+    }
+
+    /// <summary>Fictional 555 numbers so the order desk can recognise demo callers.</summary>
+    private static async Task EnsureDemoStoreContactsAsync(OrderingDbContext ordering, CancellationToken cancellationToken)
+    {
+        var contactsByCode = new Dictionary<string, (string Name, string Phone)[]>(StringComparer.Ordinal)
+        {
+            ["HB-DT"] = [("Harbor Downtown front desk", "617-555-0101"), ("Chef Lin", "617-555-0111")],
+            ["HB-BB"] = [("Harbor Back Bay front desk", "617-555-0102")],
+            ["CD-MN"] = [("Campus Main Cafe manager", "617-555-0201")],
+            ["CD-NK"] = [("Campus North Kiosk lead", "617-555-0202")],
+        };
+        var codes = contactsByCode.Keys.ToList();
+        var stores = await ordering.Stores
+            .Include(store => store.Contacts)
+            .Where(store => codes.Contains(store.Code))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var store in stores.Where(store => store.Contacts.Count == 0))
+        {
+            store.ReplaceContacts(contactsByCode[store.Code]);
+        }
+
+        await ordering.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Store> GetOrCreateStoreAsync(

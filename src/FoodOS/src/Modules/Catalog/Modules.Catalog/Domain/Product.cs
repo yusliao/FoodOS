@@ -21,6 +21,9 @@ public sealed class Product : AggregateRoot<Guid>, ISoftDeletable, IOperatorOwne
     public bool CatchWeight { get; private set; }
     public string? Barcode { get; private set; }
     public string? StorageNote { get; private set; }
+
+    /// <summary>Denormalized search text; see <see cref="ProductSearchText"/>.</summary>
+    public string SearchText { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
 
@@ -116,6 +119,7 @@ public sealed class Product : AggregateRoot<Guid>, ISoftDeletable, IOperatorOwne
             CreatedAtUtc = DateTime.UtcNow
         };
 
+        product.RefreshSearchText();
         product.AddDomainEvent(DomainEvent.Create((id, ts) =>
             new ProductCreatedDomainEvent(product.Id, product.Sku, product.Name, id, ts)));
 
@@ -146,6 +150,7 @@ public sealed class Product : AggregateRoot<Guid>, ISoftDeletable, IOperatorOwne
         CategoryId = categoryId;
         IsActive = isActive;
         UpdatedAtUtc = DateTime.UtcNow;
+        RefreshSearchText();
     }
 
     /// <summary>
@@ -181,6 +186,7 @@ public sealed class Product : AggregateRoot<Guid>, ISoftDeletable, IOperatorOwne
         Barcode = string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim();
         StorageNote = storageNote?.Trim();
         UpdatedAtUtc = DateTime.UtcNow;
+        RefreshSearchText();
     }
 
     public ProductTranslation UpsertTranslation(string culture, string name, string? description)
@@ -192,14 +198,20 @@ public sealed class Product : AggregateRoot<Guid>, ISoftDeletable, IOperatorOwne
         {
             existing.Update(name, description);
             UpdatedAtUtc = DateTime.UtcNow;
+            RefreshSearchText();
             return existing;
         }
 
         var translation = ProductTranslation.Create(Id, normalized, name, description);
         _translations.Add(translation);
         UpdatedAtUtc = DateTime.UtcNow;
+        RefreshSearchText();
         return translation;
     }
+
+    /// <summary>Recomputes <see cref="SearchText"/>; also used to backfill rows created before it existed.</summary>
+    public void RefreshSearchText() =>
+        SearchText = ProductSearchText.Build(Sku, Barcode, Name, _translations.Select(t => t.Name));
 
     public (string Name, string? Description) ResolveLocalizedCopy(string? culture)
     {

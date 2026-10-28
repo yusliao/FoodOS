@@ -847,6 +847,7 @@ internal sealed class DemoSeeder
         new("superadmin", "superadmin@root.com", "Super", "Admin", [RoleConstants.Admin]),
         new("operator.manager", "manager@root.com", "Maya", "Lin", ["Manager"]),
         new("operator.support", "support@root.com", "Sam", "Rivera", ["Support"]),
+        new("operator.service", "service@root.com", "Cleo", "Wang", [OrderingRoleTemplates.CustomerServiceRole]),
         new("operator.purchaser", "purchaser@root.com", "Pat", "Chen", ["Purchaser"]),
         new("operator.qc", "qc@root.com", "Quinn", "Diaz", ["QcInspector"]),
         new("operator.whlead", "whlead@root.com", "Wendy", "Lee", ["WarehouseLead"]),
@@ -922,6 +923,11 @@ internal sealed class DemoSeeder
                 TicketsPermissions.Tickets.Create,
                 TicketsPermissions.Tickets.Update,
             ]),
+
+        new(
+            OrderingRoleTemplates.CustomerServiceRole,
+            OrderingRoleTemplates.CustomerServiceDescription,
+            [.. OrderingRoleTemplates.CustomerServicePermissions, CatalogPermissions.Products.View]),
 
         new(
             "Purchaser",

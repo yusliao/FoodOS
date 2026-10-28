@@ -48,6 +48,13 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.StorageNote).HasMaxLength(512);
         builder.HasIndex(x => x.Barcode);
 
+        // Catalog, Shop and order desk search run substring matches on SearchText;
+        // a pg_trgm GIN index keeps them fast as the catalog grows.
+        builder.Property(x => x.SearchText).IsRequired().HasMaxLength(ProductSearchText.MaxLength).HasDefaultValue(string.Empty);
+        builder.HasIndex(x => x.SearchText)
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
+
         builder.HasMany(x => x.Translations)
             .WithOne()
             .HasForeignKey(t => t.ProductId)

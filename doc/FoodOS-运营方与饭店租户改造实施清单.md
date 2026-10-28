@@ -1381,3 +1381,13 @@
 - dashboard 购物车不再因 WMS 未配置或不可达而禁用提交；订单列表和详情显示平台承诺及仓库确认状态，明确提示实物库存仍以 WMS 为准。`FoodOS WMS Standard v1` 将销售出库/取消及回传作为一期最小能力，预占、释放和结果查询保留为可选增强能力。
 - 新增 Ordering PostgreSQL 迁移，仅增加下单幂等键、仓库确认状态/说明/更新时间和租户范围唯一索引，无库存数量变更。真实 PostgreSQL 专项已覆盖同键下单、无同步 WMS 请求、异步出库确认、短配异常、改单新修订、取消通知及零本地库存预占；完整验证与开发容器发布结果在本轮完成记录中更新。生产未发布。
 - 本轮最终验证：全解决方案构建 0 警告/0 错误；外部 WMS、Shop、客户隔离及入站事件 PostgreSQL 定向 59/59，Architecture 53/53，Ordering 36/36，dashboard WMS 浏览器回归 11/11，dashboard 生产构建均通过；Ordering 模型无待生成迁移。正式 DbMigrator 已在 `foodos-wms-dev` 应用 `AddWarehouseOrderConfirmation`，API、admin、dashboard 的 18080/18081/18082 均返回 200，API 与 dashboard 已使用本轮镜像重建并保持运行。仅发布开发环境，未调用真实 WMS、未发布生产。
+
+### 2026-10-28：运营客服电话下单（新增业务）
+
+- 新增客服岗位 `CustomerService`：权限为电话下单查看/提交（`Permissions.Ordering.OrderDesk.View/Place`）、订单查看/管理（截单前改单与取消）、客户与门店查看、商品查看。Identity 新增运营岗位模板扩展点 `IOperatorRoleTemplateSource`，生产 seed 只在 root 租户"缺失才创建"，管理员后续调整的岗位权限不被覆盖；演示种子同步新增 `service@root.com`。
+- 商品检索：`Product.SearchText` 汇总 SKU、条码、主名称、各语言翻译名及中文全拼/首字母（`ToolGood.Words.Pinyin` 3.1.0.4，MIT），按多词 AND 子串匹配，`pg_trgm` GIN 索引加速；精确 SKU/条码优先、词首匹配次之。新增 `SuggestProductsQuery` 快捷候选，运营商品搜索支持 `sortBy=relevance`。存量商品在 DbMigrator `seed` 时幂等回填检索列。
+- 来电识别：门店新增最多 10 个来电联系人（姓名 + 电话，按数字规范化去重），`GET/PUT /api/v1/ordering/stores/{id}/contacts`；电话下单按 4 位以上数字匹配联系人电话，也可按门店/客户名称或编码搜索，并给出能否下单及原因（未关联饭店账号、地址待补充、信用冻结）。
+- 电话下单工作台 `/api/v1/ordering/order-desk`：来电识别、带客户协议价和 WMS 可售状态的商品候选、按数量报价、门店最近订单（含明细）与近 90 天常购商品、代下单。代下单与 Shop 共用平台承诺下单服务（不做本地预占、异步通知 WMS），订单归属门店的饭店账号，记录 `PlacementChannel=OrderDesk` 与下单客服；饭店端可见该订单及仓库待确认状态。两条新命令已登记到外部 WMS 防线测试白名单。
+- admin 新增"电话下单"页面（来电搜索、拼音/SKU 键盘选品、常购一键加入、复制历史订单、报价合计、幂等提交）和门店卡片上的来电联系人维护，中英文文案与岗位权限显示同步。
+- 新增迁移（仅生成、未对任何数据库执行）：Catalog `AddProductSearchText`（启用 `pg_trgm`、检索列及 GIN 索引）；Ordering `AddOrderDeskAndStoreContacts`（`StoreContacts` 表、订单下单渠道与下单人）。两个 DbContext 均无待生成模型变化。上线前需由数据库所有者账号执行迁移（`pg_trgm` 为受信任扩展），再执行 `seed` 完成检索列回填与客服岗位创建。
+- 验证：Release 全解决方案 0 警告/0 错误；单元测试全部通过（含 Catalog 拼音检索 5 项、Ordering 联系人/下单渠道 5 项），Architecture 53/53；PostgreSQL 集成全量 926/926，客服相关定向复跑 54/54（含拼音/全拼/汉字/SKU 检索、来电号码识别、代下单幂等、饭店侧可见、客服岗位正向与饭店账号/无岗位员工 403、截单前改单）；admin 类型检查、生产构建通过，全量 e2e 594 项通过（含新增电话下单 3 项、联系人 1 项及路由权限矩阵登记 `/order-desk`），2 项 `customer-demo` 用例需本机演示栈未运行。未做真实 WMS 联调和生产发布。

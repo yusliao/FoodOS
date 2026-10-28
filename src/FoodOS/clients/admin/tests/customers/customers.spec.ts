@@ -291,3 +291,29 @@ test("Chinese mobile customer and store pages fit the viewport", async ({ page }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("stores-mobile.png"), fullPage: true });
 });
+
+test("store editor maintains the caller contacts used by the phone order desk", async ({ page }) => {
+  await setup(page, [SV, SU]);
+  let saved: unknown = null;
+  await page.route("**/api/v1/ordering/stores/s-1/contacts", async route => {
+    if (route.request().method() === "PUT") {
+      saved = route.request().postDataJSON();
+      const body = saved as { contacts: { name: string; phone: string }[] };
+      await route.fulfill({ json: body.contacts.map((contact, index) => ({ id: `c-${index}`, ...contact })) });
+      return;
+    }
+    await route.fulfill({ json: [{ id: "c-0", name: "Front desk", phone: "617-555-0101" }] });
+  });
+
+  await page.goto("/stores");
+  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Acme Main" }) });
+  await expect(card.getByText("Front desk · 617-555-0101")).toBeVisible();
+  await card.getByRole("button", { name: "Edit contacts" }).click();
+  await card.getByRole("button", { name: "Add contact" }).click();
+  await card.getByRole("textbox", { name: "Contact name 2" }).fill("Chef Lin");
+  await card.getByRole("textbox", { name: "Phone 2" }).fill("617 555 0111");
+  await card.getByRole("button", { name: "Save contacts" }).click();
+
+  await expect(card.getByText("Chef Lin · 617 555 0111")).toBeVisible();
+  expect(saved).toEqual({ contacts: [{ name: "Front desk", phone: "617-555-0101" }, { name: "Chef Lin", phone: "617 555 0111" }] });
+});

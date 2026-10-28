@@ -22,6 +22,7 @@ public sealed class SalesOrderConfiguration : IEntityTypeConfiguration<SalesOrde
             .HasDefaultValue(WarehouseConfirmationStatus.NotTracked);
         builder.Property(x => x.WarehouseConfirmationDetail).HasMaxLength(1000);
         builder.Property(x => x.PlacementIdempotencyKey).HasMaxLength(200);
+        builder.Property(x => x.PlacementChannel).HasConversion<string>().HasMaxLength(16);
         builder.HasIndex(x => new { x.CustomerTenantId, x.PlacementIdempotencyKey })
             .IsUnique()
             .HasFilter("\"PlacementIdempotencyKey\" IS NOT NULL");

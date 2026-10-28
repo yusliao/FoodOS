@@ -13,4 +13,5 @@ public sealed record SalesOrderDto(
     DateTimeOffset? PlacedAt,
     int Revision,
     IReadOnlyList<SalesOrderLineDto> Lines,
-    Guid? RouteId = null);
+    Guid? RouteId = null,
+    string? PlacementChannel = null);

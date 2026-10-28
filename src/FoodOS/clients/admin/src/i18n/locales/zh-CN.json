@@ -149,6 +149,7 @@
     "createHint": "填写唯一供应商编码、名称及交货提前期。",
     "save": "创建供应商"
   },
+  "orderDesk": {"title":"电话下单","description":"识别来电餐馆，快速检索商品并代客下单。订单为平台承诺，仓库异步确认。","callerTitle":"来电识别","callerSearch":"查找来电餐馆","callerPlaceholder":"来电号码、门店或客户名称、编码","callerHint":"至少输入 2 个字符；输入 4 位以上数字时按联系人电话匹配。","searching":"正在搜索…","loading":"正在加载…","requestFailed":"请求失败，请检查网络后重试。","noCallers":"没有匹配的门店，请核对号码或按门店名称搜索。","addressMissing":"配送地址待补充","store":"门店","customer":"客户","address":"配送地址","lastOrder":"最近下单","never":"暂无订单","changeCaller":"更换来电","blocking":{"customerAccountMissing":"未关联饭店账号","addressMissing":"地址待补充","creditHold":"信用冻结"},"linesTitle":"订单明细","productSearch":"搜索商品","productPlaceholder":"名称、拼音（如 swy）、SKU 或条码；↑↓ 选择，回车添加","noProducts":"没有匹配的商品。","noLines":"搜索商品、点选常购商品或复制最近订单。","decrease":"减少数量","increase":"增加数量","quantity":"数量","remove":"移除","total":"预估合计","priceHint":"按该客户协议价报价，最终价格以提交时为准。","place":"提交订单","placing":"正在提交…","readOnly":"你可以整理明细，但没有代下单权限。","placed":"订单已提交","placedHint":"订单已提交，等待仓库确认。","viewOrder":"查看订单","placeFailed":"订单未提交成功。","quoteFailed":"价格刷新失败。","stock":{"available":"有货","insufficient":"库存不足","pending":"待仓库同步"},"frequentTitle":"常购商品","noFrequent":"近 90 天没有订单。","orderedTimes":"已下单次数","inactive":"商品已下架","recentTitle":"最近订单","noRecent":"该门店还没有订单。","byPhone":"电话代下","linesUnit":"行","showLines":"展开明细","hideLines":"收起明细","copyOrder":"加入这些商品","short":"缺货"},
   "orderManage": {
     "amend": "修改订单",
     "cancel": "取消订单",
@@ -354,6 +355,7 @@
     "boundaries": "价盘主档和阶梯价不能删除，价格锁不能查询或删除。本工作台只开放服务端已有的创建、覆盖和报价能力。"
   },
   "partners": {
+    "contacts":"来电联系人","contactsHint":"电话下单按这些号码识别门店。","contactName":"联系人","contactPhone":"电话","addContact":"添加联系人","removeContact":"移除联系人","saveContacts":"保存联系人","contactsSaved":"联系人已保存。","noContacts":"暂无联系人。","editContacts":"编辑联系人",
     "customerCreated": "合作客户已创建。",
     "storeCreated": "已为所选客户创建门店，列表筛选条件保持不变。",
     "requestFailed": "请求失败，请检查连接后重试。",
@@ -457,6 +459,7 @@
       "logistics": { "vehicles": "车辆档案", "drivers": "司机档案", "routes": "配送路线" },
       "procurement": { "suppliers": "供应商管理", "purchase-orders": "采购单工作台" },
       "orders": "运营订单中心",
+      "order-desk": "电话下单",
       "customers": "合作客户",
       "stores": "饭店门店",
       "catalog": {
@@ -1138,7 +1141,7 @@
       "Operations": "运营"
     },
     "resource": {
-      "Ordering": { "Customers": "客户", "Stores": "门店" },
+      "Ordering": { "OrderDesk": "电话下单", "Customers": "客户", "Stores": "门店" },
       "Inventory": { "Warehouses": "仓库" },
       "WmsIntegration": "WMS 对接",
       "Notifications": { "Inbox": "通知" }
@@ -1161,7 +1164,8 @@
       "Permissions": {
         "Ordering": {
           "Customers": { "View": "查看客户", "Create": "创建客户", "Update": "更新客户" },
-          "Stores": { "View": "查看门店", "Create": "创建门店", "Update": "更新门店" }
+          "Stores": { "View": "查看门店", "Create": "创建门店", "Update": "更新门店" },
+          "OrderDesk": { "View": "使用电话下单工作台", "Place": "代饭店电话下单" }
         },
         "Inventory": { "Warehouses": { "View": "查看仓库" } },
         "WmsIntegration": { "View": "查看 WMS 对接" },

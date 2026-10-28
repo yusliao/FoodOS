@@ -13,7 +13,7 @@ namespace FSH.Modules.Catalog.Contracts.v1.Products;
 /// <param name="IsActive">Optional active status filter.</param>
 /// <param name="PageNumber">Page number.</param>
 /// <param name="PageSize">Page size.</param>
-/// <param name="SortBy">Sort column. One of: name | sku | createdAtUtc | stock | price.</param>
+/// <param name="SortBy">Sort column. One of: name | sku | createdAtUtc | stock | price | relevance (requires Search).</param>
 /// <param name="SortDir">Sort direction. One of: asc | desc.</param>
 public sealed record SearchProductsQuery(
     string? Search = null,

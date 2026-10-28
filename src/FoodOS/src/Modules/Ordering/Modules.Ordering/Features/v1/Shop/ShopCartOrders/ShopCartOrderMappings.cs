@@ -34,5 +34,6 @@ internal static class ShopCartOrderMappings
                 line.ShortageQty,
                 line.ShortageReason,
                 line.UnitPrice,
-                line.Currency)).ToList());
+                line.Currency)).ToList(),
+            order.PlacementChannel?.ToString());
 }

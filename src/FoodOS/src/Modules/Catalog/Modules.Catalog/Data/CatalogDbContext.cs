@@ -31,6 +31,8 @@ public sealed class CatalogDbContext : BaseDbContext
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         modelBuilder.HasDefaultSchema(Schema);
+        // Trigram index support for Product.SearchText (trusted extension; the database owner can create it).
+        modelBuilder.HasPostgresExtension("pg_trgm");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CatalogDbContext).Assembly);
         // base.OnModelCreating runs LAST so BaseDbContext's auto-apply sees
         // fully-configured entities (including HasMany child types like ProductImage).

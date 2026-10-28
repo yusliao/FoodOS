@@ -21,6 +21,7 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                 .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.Brand", b =>
@@ -75,8 +76,8 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = FALSE")
-                        .HasDatabaseName("IX_Brands_Slug");
+                        .HasDatabaseName("IX_Brands_Slug")
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Brands", "catalog");
                 });
@@ -134,8 +135,8 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = FALSE")
-                        .HasDatabaseName("IX_Categories_Slug");
+                        .HasDatabaseName("IX_Categories_Slug")
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Categories", "catalog");
                 });
@@ -270,6 +271,13 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("SearchText")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasDefaultValue("");
+
                     b.Property<int?>("ShelfLifeDays")
                         .HasColumnType("integer");
 
@@ -314,15 +322,20 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
 
                     b.HasIndex("IsDeleted");
 
+                    b.HasIndex("SearchText");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchText"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("SearchText"), new[] { "gin_trgm_ops" });
+
                     b.HasIndex("Sku", "TenantId")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = FALSE")
-                        .HasDatabaseName("IX_Products_Sku");
+                        .HasDatabaseName("IX_Products_Sku")
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("Slug", "TenantId")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = FALSE")
-                        .HasDatabaseName("IX_Products_Slug");
+                        .HasDatabaseName("IX_Products_Slug")
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Products", "catalog");
                 });

@@ -24,6 +24,8 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
     public WarehouseConfirmationStatus WarehouseConfirmationStatus { get; private set; }
     public string? WarehouseConfirmationDetail { get; private set; }
     public DateTimeOffset? WarehouseConfirmationUpdatedAt { get; private set; }
+    public SalesOrderPlacementChannel? PlacementChannel { get; private set; }
+    public Guid? PlacedByUserId { get; private set; }
 
     public IReadOnlyList<SalesOrderLine> Lines => _lines;
 
@@ -107,10 +109,16 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
             new SalesOrderPlacedDomainEvent(Id, Number, StoreId, WarehouseId, id, ts)));
     }
 
-    public void PlaceWithPlatformCommitment(string idempotencyKey, DateTimeOffset utcNow)
+    public void PlaceWithPlatformCommitment(
+        string idempotencyKey,
+        DateTimeOffset utcNow,
+        SalesOrderPlacementChannel channel = SalesOrderPlacementChannel.Shop,
+        Guid? placedByUserId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
         PlacementIdempotencyKey = idempotencyKey.Trim();
+        PlacementChannel = channel;
+        PlacedByUserId = placedByUserId;
         foreach (var line in _lines)
         {
             line.BindReservation(Id, line.OrderedQty);

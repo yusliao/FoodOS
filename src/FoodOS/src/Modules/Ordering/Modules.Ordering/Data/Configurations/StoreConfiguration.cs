@@ -19,6 +19,13 @@ public sealed class StoreConfiguration : IEntityTypeConfiguration<Store>
         builder.Property(x => x.Address).IsRequired().HasMaxLength(256);
         builder.Property(x => x.DeliveryWindow).HasMaxLength(64);
         builder.HasIndex(x => x.CustomerOrgId);
+        builder.HasMany(x => x.Contacts)
+            .WithOne()
+            .HasForeignKey(contact => contact.StoreId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(x => x.Contacts)
+            .HasField("_contacts")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Ignore(x => x.DomainEvents);
     }
 }

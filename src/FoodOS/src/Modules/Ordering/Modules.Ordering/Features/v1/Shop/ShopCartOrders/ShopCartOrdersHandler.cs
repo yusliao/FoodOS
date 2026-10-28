@@ -1,8 +1,6 @@
-using System.Globalization;
 using System.Net;
 using FSH.Framework.Core.Exceptions;
 using FSH.Framework.Shared.Persistence;
-using FSH.Modules.Inventory.Contracts.v1.Plans;
 using FSH.Modules.Ordering.Contracts.Access;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using FSH.Modules.Ordering.Contracts.v1.Carts;
@@ -20,7 +18,7 @@ public sealed class ShopCartOrdersHandler(
     OrderingDbContext dbContext,
     ICustomerAccessScopeResolver accessScopeResolver,
     IMediator mediator,
-    TimeProvider clock)
+    PlatformOrderPlacement placement)
     : IQueryHandler<GetShopCartQuery, ShopCartDto>,
       ICommandHandler<UpdateShopCartCommand, Guid>,
       IQueryHandler<SearchShopOrdersQuery, PagedResponse<ShopOrderDto>>,
@@ -109,11 +107,8 @@ public sealed class ShopCartOrdersHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
         var access = await RequireStoreAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
-        var existingOrder = await dbContext.SalesOrders.AsNoTracking()
-            .SingleOrDefaultAsync(order =>
-                order.CustomerTenantId == access.CustomerTenantId
-                && order.PlacementIdempotencyKey == command.IdempotencyKey,
-                cancellationToken)
+        var existingOrder = await placement
+            .FindByIdempotencyKeyAsync(access.CustomerTenantId, command.IdempotencyKey, cancellationToken)
             .ConfigureAwait(false);
         if (existingOrder is not null)
         {
@@ -128,19 +123,7 @@ public sealed class ShopCartOrdersHandler(
         var store = await dbContext.Stores
             .FirstAsync(item => item.Id == command.StoreId, cancellationToken)
             .ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(store.Address))
-        {
-            throw Conflict("The store delivery address must be completed before placing an order.");
-        }
-        var org = await dbContext.CustomerOrgs
-            .FirstOrDefaultAsync(item => item.Id == store.CustomerOrgId, cancellationToken)
-            .ConfigureAwait(false)
-            ?? throw new NotFoundException($"Customer organization {store.CustomerOrgId} not found.");
-        if (org.CreditHold)
-        {
-            throw Conflict("Customer is on credit hold.");
-        }
-
+        var org = await placement.RequireOrderableAsync(store, cancellationToken).ConfigureAwait(false);
         var cart = await dbContext.Carts
             .FirstOrDefaultAsync(item => item.StoreId == store.Id, cancellationToken)
             .ConfigureAwait(false);
@@ -152,62 +135,15 @@ public sealed class ShopCartOrdersHandler(
                 HttpStatusCode.BadRequest);
         }
 
-        var warehouse = await StoreWarehouseResolver.ResolveAsync(mediator, store.DefaultWarehouseId, cancellationToken)
-            .ConfigureAwait(false)
-            ?? throw Conflict("The operator warehouse must be configured before placing an order.");
-        DateTimeOffset utcNow = clock.GetUtcNow();
-        TimeOnly cutoffLocal = TimeOnly.ParseExact(
-            warehouse.Clock.CutoffLocal,
-            "HH:mm",
-            CultureInfo.InvariantCulture);
-        var (businessDate, cutoffAt) = OperatingCutoff.Resolve(warehouse.Clock.TimeZoneId, cutoffLocal, utcNow);
-        for (int i = 0; i < 7; i++)
-        {
-            var existingPlan = await mediator
-                .Send(new GetDailyPlanQuery(warehouse.Id, businessDate), cancellationToken)
-                .ConfigureAwait(false);
-            if (existingPlan is null)
-            {
-                break;
-            }
-
-            (businessDate, cutoffAt) = OperatingCutoff.NextAfter(
-                warehouse.Clock.TimeZoneId,
-                cutoffLocal,
-                businessDate);
-        }
-
-        var products = await ShopCatalog.GetActiveManyAsync(
-                mediator,
-                cart.Lines.Select(line => line.ProductId),
+        var order = await placement.AddPlacedOrderAsync(
+                store,
+                org,
+                cart.Lines.Select(line => (line.ProductId, line.Quantity)).ToList(),
+                command.IdempotencyKey,
+                SalesOrderPlacementChannel.Shop,
+                placedByUserId: null,
                 cancellationToken)
             .ConfigureAwait(false);
-        var quotes = await ShopCatalog.QuoteManyAsync(
-                mediator,
-                org.Id,
-                cart.Lines.Select(line => (line.ProductId, line.Quantity)),
-                cancellationToken)
-            .ConfigureAwait(false);
-        var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
-        foreach (var line in cart.Lines)
-        {
-            var (_, zone) = products[line.ProductId];
-            var quote = quotes[line.ProductId];
-            draftLines.Add((line.ProductId, zone.ToString(), line.Quantity, quote.UnitPrice, quote.Currency));
-        }
-
-        string number = await OrderNumbers.NextAsync(dbContext, businessDate, cancellationToken).ConfigureAwait(false);
-        var order = SalesOrder.CreateDraft(
-            number,
-            store.Id,
-            org.Id,
-            warehouse.Id,
-            businessDate,
-            cutoffAt,
-            draftLines,
-            store.CustomerTenantId);
-        order.PlaceWithPlatformCommitment(command.IdempotencyKey, utcNow);
-        dbContext.SalesOrders.Add(order);
         dbContext.CartLines.RemoveRange(cart.Lines);
         cart.Clear();
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -266,8 +202,5 @@ public sealed class ShopCartOrdersHandler(
             ?? throw new NotFoundException($"Order {orderId} not found.");
     }
 
-    private static CustomException Conflict(string message) => new(
-        message,
-        (IEnumerable<string>?)null,
-        HttpStatusCode.Conflict);
+    private static CustomException Conflict(string message) => PlatformOrderPlacement.Conflict(message);
 }
