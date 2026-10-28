@@ -46,7 +46,7 @@ test("customer cards show their level and the editor moves a customer to another
   await page.route(`**/api/v1/catalog/customer-levels/assignments/${A}`, async route => { writes.push({ url: route.request().url(), body: route.request().postDataJSON() }); await route.fulfill({ status: 204 }); });
 
   await page.goto("/customers");
-  await expect(card(page, "Acme Restaurant")).toContainText("VIP · 10% off");
+  await expect(card(page, "Acme Restaurant")).toContainText("VIP · Pay 90%");
   await expect(card(page, "Beta Restaurant")).toContainText("Standard price (no level)");
 
   await card(page, "Acme Restaurant").getByRole("button", { name: "Edit customer" }).click();
@@ -87,7 +87,7 @@ test("pricing tab merges levels with contract pricing and creates a level", asyn
   await page.getByRole("tab", { name: "Levels and contract prices" }).click();
   await expect(page).toHaveURL(/tab=pricing/);
   await expect(page.getByRole("heading", { name: "Customer levels" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "10% off" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Pay 90%" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "VIP specials" })).toBeVisible();
   await expect(page.getByText("Level · VIP")).toBeVisible();
 
@@ -95,7 +95,8 @@ test("pricing tab merges levels with contract pricing and creates a level", asyn
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Level code").fill("silver");
   await dialog.getByLabel("Level name").fill("Silver");
-  await dialog.getByLabel("Discount (% off)").fill("5");
+  await expect(dialog.getByLabel("Discount (%)")).toHaveValue("100");
+  await dialog.getByLabel("Discount (%)").fill("95");
   await dialog.getByRole("button", { name: "Save level" }).click();
   await expect(dialog).toHaveCount(0);
   expect(created).toEqual({ code: "silver", name: "Silver", discountPercent: 5 });

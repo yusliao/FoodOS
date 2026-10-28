@@ -12,7 +12,7 @@ const PC = "Permissions.Catalog.Products.Create";
 const PU = "Permissions.Catalog.Products.Update";
 const brand = { id: "11111111-1111-1111-1111-111111111111", name: "Fresh Fields", slug: "fresh-fields", description: "Produce", logoUrl: null, createdAtUtc: "2026-09-16T00:00:00Z" };
 const category = { id: "22222222-2222-2222-2222-222222222222", name: "Vegetables", slug: "vegetables", description: "Greens", parentCategoryId: null, createdAtUtc: "2026-09-16T00:00:00Z" };
-const product = { id: "33333333-3333-3333-3333-333333333333", sku: "VEG-01", name: "Baby spinach", slug: "baby-spinach", description: "Washed", brandId: brand.id, categoryId: category.id, price: { amount: 3.5, currency: "USD" }, isActive: true, createdAtUtc: "2026-09-16T00:00:00Z" };
+const product = { id: "33333333-3333-3333-3333-333333333333", sku: "VEG-01", name: "Baby spinach", slug: "baby-spinach", description: "Washed", brandId: brand.id, categoryId: category.id, brandName: brand.name, categoryName: category.name, price: { amount: 3.5, currency: "USD" }, isActive: true, createdAtUtc: "2026-09-16T00:00:00Z" };
 
 async function setup(page: Page, permissions: string[]) {
   await seedAuthedSession(page, { ...TEST_USER, permissions });
@@ -30,6 +30,11 @@ test("product reader sees base prices without write actions or forbidden lookup 
   await page.goto("/catalog/products");
   await expect(page.getByRole("heading", { name: "Baby spinach" })).toBeVisible();
   await expect(page.getByText("$3.50")).toBeVisible();
+  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Baby spinach" }) });
+  await expect(card).toContainText("Fresh Fields");
+  await expect(card).toContainText("Vegetables");
+  await expect(card).not.toContainText(brand.id);
+  await expect(card).not.toContainText(category.id);
   await expect(page.getByRole("button", { name: /New product|Edit|Change base price|Delete/ })).toHaveCount(0);
   expect(requests.some(url => /catalog\/(brands|categories)/.test(url))).toBe(false);
   const request = await productRequest;

@@ -22,7 +22,7 @@ public sealed class AmendOrderCommandHandler(OrderingDbContext dbContext, IMedia
         DateTimeOffset utcNow = clock.GetUtcNow();
         order.BeginAmend(utcNow);
 
-        var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
+        var draftLines = new List<SalesOrderLineDraft>();
         var products = await ShopCatalog.GetActiveManyAsync(
                 mediator,
                 command.Lines.Select(line => line.ProductId),
@@ -38,7 +38,7 @@ public sealed class AmendOrderCommandHandler(OrderingDbContext dbContext, IMedia
         {
             var (_, zone) = products[line.ProductId];
             var quote = quotes[line.ProductId];
-            draftLines.Add((line.ProductId, zone.ToString(), line.Quantity, quote.UnitPrice, quote.Currency));
+            draftLines.Add(SalesOrderLineDraft.FromQuote(line.ProductId, zone.ToString(), line.Quantity, quote));
         }
 
         ReplaceOrderLines(dbContext, order, draftLines);
@@ -56,7 +56,7 @@ public sealed class AmendOrderCommandHandler(OrderingDbContext dbContext, IMedia
     private static void ReplaceOrderLines(
         OrderingDbContext dbContext,
         SalesOrder order,
-        IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines)
+        IReadOnlyList<SalesOrderLineDraft> lines)
     {
         var existing = order.Lines.ToList();
         if (existing.Count > 0)

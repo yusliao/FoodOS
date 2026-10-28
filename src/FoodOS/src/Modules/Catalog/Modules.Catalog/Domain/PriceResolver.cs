@@ -65,17 +65,33 @@ public static class PriceResolver
             }
         }
 
-        // 全局价目表必须排除等级价目表，否则别的等级的价格会漏给这个客户
-        var catalogLine = MatchTier(
-            valid.Where(l => l.CustomerOrgId is null && l.CustomerLevelId is null),
-            productId,
-            quantity);
-        decimal basePrice = catalogLine?.UnitPrice ?? catalogPrice.Amount;
-        string currency = catalogLine?.Currency ?? catalogPrice.Currency;
+        var (basePrice, currency) = ListPrice(productId, catalogPrice, quantity, asOf, valid);
 
         return level is { DiscountPercent: > 0 }
             ? (level.ApplyDiscount(basePrice), currency, PriceQuoteSource.Level)
             : (basePrice, currency, PriceQuoteSource.Catalog);
+    }
+
+    /// <summary>
+    /// Standard price before any customer-specific pricing: catalog-wide tier, else product price.
+    /// Level lists are excluded so one level's prices never leak into the standard price.
+    /// </summary>
+    public static (decimal UnitPrice, string Currency) ListPrice(
+        Guid productId,
+        Money catalogPrice,
+        decimal quantity,
+        DateTimeOffset asOf,
+        IEnumerable<PriceList> lists)
+    {
+        ArgumentNullException.ThrowIfNull(catalogPrice);
+        ArgumentNullException.ThrowIfNull(lists);
+        var catalogLine = MatchTier(
+            lists.Where(l => l.IsValidAt(asOf) && l.CustomerOrgId is null && l.CustomerLevelId is null),
+            productId,
+            quantity);
+        return catalogLine is not null
+            ? (catalogLine.UnitPrice, catalogLine.Currency)
+            : (catalogPrice.Amount, catalogPrice.Currency);
     }
 
     private static PriceListLine? MatchTier(IEnumerable<PriceList> lists, Guid productId, decimal quantity)

@@ -64,7 +64,11 @@ internal static class OrderingMappings
                     lot.LotNo,
                     lot.ShippedQty,
                     lot.DeliveredQty,
-                    lot.ReturnedQty)).ToList())).ToList(),
+                    lot.ReturnedQty)).ToList())
+            {
+                ListUnitPrice = l.ListUnitPrice,
+                PriceSource = l.PriceSource,
+            }).ToList(),
             routeId,
             order.PlacementChannel?.ToString());
 

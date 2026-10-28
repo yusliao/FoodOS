@@ -200,6 +200,31 @@ public sealed class SalesOrderTests
         ex.StatusCode.ShouldBe(System.Net.HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public void CreateDraft_Should_SnapshotListPriceAndSource_FromQuote()
+    {
+        var productId = Guid.CreateVersion7();
+        var quote = new FSH.Modules.Catalog.Contracts.Dtos.PriceQuoteDto(Guid.CreateVersion7(), productId, 2m, 14.49m, "USD", "Level")
+        {
+            ListUnitPrice = 16.1m,
+        };
+
+        var order = SalesOrder.CreateDraft(
+            "SO202609110003",
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            new DateOnly(2026, 9, 11),
+            DateTimeOffset.UtcNow.AddHours(2),
+            [SalesOrderLineDraft.FromQuote(productId, "Ambient", 2m, quote), (Guid.CreateVersion7(), "Ambient", 1m, 3m, "USD")]);
+
+        order.Lines[0].UnitPrice.ShouldBe(14.49m);
+        order.Lines[0].ListUnitPrice.ShouldBe(16.1m);
+        order.Lines[0].PriceSource.ShouldBe("Level");
+        order.Lines[1].ListUnitPrice.ShouldBeNull();
+        order.Lines[1].PriceSource.ShouldBeNull();
+    }
+
     private static SalesOrder CreateDraft()
         => SalesOrder.CreateDraft(
             "SO202609110001",

@@ -97,6 +97,13 @@ public sealed class ProductsEndpointTests
 
         page.Items.ShouldContain(p => p.Id == productId);
         page.Items.ShouldAllBe(p => p.BrandId == brandId);
+
+        // 列表直接带品牌、分类名称，前端不用再拿 ID 去查
+        var created = page.Items.Single(p => p.Id == productId);
+        created.BrandName.ShouldNotBeNullOrWhiteSpace();
+        created.BrandName.ShouldStartWith("Product-Brand-");
+        created.CategoryName.ShouldNotBeNullOrWhiteSpace();
+        created.CategoryName.ShouldStartWith("Product-Cat-");
     }
 
     [Fact]

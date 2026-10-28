@@ -24,4 +24,9 @@ public sealed record ProductDto(
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc,
     DateTimeOffset? DeletedOnUtc = null,
-    string? DeletedBy = null);
+    string? DeletedBy = null)
+{
+    /// <summary>Filled by list queries so operators read names instead of ids.</summary>
+    public string? BrandName { get; init; }
+    public string? CategoryName { get; init; }
+}

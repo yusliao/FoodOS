@@ -209,6 +209,20 @@ public sealed class PriceResolverTests
     }
 
     [Fact]
+    public void ListPrice_Should_UseCatalogWideTier_And_IgnoreCustomerAndLevelLists()
+    {
+        var vip = CustomerLevel.Create("VIP", "VIP", 10m);
+        var promo = PriceList.Create("promo", customerOrgId: null, AsOf.AddDays(-1), AsOf.AddYears(1), 1);
+        promo.UpsertLine(ProductId, 1m, 15m, "USD");
+
+        var (withPromo, _) = PriceResolver.ListPrice(ProductId, CatalogPrice, 1m, AsOf, [promo, LevelList(vip, 5m), Contract(OrgA, 4m)]);
+        var (noLists, _) = PriceResolver.ListPrice(ProductId, CatalogPrice, 1m, AsOf, [LevelList(vip, 5m)]);
+
+        withPromo.ShouldBe(15m);
+        noLists.ShouldBe(20m);
+    }
+
+    [Fact]
     public void Resolve_Should_RoundLevelDiscount_ToCents()
     {
         var level = CustomerLevel.Create("B", "B", 12.5m);

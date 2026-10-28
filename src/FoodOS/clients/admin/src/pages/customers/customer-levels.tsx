@@ -20,7 +20,7 @@ import { useT } from "@/i18n/locale-provider";
 import { CatalogPermissions } from "@/lib/permissions";
 import { newUuid } from "@/lib/uuid";
 import { describe } from "./request-error";
-import { discountLabel } from "./level-format";
+import { discountLabel, payPercent } from "./level-format";
 
 /** Customer pricing levels: each level has a discount and optional per-product prices (its price lists). */
 export function CustomerLevelsSection() {
@@ -66,7 +66,8 @@ function CustomerLevelDialog({ level, onClose }: { level: CustomerLevelDto | nul
   const cache = useQueryClient();
   const [code, setCode] = useState(level?.code ?? "");
   const [name, setName] = useState(level?.name ?? "");
-  const [discount, setDiscount] = useState(level ? String(level.discountPercent) : "0");
+  // 界面按「折」填：90 = 9 折，100 = 不打折；后端存的是优惠百分比（100 - 折扣）
+  const [discount, setDiscount] = useState(level ? String(payPercent(level.discountPercent)) : "100");
   const attempt = useRef<{ body: string; key: string } | null>(null);
   const mutation = useMutation({
     mutationFn: async ({ input, key }: { input: CustomerLevelInput; key: string }) => {
@@ -85,12 +86,12 @@ function CustomerLevelDialog({ level, onClose }: { level: CustomerLevelDto | nul
   });
   const discountValue = Number(discount);
   const valid = code.trim().length > 0 && name.trim().length > 0 && discount.trim() !== ""
-    && Number.isFinite(discountValue) && discountValue >= 0 && discountValue < 100;
+    && Number.isFinite(discountValue) && discountValue > 0 && discountValue <= 100;
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!valid || mutation.isPending) return;
-    const input = { code: code.trim(), name: name.trim(), discountPercent: discountValue };
+    const input = { code: code.trim(), name: name.trim(), discountPercent: Math.round((100 - discountValue) * 100) / 100 };
     const body = JSON.stringify(input);
     if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ input, key: attempt.current.key });
@@ -108,7 +109,7 @@ function CustomerLevelDialog({ level, onClose }: { level: CustomerLevelDto | nul
             <Field id="level-code" label={t("levels.code")} required><Input id="level-code" required maxLength={32} value={code} onChange={e => setCode(e.target.value)} /></Field>
             <Field id="level-name" label={t("levels.name")} required><Input id="level-name" required maxLength={100} value={name} onChange={e => setName(e.target.value)} /></Field>
             <Field id="level-discount" label={t("levels.discount")} required>
-              <Input id="level-discount" type="number" min="0" max="99.99" step="0.01" required value={discount} onChange={e => setDiscount(e.target.value)} />
+              <Input id="level-discount" type="number" min="0.01" max="100" step="0.01" required value={discount} onChange={e => setDiscount(e.target.value)} />
             </Field>
             <p className="text-xs text-[var(--color-muted-foreground)]">{t("levels.discountHint")}</p>
           </fieldset>

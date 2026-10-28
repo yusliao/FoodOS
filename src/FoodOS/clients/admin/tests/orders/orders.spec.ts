@@ -37,6 +37,25 @@ test("order detail shows customer, store, warehouse and product names instead of
   await expect(page.getByText("product-1")).toHaveCount(0);
 });
 
+test("order lines show original and discounted unit prices for level-priced customers", async ({ page }) => {
+  await setup(page, [view]);
+  const priced = { ...order, lines: [
+    { ...order.lines[0], id: "line-1", productName: "Sugar", unitPrice: 14.49, listUnitPrice: 16.1, priceSource: "Level" },
+    { ...order.lines[0], id: "line-2", productId: "product-2", productName: "Fries", unitPrice: 6.4, listUnitPrice: 6.4, priceSource: "Catalog" },
+    { ...order.lines[0], id: "line-3", productId: "product-3", productName: "Legacy", unitPrice: 2 },
+  ] };
+  await page.route(`**/api/v1/ordering/orders/${id}`, route => route.fulfill({ json: priced }));
+  await page.goto(`/orders/${id}`);
+  const card = (name: string) => page.locator("article, section, div").filter({ has: page.getByRole("heading", { name, exact: true }) }).last();
+  await expect(card("Sugar")).toContainText("Original unit price$16.10");
+  await expect(card("Sugar")).toContainText("Discounted unit price$14.49 · Level price");
+  // 没有折扣、或者老订单没有记录原价时，只显示一个单价
+  await expect(card("Fries")).toContainText("Unit price$6.40");
+  await expect(card("Fries")).not.toContainText("Original unit price");
+  await expect(card("Legacy")).toContainText("Unit price$2.00");
+  await expect(card("Legacy")).not.toContainText("Original unit price");
+});
+
 for (const path of ["/orders", `/orders/${id}`]) test(`unauthorized direct URL ${path} sends no order request`, async ({ page }) => {
   await setup(page, []);
   const urls: string[] = [];

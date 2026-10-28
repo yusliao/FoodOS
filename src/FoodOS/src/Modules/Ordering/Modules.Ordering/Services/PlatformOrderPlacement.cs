@@ -94,7 +94,7 @@ public sealed class PlatformOrderPlacement(OrderingDbContext dbContext, IMediato
             .ConfigureAwait(false);
         var quotes = await ShopCatalog.QuoteManyAsync(mediator, org.Id, lines, cancellationToken)
             .ConfigureAwait(false);
-        var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
+        var draftLines = new List<SalesOrderLineDraft>();
         foreach (var (productId, quantity) in lines)
         {
             if (!products.TryGetValue(productId, out var product))
@@ -103,7 +103,7 @@ public sealed class PlatformOrderPlacement(OrderingDbContext dbContext, IMediato
             }
 
             var quote = quotes[productId];
-            draftLines.Add((productId, product.Zone.ToString(), quantity, quote.UnitPrice, quote.Currency));
+            draftLines.Add(SalesOrderLineDraft.FromQuote(productId, product.Zone.ToString(), quantity, quote));
         }
 
         string number = await OrderNumbers.NextAsync(dbContext, businessDate, cancellationToken).ConfigureAwait(false);

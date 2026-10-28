@@ -85,7 +85,7 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
                 businessDate);
         }
 
-        var draftLines = new List<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)>();
+        var draftLines = new List<SalesOrderLineDraft>();
         var zones = new Dictionary<Guid, TemperatureZoneKind>();
         var products = await ShopCatalog.GetActiveManyAsync(
                 mediator,
@@ -102,7 +102,7 @@ public sealed class PlaceOrderCommandHandler(OrderingDbContext dbContext, IMedia
         {
             var (_, zone) = products[line.ProductId];
             var quote = quotes[line.ProductId];
-            draftLines.Add((line.ProductId, zone.ToString(), line.Quantity, quote.UnitPrice, quote.Currency));
+            draftLines.Add(SalesOrderLineDraft.FromQuote(line.ProductId, zone.ToString(), line.Quantity, quote));
             zones[line.ProductId] = zone;
         }
 

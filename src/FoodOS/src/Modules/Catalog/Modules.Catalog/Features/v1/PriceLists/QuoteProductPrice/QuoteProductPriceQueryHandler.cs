@@ -50,6 +50,9 @@ public sealed class QuoteProductPriceQueryHandler(CatalogDbContext dbContext, Ti
             query.Quantity,
             unitPrice,
             currency,
-            source);
+            source)
+        {
+            ListUnitPrice = PriceResolver.ListPrice(query.ProductId, product.Price, query.Quantity, asOf, lists).UnitPrice,
+        };
     }
 }

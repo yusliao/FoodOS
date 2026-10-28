@@ -7,6 +7,8 @@ export type OrderLine = {
   shortageReason: string | null; varianceReason: string | null;
   unitPrice: number; currency: string; reservationId: string | null;
   sku?: string | null; productName?: string | null; baseUom?: string | null;
+  /** Standard price at order time (null on older orders) and the rule behind unitPrice. */
+  listUnitPrice?: number | null; priceSource?: string | null;
   lots: { lotId: string; lotNo: string; shippedQty: number; deliveredQty: number; returnedQty: number }[];
 };
 export type SalesOrder = {

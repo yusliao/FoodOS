@@ -51,9 +51,24 @@ public sealed class SearchProductsQueryHandler(CatalogDbContext dbContext)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var brandIds = products.Select(p => p.BrandId).Distinct().ToList();
+        var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+        var brandNames = await dbContext.Brands.AsNoTracking()
+            .Where(b => brandIds.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, b => b.Name, cancellationToken)
+            .ConfigureAwait(false);
+        var categoryNames = await dbContext.Categories.AsNoTracking()
+            .Where(c => categoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken)
+            .ConfigureAwait(false);
+
         return new PagedResponse<ProductDto>
         {
-            Items = products.Select(p => p.ToDto()).ToList(),
+            Items = products.Select(p => p.ToDto() with
+            {
+                BrandName = brandNames.GetValueOrDefault(p.BrandId),
+                CategoryName = categoryNames.GetValueOrDefault(p.CategoryId),
+            }).ToList(),
             PageNumber = page,
             PageSize = size,
             TotalCount = total,

@@ -112,6 +112,7 @@ public sealed class PriceListTests
         var discountQuote = await QuoteAsync(client, vipOrg, discounted, 1m);
         discountQuote.UnitPrice.ShouldBe(18m);
         discountQuote.Source.ShouldBe("Level");
+        discountQuote.ListUnitPrice.ShouldBe(20m);
         var overrideQuote = await QuoteAsync(client, vipOrg, overridden, 1m);
         overrideQuote.UnitPrice.ShouldBe(15m);
         overrideQuote.Source.ShouldBe("Level");

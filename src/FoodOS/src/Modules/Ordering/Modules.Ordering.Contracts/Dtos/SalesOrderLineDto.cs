@@ -27,4 +27,10 @@ public sealed record SalesOrderLineDto(
     public string? Sku { get; init; }
     public string? ProductName { get; init; }
     public string? BaseUom { get; init; }
+
+    /// <summary>Standard price at order time; null on older orders.</summary>
+    public decimal? ListUnitPrice { get; init; }
+
+    /// <summary>Pricing rule behind <see cref="UnitPrice"/>: Locked, Contract, Level or Catalog.</summary>
+    public string? PriceSource { get; init; }
 }

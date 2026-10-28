@@ -83,7 +83,9 @@ export function OrderDetailPage() {
       <div className="grid gap-4 lg:grid-cols-2">{order.lines.map(line => <article key={line.id} className="min-w-0 space-y-3 rounded-xl border p-5 text-sm">
         <h3 className="break-words font-semibold">{line.productName ?? line.productId}</h3>
         {line.sku && <p className="text-[var(--color-muted-foreground)]">{line.sku}{line.baseUom ? ` · ${line.baseUom}` : ""}</p>}
-        <dl className="grid grid-cols-2 gap-3">{[["ordered", line.orderedQty], ["reserved", line.reservedQty], ["delivered", line.deliveredQty], ["returned", line.returnedQty], ["shortage", line.shortageQty], ["unitPrice", money(line.unitPrice, line.currency)]].map(([label, value]) => <div key={label}><dt>{t(`orders.${label}`)}</dt><dd>{value}</dd></div>)}</dl>
+        <dl className="grid grid-cols-2 gap-3">{[["ordered", line.orderedQty], ["reserved", line.reservedQty], ["delivered", line.deliveredQty], ["returned", line.returnedQty], ["shortage", line.shortageQty], ...(line.listUnitPrice != null && line.listUnitPrice !== line.unitPrice
+          ? [["listUnitPrice", money(line.listUnitPrice, line.currency)], ["discountedUnitPrice", `${money(line.unitPrice, line.currency)}${line.priceSource ? ` · ${t(`pricing.source${line.priceSource}`, line.priceSource)}` : ""}`]]
+          : [["unitPrice", money(line.unitPrice, line.currency)]])].map(([label, value]) => <div key={label}><dt>{t(`orders.${label}`)}</dt><dd>{value}</dd></div>)}</dl>
         {line.shortageReason && <p>{line.shortageReason}</p>}{line.varianceReason && <p>{line.varianceReason}</p>}
         {line.lots.map(lot => <p className="break-all" key={lot.lotId}>{t("orders.lot")}: {lot.lotNo} · {t("orders.delivered")}: {lot.deliveredQty} · {t("orders.returned")}: {lot.returnedQty}</p>)}
       </article>)}</div>

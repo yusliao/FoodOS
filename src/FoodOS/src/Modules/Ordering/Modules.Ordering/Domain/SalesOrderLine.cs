@@ -18,6 +18,12 @@ public sealed class SalesOrderLine : BaseEntity<Guid>, IOperatorOwnedEntity
     public string? VarianceReason { get; private set; }
     public decimal UnitPrice { get; private set; }
     public string Currency { get; private set; } = "USD";
+
+    /// <summary>Standard price at order time; null on orders placed before it was recorded.</summary>
+    public decimal? ListUnitPrice { get; private set; }
+
+    /// <summary>Which pricing rule produced <see cref="UnitPrice"/> (Locked / Contract / Level / Catalog).</summary>
+    public string? PriceSource { get; private set; }
     public Guid? ReservationId { get; private set; }
 
     public IReadOnlyList<SalesOrderLineLot> Lots => _lots;
@@ -30,7 +36,9 @@ public sealed class SalesOrderLine : BaseEntity<Guid>, IOperatorOwnedEntity
         string zone,
         decimal orderedQty,
         decimal unitPrice,
-        string currency)
+        string currency,
+        decimal? listUnitPrice = null,
+        string? priceSource = null)
     {
         if (productId == Guid.Empty)
         {
@@ -59,7 +67,9 @@ public sealed class SalesOrderLine : BaseEntity<Guid>, IOperatorOwnedEntity
             Zone = zone.Trim(),
             OrderedQty = orderedQty,
             UnitPrice = unitPrice,
-            Currency = currency.Trim().ToUpperInvariant()
+            Currency = currency.Trim().ToUpperInvariant(),
+            ListUnitPrice = listUnitPrice is < 0 ? null : listUnitPrice,
+            PriceSource = string.IsNullOrWhiteSpace(priceSource) ? null : priceSource.Trim()
         };
     }
 

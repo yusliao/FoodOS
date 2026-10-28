@@ -103,6 +103,9 @@ public sealed partial class CustomerShopIsolationTests
         order.CustomerTenantId.ShouldBe(tenantId.ToUpperInvariant());
         var orderLine = order.Lines.ShouldHaveSingleItem();
         orderLine.UnitPrice.ShouldBe(9.5m);
+        // 订单行同时快照标准价和取价来源，明细页才能显示原始单价
+        orderLine.ListUnitPrice.ShouldBe(9.5m);
+        orderLine.PriceSource.ShouldBe("Catalog");
         // Operator detail shows names, not raw ids.
         order.StoreCode.ShouldBe(storeCode);
         order.CustomerOrgName.ShouldBe(caller.CustomerOrgName);

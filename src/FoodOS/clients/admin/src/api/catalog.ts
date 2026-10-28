@@ -36,6 +36,9 @@ export type ProductDto = {
   description?: string | null;
   brandId: string;
   categoryId: string;
+  /** Present on search results; null when the brand/category was deleted. */
+  brandName?: string | null;
+  categoryName?: string | null;
   baseUom: string;
   price: { amount: number; currency: string };
   isActive: boolean;

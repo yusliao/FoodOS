@@ -38,7 +38,7 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
         Guid warehouseId,
         DateOnly businessDate,
         DateTimeOffset cutoffAt,
-        IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines,
+        IReadOnlyList<SalesOrderLineDraft> lines,
         string? customerTenantId = null,
         Guid? orderId = null)
     {
@@ -84,9 +84,9 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        foreach (var (productId, zone, qty, unitPrice, currency) in lines)
+        foreach (var line in lines)
         {
-            order._lines.Add(SalesOrderLine.Create(order.Id, productId, zone, qty, unitPrice, currency));
+            order._lines.Add(line.ToLine(order.Id));
         }
 
         return order;
@@ -156,8 +156,7 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
         Revision++;
     }
 
-    public void ReplaceLines(
-        IReadOnlyList<(Guid ProductId, string Zone, decimal Qty, decimal UnitPrice, string Currency)> lines)
+    public void ReplaceLines(IReadOnlyList<SalesOrderLineDraft> lines)
     {
         ArgumentNullException.ThrowIfNull(lines);
         if (Status != SalesOrderStatus.Reserved)
@@ -177,9 +176,9 @@ public sealed class SalesOrder : AggregateRoot<Guid>, IOperatorOwnedEntity
         }
 
         _lines.Clear();
-        foreach (var (productId, zone, qty, unitPrice, currency) in lines)
+        foreach (var line in lines)
         {
-            _lines.Add(SalesOrderLine.Create(Id, productId, zone, qty, unitPrice, currency));
+            _lines.Add(line.ToLine(Id));
         }
     }
 
