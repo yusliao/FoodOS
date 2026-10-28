@@ -1,8 +1,9 @@
 namespace FSH.Modules.Catalog.Domain;
 
 /// <summary>
-/// Resolves unit price at order time: lock → customer contract tier → catalog list / product list price.
-/// Caller must pass only lists that belong to the quoted customer or have a null customer (catalog-wide).
+/// Resolves unit price at order time:
+/// lock → customer contract tier → level price list → level discount on (catalog list / product price) → catalog price.
+/// Caller must pass only lists that belong to the quoted customer, the customer's level, or the whole catalog.
 /// </summary>
 public static class PriceResolver
 {
@@ -13,7 +14,8 @@ public static class PriceResolver
         decimal quantity,
         DateTimeOffset asOf,
         ProductContractLock? priceLock,
-        IEnumerable<PriceList> lists)
+        IEnumerable<PriceList> lists,
+        CustomerLevel? level = null)
     {
         ArgumentNullException.ThrowIfNull(catalogPrice);
         ArgumentNullException.ThrowIfNull(lists);
@@ -51,16 +53,29 @@ public static class PriceResolver
             return (contractLine.UnitPrice, contractLine.Currency, PriceQuoteSource.Contract);
         }
 
-        var catalogLine = MatchTier(
-            valid.Where(l => l.CustomerOrgId is null),
-            productId,
-            quantity);
-        if (catalogLine is not null)
+        if (level is not null)
         {
-            return (catalogLine.UnitPrice, catalogLine.Currency, PriceQuoteSource.Catalog);
+            var levelLine = MatchTier(
+                valid.Where(l => l.CustomerOrgId is null && l.CustomerLevelId == level.Id),
+                productId,
+                quantity);
+            if (levelLine is not null)
+            {
+                return (levelLine.UnitPrice, levelLine.Currency, PriceQuoteSource.Level);
+            }
         }
 
-        return (catalogPrice.Amount, catalogPrice.Currency, PriceQuoteSource.Catalog);
+        // 全局价目表必须排除等级价目表，否则别的等级的价格会漏给这个客户
+        var catalogLine = MatchTier(
+            valid.Where(l => l.CustomerOrgId is null && l.CustomerLevelId is null),
+            productId,
+            quantity);
+        decimal basePrice = catalogLine?.UnitPrice ?? catalogPrice.Amount;
+        string currency = catalogLine?.Currency ?? catalogPrice.Currency;
+
+        return level is { DiscountPercent: > 0 }
+            ? (level.ApplyDiscount(basePrice), currency, PriceQuoteSource.Level)
+            : (basePrice, currency, PriceQuoteSource.Catalog);
     }
 
     private static PriceListLine? MatchTier(IEnumerable<PriceList> lists, Guid productId, decimal quantity)

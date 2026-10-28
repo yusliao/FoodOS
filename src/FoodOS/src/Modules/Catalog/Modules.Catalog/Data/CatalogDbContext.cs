@@ -26,6 +26,8 @@ public sealed class CatalogDbContext : BaseDbContext
     public DbSet<PriceList> PriceLists => Set<PriceList>();
     public DbSet<PriceListLine> PriceListLines => Set<PriceListLine>();
     public DbSet<ProductContractLock> ProductContractLocks => Set<ProductContractLock>();
+    public DbSet<CustomerLevel> CustomerLevels => Set<CustomerLevel>();
+    public DbSet<CustomerLevelAssignment> CustomerLevelAssignments => Set<CustomerLevelAssignment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -78,7 +78,7 @@ for (const [culture, messages] of [["en-US", en], ["zh-CN", zh]] as const) {
       if (mode === "lock") await container.getByLabel(messages.pricing.lockUntil).fill("2027-01-01T12:00");
       await container.getByRole("button", { name: mode === "tier" ? messages.pricing.saveTier : mode === "lock" ? messages.pricing.saveLock : messages.pricing.quote, exact: true }).click();
       if (mode !== "quote") await expect(container).toHaveCount(0);
-      else await expect(container.getByRole("status").filter({ hasText: "Catalog" })).toBeVisible();
+      else await expect(container.getByRole("status").filter({ hasText: messages.pricing.sourceCatalog })).toBeVisible();
     }
     expect(writes).toHaveLength(2);
     expect(writes.every(body => body.productId === "product-2" && body.currency === "USD")).toBe(true);

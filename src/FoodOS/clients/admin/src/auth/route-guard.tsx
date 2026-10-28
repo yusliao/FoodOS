@@ -11,6 +11,8 @@ type RouteGuardProps = {
    * ProtectedRoute itself only handles the auth-vs-anonymous question.
    */
   perms: readonly string[];
+  /** Optional: at least one of these must be held (checked in addition to `perms`). */
+  anyOf?: readonly string[];
   children: ReactNode;
 };
 
@@ -24,7 +26,7 @@ type RouteGuardProps = {
  * flight (permissionsHydrated=false), we render a quiet loading slug instead
  * of 403 to avoid a flash of "access denied" on first paint.
  */
-export function RouteGuard({ perms, children }: RouteGuardProps) {
+export function RouteGuard({ perms, anyOf, children }: RouteGuardProps) {
   const t = useT();
   const { user, permissionsHydrated } = useAuth();
 
@@ -42,6 +44,9 @@ export function RouteGuard({ perms, children }: RouteGuardProps) {
 
   const granted = user?.permissions ?? [];
   const missing = perms.filter((p) => !granted.includes(p));
+  if (anyOf && anyOf.length > 0 && !anyOf.some((p) => granted.includes(p))) {
+    missing.push(...anyOf);
+  }
 
   if (missing.length > 0) {
     return <ForbiddenView missing={missing} />;

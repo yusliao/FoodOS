@@ -78,7 +78,7 @@ for (const [culture, m] of [["en-US", en], ["zh-CN", zh]] as const) {
     const customer = panel.getByRole("combobox", { name: m.pricing.customer, exact: true });
     const product = panel.getByRole("button", { name: m.pricing.product, exact: true });
     const quantity = panel.getByRole("spinbutton", { name: m.pricing.quantity, exact: true });
-    const result = panel.getByRole("status").filter({ hasText: "Catalog" });
+    const result = panel.getByRole("status").filter({ hasText: m.pricing.sourceCatalog });
     const submit = panel.getByRole("button", { name: m.pricing.quote, exact: true });
     await customer.selectOption("customer-1");
     await product.click();

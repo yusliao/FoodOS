@@ -17,7 +17,7 @@ public static class CreatePriceListEndpoint
                 async (CreatePriceListCommand command, IMediator mediator, CancellationToken ct) =>
                     Results.Ok(await mediator.Send(command, ct)))
             .WithName("CreatePriceList")
-            .WithSummary("Create a catalog or customer contract price list")
+            .WithSummary("Create a catalog-wide, customer-level or customer contract price list")
             .RequirePermission(CatalogPermissions.PriceLists.Create)
             .WithIdempotency();
     }

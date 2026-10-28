@@ -34,6 +34,11 @@ using FSH.Modules.Catalog.Features.v1.Products.RestoreProduct;
 using FSH.Modules.Catalog.Features.v1.Products.SearchProducts;
 using FSH.Modules.Catalog.Features.v1.Products.SetProductThumbnail;
 using FSH.Modules.Catalog.Features.v1.Products.UpdateProduct;
+using FSH.Modules.Catalog.Features.v1.CustomerLevels.AssignCustomerLevel;
+using FSH.Modules.Catalog.Features.v1.CustomerLevels.CreateCustomerLevel;
+using FSH.Modules.Catalog.Features.v1.CustomerLevels.GetCustomerLevelAssignments;
+using FSH.Modules.Catalog.Features.v1.CustomerLevels.GetCustomerLevels;
+using FSH.Modules.Catalog.Features.v1.CustomerLevels.UpdateCustomerLevel;
 using FSH.Modules.Catalog.Features.v1.PriceLists.CreatePriceList;
 using FSH.Modules.Catalog.Features.v1.PriceLists.GetPriceListById;
 using FSH.Modules.Catalog.Features.v1.PriceLists.GetPriceLists;
@@ -139,5 +144,11 @@ public sealed class CatalogModule : IModule
         group.MapUpsertPriceListLineEndpoint();
         group.MapUpsertProductPriceLockEndpoint();
         group.MapGetProductPriceQuoteEndpoint();
+
+        group.MapGetCustomerLevelAssignmentsEndpoint();
+        group.MapAssignCustomerLevelEndpoint();
+        group.MapGetCustomerLevelsEndpoint();
+        group.MapCreateCustomerLevelEndpoint();
+        group.MapUpdateCustomerLevelEndpoint();
     }
 }

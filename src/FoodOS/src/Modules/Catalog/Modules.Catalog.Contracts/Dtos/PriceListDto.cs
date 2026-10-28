@@ -7,4 +7,8 @@ public sealed record PriceListDto(
     int Priority,
     DateTimeOffset ValidFrom,
     DateTimeOffset? ValidTo,
-    IReadOnlyList<PriceListLineDto> Lines);
+    IReadOnlyList<PriceListLineDto> Lines)
+{
+    /// <summary>Set when the list prices one customer level instead of one customer or the whole catalog.</summary>
+    public Guid? CustomerLevelId { get; init; }
+}

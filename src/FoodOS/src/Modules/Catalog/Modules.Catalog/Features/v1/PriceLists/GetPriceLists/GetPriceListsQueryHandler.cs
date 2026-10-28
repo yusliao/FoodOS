@@ -21,6 +21,11 @@ public sealed class GetPriceListsQueryHandler(CatalogDbContext dbContext)
             lists = lists.Where(l => l.CustomerOrgId == orgId);
         }
 
+        if (query.CustomerLevelId is { } levelId && levelId != Guid.Empty)
+        {
+            lists = lists.Where(l => l.CustomerLevelId == levelId);
+        }
+
         var items = await lists
             .OrderByDescending(l => l.Priority)
             .ThenBy(l => l.Name)

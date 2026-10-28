@@ -141,10 +141,77 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                     b.ToTable("Categories", "catalog");
                 });
 
+            modelBuilder.Entity("FSH.Modules.Catalog.Domain.CustomerLevel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<decimal>("DiscountPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CustomerLevels_Code");
+
+                    b.ToTable("CustomerLevels", "catalog");
+                });
+
+            modelBuilder.Entity("FSH.Modules.Catalog.Domain.CustomerLevelAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerLevelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerOrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("root");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerLevelId");
+
+                    b.HasIndex("CustomerOrgId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CustomerLevelAssignments_CustomerOrgId");
+
+                    b.ToTable("CustomerLevelAssignments", "catalog");
+                });
+
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.PriceList", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerLevelId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("CustomerOrgId")
@@ -171,6 +238,8 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CustomerLevelId");
 
                     b.HasIndex("CustomerOrgId");
 
@@ -455,6 +524,23 @@ namespace FoodOS.Migrations.PostgreSQL.Catalog
                         .HasDatabaseName("IX_ProductTranslations_ProductId_Culture");
 
                     b.ToTable("ProductTranslations", "catalog");
+                });
+
+            modelBuilder.Entity("FSH.Modules.Catalog.Domain.CustomerLevelAssignment", b =>
+                {
+                    b.HasOne("FSH.Modules.Catalog.Domain.CustomerLevel", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerLevelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FSH.Modules.Catalog.Domain.PriceList", b =>
+                {
+                    b.HasOne("FSH.Modules.Catalog.Domain.CustomerLevel", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerLevelId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("FSH.Modules.Catalog.Domain.PriceListLine", b =>

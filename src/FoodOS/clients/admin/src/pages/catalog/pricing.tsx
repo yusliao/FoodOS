@@ -1,19 +1,22 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeDollarSign } from "lucide-react";
 import { toast } from "sonner";
 import {
   createPriceList,
+  customerLevelKeys,
+  getCustomerLevels,
   getPriceLists,
   quoteProductPrice,
   searchProducts,
   upsertPriceListLine,
   upsertPriceLock,
+  type CustomerLevelDto,
   type PriceListDto,
+  type PriceListScope,
 } from "@/api/catalog";
 import { searchCustomers, type CustomerOrgDto } from "@/api/customers";
 import { useAuth } from "@/auth/use-auth";
-import { EntityPageHeader, ErrorBand, Field, LoadingRow } from "@/components/list";
+import { ErrorBand, Field, LoadingRow } from "@/components/list";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter,
@@ -28,11 +31,12 @@ const priceKey = ["catalog", "price-lists"] as const;
 import { CatalogChoice } from "./catalog-choice";
 import { newUuid } from "@/lib/uuid";
 
-export function PricingPage() {
+/** Contract pricing workspace, shown as the "levels and contract prices" tab of the customers page. */
+export function PricingPanel() {
   const t = useT();
   const { user } = useAuth();
   const granted = user?.permissions ?? [];
-  const [customerFilter, setCustomerFilter] = useState("");
+  const [scopeFilter, setScopeFilter] = useState("");
   const [creating, setCreating] = useState(false);
   const [editingLines, setEditingLines] = useState<PriceListDto | null>(null);
   const [locking, setLocking] = useState(false);
@@ -41,9 +45,10 @@ export function PricingPage() {
   const canReadProducts = granted.includes(CatalogPermissions.Products.View);
   const canReadCustomers = granted.includes(OrderingPermissions.Customers.View);
   const lists = useQuery({
-    queryKey: [...priceKey, customerFilter],
-    queryFn: ({ signal }) => getPriceLists(customerFilter, signal),
+    queryKey: [...priceKey, scopeFilter],
+    queryFn: ({ signal }) => getPriceLists(parseScope(scopeFilter), signal),
   });
+  const levels = useQuery({ queryKey: customerLevelKeys.levels, queryFn: ({ signal }) => getCustomerLevels(signal) });
   const customers = useQuery({
     queryKey: ["customers", "pricing"],
     queryFn: ({ signal }) => searchCustomers("", signal),
@@ -56,7 +61,14 @@ export function PricingPage() {
   });
   const customerItems = useMemo(() => customers.isSuccess ? customers.data : [], [customers.data, customers.isSuccess]);
   const productItems = useMemo(() => products.isSuccess ? products.data.items : [], [products.data, products.isSuccess]);
+  const levelItems = useMemo(() => levels.isSuccess ? levels.data : [], [levels.data, levels.isSuccess]);
   const customerNames = useMemo(() => new Map(customerItems.map(item => [item.id, item.name])), [customerItems]);
+  const levelNames = useMemo(() => new Map(levelItems.map(item => [item.id, item.name])), [levelItems]);
+  const scopeLabel = (list: PriceListDto) => list.customerOrgId
+    ? customerNames.get(list.customerOrgId) ?? list.customerOrgId
+    : list.customerLevelId
+      ? t("pricing.levelScope").replace("{name}", levelNames.get(list.customerLevelId) ?? list.customerLevelId)
+      : t("pricing.global");
   const productNames = useMemo(() => new Map(productItems.map(item => [item.id, item.name])), [productItems]);
   const canCreateCustomerPrice = canCreate && canReadCustomers;
   const canEditTiers = canUpdate && canReadProducts;
@@ -64,19 +76,18 @@ export function PricingPage() {
   const canQuote = canReadCustomers && canReadProducts;
 
   return <div className="space-y-6">
-    <EntityPageHeader icon={BadgeDollarSign} title={t("pricing.title")} description={t("pricing.description")}>
-      <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+      <div><h2 className="text-lg font-semibold">{t("pricing.title")}</h2><p className="max-w-2xl text-sm text-[var(--color-muted-foreground)]">{t("pricing.description")}</p></div>
+      <div className="flex shrink-0 flex-wrap gap-2">
         {canCreate && <Button disabled={canReadCustomers && !customers.isSuccess} onClick={() => setCreating(true)}>{t("pricing.newList")}</Button>}
         {canLock && <Button variant="outline" disabled={!customers.isSuccess} onClick={() => setLocking(true)}>{t("pricing.setLock")}</Button>}
       </div>
-    </EntityPageHeader>
+    </div>
 
-    {canReadCustomers && <label className="block max-w-md space-y-1 text-sm"><span>{t("pricing.customerFilter")}</span>
-      <select className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3" value={customerFilter} onChange={event => setCustomerFilter(event.target.value)}>
-        <option value="">{t("pricing.allLists")}</option>
-        {customerItems.map(customer => <option key={customer.id} value={customer.id}>{customer.code} · {customer.name}</option>)}
-      </select>
-    </label>}
+    <label className="block max-w-md space-y-1 text-sm"><span>{t("pricing.scopeFilter")}</span>
+      <ScopeSelect value={scopeFilter} onChange={setScopeFilter} levels={levelItems} customers={canReadCustomers ? customerItems : []} emptyLabel={t("pricing.allLists")} />
+    </label>
+    {levels.isError && <section aria-label={t("pricing.levelsFailed")} className="space-y-2"><ErrorBand message={describe(levels.error, t("pricing.levelsFailed"))} /><Button disabled={levels.isFetching} variant="outline" onClick={() => void levels.refetch()}>{t("workbench.retry")}</Button></section>}
     {canReadCustomers && customers.isFetching && <LoadingRow label={t("common.loading")} />}
     {canReadCustomers && customers.isError && <section aria-label={t("pricing.customersFailed")} className="space-y-2"><ErrorBand message={describe(customers.error, t("pricing.customersFailed"))} /><Button disabled={customers.isFetching} variant="outline" onClick={() => { if (canReadCustomers) void customers.refetch(); }}>{t("workbench.retry")}</Button></section>}
     {canReadProducts && products.isError && <section aria-label={t("pricing.productsFailed")} className="space-y-2"><ErrorBand message={describe(products.error, t("pricing.productsFailed"))} /><Button disabled={products.isFetching} variant="outline" onClick={() => { if (canReadProducts) void products.refetch(); }}>{t("workbench.retry")}</Button></section>}
@@ -86,7 +97,7 @@ export function PricingPage() {
     {lists.isSuccess && lists.data.length === 0 && <p role="status">{t("pricing.empty")}</p>}
     {lists.isSuccess && <div className="grid gap-4 xl:grid-cols-2">{lists.data.map(list =>
       <article key={list.id} className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5">
-        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start"><div><h2 className="font-semibold break-words">{list.name}</h2><p className="text-sm text-[var(--color-muted-foreground)]">{list.customerOrgId ? customerNames.get(list.customerOrgId) ?? list.customerOrgId : t("pricing.global")}</p></div><span className="rounded-full border px-2 py-1 text-xs">{t("pricing.priority")} {list.priority}</span></div>
+        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start"><div><h2 className="font-semibold break-words">{list.name}</h2><p className="text-sm text-[var(--color-muted-foreground)]">{scopeLabel(list)}</p></div><span className="rounded-full border px-2 py-1 text-xs">{t("pricing.priority")} {list.priority}</span></div>
         <p className="text-sm text-[var(--color-muted-foreground)]">{formatDate(list.validFrom)} – {list.validTo ? formatDate(list.validTo) : t("pricing.noEnd")}</p>
         {list.lines.length === 0 ? <p className="text-sm">{t("pricing.noLines")}</p> : <>
           <dl className="space-y-3 sm:hidden">{list.lines.map(line => <div key={line.id} className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--color-border)] p-3 text-sm"><dt className="col-span-2 text-[var(--color-muted-foreground)]">{t("pricing.product")}</dt><dd className="col-span-2 break-all">{productNames.get(line.productId) ?? line.productId}</dd><dt className="text-[var(--color-muted-foreground)]">{t("pricing.minQty")}</dt><dt className="text-[var(--color-muted-foreground)]">{t("pricing.unitPrice")}</dt><dd>{line.minQty}</dd><dd>{formatMoney(line.unitPrice, line.currency)}</dd></div>)}</dl>
@@ -100,17 +111,17 @@ export function PricingPage() {
     {canQuote && <QuotePanel customers={customerItems} />}
     <section className="rounded-xl border border-dashed border-[var(--color-border)] p-4 text-sm text-[var(--color-muted-foreground)]"><h2 className="font-semibold text-[var(--color-foreground)]">{t("pricing.boundariesTitle")}</h2><p>{t("pricing.boundaries")}</p></section>
 
-    {creating && canCreate && <CreatePriceListDialog customers={canCreateCustomerPrice ? customerItems : []} onClose={() => setCreating(false)} />}
+    {creating && canCreate && <CreatePriceListDialog customers={canCreateCustomerPrice ? customerItems : []} levels={levelItems} onClose={() => setCreating(false)} />}
     {editingLines && canEditTiers && <PriceTierDialog list={editingLines} onClose={() => setEditingLines(null)} />}
     {locking && canLock && <PriceLockDialog customers={customerItems} onClose={() => setLocking(false)} />}
   </div>;
 }
 
-function CreatePriceListDialog({ customers, onClose }: { customers: CustomerOrgDto[]; onClose: () => void }) {
+function CreatePriceListDialog({ customers, levels, onClose }: { customers: CustomerOrgDto[]; levels: CustomerLevelDto[]; onClose: () => void }) {
   const t = useT();
   const cache = useQueryClient();
   const [name, setName] = useState("");
-  const [customerOrgId, setCustomerOrgId] = useState("");
+  const [scope, setScope] = useState("");
   const [priority, setPriority] = useState("0");
   const [validFrom, setValidFrom] = useState(toLocalInput(new Date()));
   const [validTo, setValidTo] = useState("");
@@ -122,12 +133,13 @@ function CreatePriceListDialog({ customers, onClose }: { customers: CustomerOrgD
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim() || !validFrom || mutation.isPending) return;
-    const input = { name: name.trim(), customerOrgId: customerOrgId || null, priority: Number(priority), validFrom: new Date(validFrom).toISOString(), validTo: validTo ? new Date(validTo).toISOString() : null };
+    const { customerOrgId, customerLevelId } = parseScope(scope);
+    const input = { name: name.trim(), customerOrgId: customerOrgId ?? null, customerLevelId: customerLevelId ?? null, priority: Number(priority), validFrom: new Date(validFrom).toISOString(), validTo: validTo ? new Date(validTo).toISOString() : null };
     const body = JSON.stringify(input);
     if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ input, key: attempt.current.key });
   }
-  return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent><DialogHeader><DialogTitle>{t("pricing.newList")}</DialogTitle><DialogDescription>{t("pricing.createHint")}</DialogDescription></DialogHeader><form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="space-y-4"><Field id="price-list-name" label={t("pricing.name")} required><Input id="price-list-name" required value={name} onChange={event => setName(event.target.value)} /></Field>{customers.length > 0 && <Field id="price-list-customer" label={t("pricing.customer")}><select id="price-list-customer" className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3" value={customerOrgId} onChange={event => setCustomerOrgId(event.target.value)}><option value="">{t("pricing.global")}</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.code} · {customer.name}</option>)}</select></Field>}<Field id="price-list-priority" label={t("pricing.priority")} required><Input id="price-list-priority" type="number" required value={priority} onChange={event => setPriority(event.target.value)} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field id="price-list-from" label={t("pricing.validFrom")} required><Input id="price-list-from" type="datetime-local" required value={validFrom} onChange={event => setValidFrom(event.target.value)} /></Field><Field id="price-list-to" label={t("pricing.validTo")}><Input id="price-list-to" type="datetime-local" value={validTo} onChange={event => setValidTo(event.target.value)} /></Field></div></fieldset>{mutation.isError && <p role="alert" className="text-sm text-[var(--color-destructive)]">{describe(mutation.error, t("pricing.requestFailed"))}</p>}</DialogBody><DialogFooter><Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>{t("chrome.cancel")}</Button><Button type="submit" disabled={!name.trim() || !validFrom || mutation.isPending}>{t(mutation.isPending ? "pricing.saving" : "pricing.create")}</Button></DialogFooter></form></DialogContent></Dialog>;
+  return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent><DialogHeader><DialogTitle>{t("pricing.newList")}</DialogTitle><DialogDescription>{t("pricing.createHint")}</DialogDescription></DialogHeader><form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="space-y-4"><Field id="price-list-name" label={t("pricing.name")} required><Input id="price-list-name" required value={name} onChange={event => setName(event.target.value)} /></Field>{(customers.length > 0 || levels.length > 0) && <Field id="price-list-scope" label={t("pricing.scope")}><ScopeSelect id="price-list-scope" value={scope} onChange={setScope} levels={levels} customers={customers} emptyLabel={t("pricing.global")} /></Field>}<Field id="price-list-priority" label={t("pricing.priority")} required><Input id="price-list-priority" type="number" required value={priority} onChange={event => setPriority(event.target.value)} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field id="price-list-from" label={t("pricing.validFrom")} required><Input id="price-list-from" type="datetime-local" required value={validFrom} onChange={event => setValidFrom(event.target.value)} /></Field><Field id="price-list-to" label={t("pricing.validTo")}><Input id="price-list-to" type="datetime-local" value={validTo} onChange={event => setValidTo(event.target.value)} /></Field></div></fieldset>{mutation.isError && <p role="alert" className="text-sm text-[var(--color-destructive)]">{describe(mutation.error, t("pricing.requestFailed"))}</p>}</DialogBody><DialogFooter><Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>{t("chrome.cancel")}</Button><Button type="submit" disabled={!name.trim() || !validFrom || mutation.isPending}>{t(mutation.isPending ? "pricing.saving" : "pricing.create")}</Button></DialogFooter></form></DialogContent></Dialog>;
 }
 
 function PriceTierDialog({ list, onClose }: { list: PriceListDto; onClose: () => void }) {
@@ -161,7 +173,30 @@ function QuotePanel({ customers }: { customers: CustomerOrgDto[] }) {
   const [quantity, setQuantity] = useState("1");
   const quote = useMutation({ mutationFn: (input: Parameters<typeof quoteProductPrice>[0]) => quoteProductPrice(input) });
   function submit(event: FormEvent) { event.preventDefault(); if (!quote.isPending && Number.isFinite(Number(quantity)) && customerOrgId && productId && Number(quantity) > 0) quote.mutate({ customerOrgId, productId, quantity: Number(quantity) }); }
-  return <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5"><div><h2 className="font-semibold">{t("pricing.quoteTitle")}</h2><p className="text-sm text-[var(--color-muted-foreground)]">{t("pricing.quoteHint")}</p></div><form onSubmit={submit}><fieldset disabled={quote.isPending} className="grid gap-3 md:grid-cols-4"><label className="space-y-1 text-sm"><span>{t("pricing.customer")}</span><select className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3" value={customerOrgId} onChange={event => { setCustomerOrgId(event.target.value); quote.reset(); }}><option value="">{t("pricing.chooseCustomer")}</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.code} · {customer.name}</option>)}</select></label><CatalogChoice kind="products" value={productId} onChange={value => { setProductId(value); quote.reset(); }} disabled={quote.isPending} /><Field id="quote-quantity" label={t("pricing.quantity")}><Input id="quote-quantity" type="number" min="0.001" step="0.001" value={quantity} onChange={event => { setQuantity(event.target.value); quote.reset(); }} /></Field><Button className="self-end" type="submit" disabled={!customerOrgId || !productId || Number(quantity) <= 0 || quote.isPending}>{t(quote.isPending ? "pricing.quoting" : "pricing.quote")}</Button></fieldset></form>{quote.isError && <ErrorBand message={describe(quote.error, t("pricing.quoteFailed"))} />}{quote.isSuccess && quote.data && <p role="status" className="text-lg font-semibold">{formatMoney(quote.data.unitPrice, quote.data.currency)} <span className="text-sm font-normal text-[var(--color-muted-foreground)]">· {quote.data.source}</span></p>}</section>;
+  return <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5"><div><h2 className="font-semibold">{t("pricing.quoteTitle")}</h2><p className="text-sm text-[var(--color-muted-foreground)]">{t("pricing.quoteHint")}</p></div><form onSubmit={submit}><fieldset disabled={quote.isPending} className="grid gap-3 md:grid-cols-4"><label className="space-y-1 text-sm"><span>{t("pricing.customer")}</span><select className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3" value={customerOrgId} onChange={event => { setCustomerOrgId(event.target.value); quote.reset(); }}><option value="">{t("pricing.chooseCustomer")}</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.code} · {customer.name}</option>)}</select></label><CatalogChoice kind="products" value={productId} onChange={value => { setProductId(value); quote.reset(); }} disabled={quote.isPending} /><Field id="quote-quantity" label={t("pricing.quantity")}><Input id="quote-quantity" type="number" min="0.001" step="0.001" value={quantity} onChange={event => { setQuantity(event.target.value); quote.reset(); }} /></Field><Button className="self-end" type="submit" disabled={!customerOrgId || !productId || Number(quantity) <= 0 || quote.isPending}>{t(quote.isPending ? "pricing.quoting" : "pricing.quote")}</Button></fieldset></form>{quote.isError && <ErrorBand message={describe(quote.error, t("pricing.quoteFailed"))} />}{quote.isSuccess && quote.data && <p role="status" className="text-lg font-semibold">{formatMoney(quote.data.unitPrice, quote.data.currency)} <span className="text-sm font-normal text-[var(--color-muted-foreground)]">· {t(`pricing.source${quote.data.source}`, quote.data.source)}</span></p>}</section>;
+}
+
+/** Scope select values: "" (all / catalog-wide), "level:<id>" or "customer:<id>". */
+function parseScope(value: string): PriceListScope {
+  if (value.startsWith("level:")) return { customerLevelId: value.slice("level:".length) };
+  if (value.startsWith("customer:")) return { customerOrgId: value.slice("customer:".length) };
+  return {};
+}
+
+function ScopeSelect({ id, value, onChange, levels, customers, emptyLabel }: {
+  id?: string;
+  value: string;
+  onChange: (value: string) => void;
+  levels: CustomerLevelDto[];
+  customers: CustomerOrgDto[];
+  emptyLabel: string;
+}) {
+  const t = useT();
+  return <select id={id} className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3" value={value} onChange={event => onChange(event.target.value)}>
+    <option value="">{emptyLabel}</option>
+    {levels.length > 0 && <optgroup label={t("pricing.levelsGroup")}>{levels.map(level => <option key={level.id} value={`level:${level.id}`}>{level.code} · {level.name}</option>)}</optgroup>}
+    {customers.length > 0 && <optgroup label={t("pricing.customersGroup")}>{customers.map(customer => <option key={customer.id} value={`customer:${customer.id}`}>{customer.code} · {customer.name}</option>)}</optgroup>}
+  </select>;
 }
 
 function toLocalInput(value: Date) {

@@ -13,10 +13,10 @@ public static class GetPriceListsEndpoint
     internal static RouteHandlerBuilder MapGetPriceListsEndpoint(this IEndpointRouteBuilder endpoints)
     {
         return endpoints.MapGet("/price-lists",
-                (Guid? customerOrgId, IMediator mediator, CancellationToken ct) =>
-                    mediator.Send(new GetPriceListsQuery(customerOrgId), ct))
+                (Guid? customerOrgId, Guid? customerLevelId, IMediator mediator, CancellationToken ct) =>
+                    mediator.Send(new GetPriceListsQuery(customerOrgId, customerLevelId), ct))
             .WithName("GetPriceLists")
-            .WithSummary("List price lists; pass customerOrgId to return only that customer's contracts")
+            .WithSummary("List price lists; filter by customerOrgId (contracts) or customerLevelId (level prices)")
             .RequirePermission(CatalogPermissions.PriceLists.View);
     }
 }

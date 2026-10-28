@@ -8,4 +8,5 @@ public sealed record CreatePriceListCommand(
     DateTimeOffset ValidFrom,
     DateTimeOffset? ValidTo = null,
     int Priority = 0,
-    IReadOnlyList<PriceListLineInput>? Lines = null) : ICommand<Guid>;
+    IReadOnlyList<PriceListLineInput>? Lines = null,
+    Guid? CustomerLevelId = null) : ICommand<Guid>;

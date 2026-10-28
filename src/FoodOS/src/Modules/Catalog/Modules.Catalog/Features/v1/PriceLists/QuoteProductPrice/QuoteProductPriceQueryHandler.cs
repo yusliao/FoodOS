@@ -30,11 +30,8 @@ public sealed class QuoteProductPriceQueryHandler(CatalogDbContext dbContext, Ti
                 cancellationToken)
             .ConfigureAwait(false);
 
-        var lists = await dbContext.PriceLists
-            .AsNoTracking()
-            .Where(l => l.CustomerOrgId == query.CustomerOrgId || l.CustomerOrgId == null)
-            .Include(l => l.Lines)
-            .ToListAsync(cancellationToken)
+        var (level, lists) = await CustomerPricingScope
+            .LoadAsync(dbContext, query.CustomerOrgId, cancellationToken)
             .ConfigureAwait(false);
 
         var (unitPrice, currency, source) = PriceResolver.Resolve(
@@ -44,7 +41,8 @@ public sealed class QuoteProductPriceQueryHandler(CatalogDbContext dbContext, Ti
             query.Quantity,
             asOf,
             priceLock,
-            lists);
+            lists,
+            level);
 
         return new PriceQuoteDto(
             query.CustomerOrgId,

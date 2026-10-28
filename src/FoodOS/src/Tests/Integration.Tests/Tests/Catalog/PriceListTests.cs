@@ -74,6 +74,70 @@ public sealed class PriceListTests
     }
 
     [Fact]
+    public async Task Quote_Should_ApplyCustomerLevel_DiscountAndOverride_BelowCustomerContract()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var discounted = await CreateProductAsync(client, listPrice: 20m);
+        var overridden = await CreateProductAsync(client, listPrice: 20m);
+        var vipOrg = await CreateCustomerOrgAsync(client);
+        var plainOrg = await CreateCustomerOrgAsync(client);
+
+        string code = $"l{Guid.NewGuid().ToString("N")[..6]}";
+        string storedCode = code.ToUpperInvariant();
+        using var createLevel = await client.PostAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/customer-levels",
+            new { code, name = "VIP", discountPercent = 10m });
+        createLevel.StatusCode.ShouldBe(HttpStatusCode.OK, await createLevel.Content.ReadAsStringAsync());
+        var levelId = await createLevel.DeserializeAsync<Guid>();
+
+        using var duplicate = await client.PostAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/customer-levels",
+            new { code = storedCode, name = "dup", discountPercent = 5m });
+        duplicate.StatusCode.ShouldBe(HttpStatusCode.Conflict, await duplicate.Content.ReadAsStringAsync());
+
+        using var levelList = await client.PostAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/price-lists",
+            new
+            {
+                name = Unique("Level"),
+                customerLevelId = levelId,
+                validFrom = DateTimeOffset.UtcNow.AddDays(-1),
+                priority = 1,
+                lines = new[] { new { productId = overridden, minQty = 1m, unitPrice = 15m, currency = "USD" } },
+            });
+        levelList.StatusCode.ShouldBe(HttpStatusCode.OK, await levelList.Content.ReadAsStringAsync());
+
+        await AssignLevelAsync(client, vipOrg, levelId);
+
+        var discountQuote = await QuoteAsync(client, vipOrg, discounted, 1m);
+        discountQuote.UnitPrice.ShouldBe(18m);
+        discountQuote.Source.ShouldBe("Level");
+        var overrideQuote = await QuoteAsync(client, vipOrg, overridden, 1m);
+        overrideQuote.UnitPrice.ShouldBe(15m);
+        overrideQuote.Source.ShouldBe("Level");
+
+        // 等级价目表不能被当成全局价漏给别的客户
+        var plainQuote = await QuoteAsync(client, plainOrg, overridden, 1m);
+        plainQuote.UnitPrice.ShouldBe(20m);
+        plainQuote.Source.ShouldBe("Catalog");
+
+        await CreatePriceListAsync(client, vipOrg, overridden, 9m);
+        (await QuoteAsync(client, vipOrg, overridden, 1m)).Source.ShouldBe("Contract");
+
+        using var levels = await client.GetAsync($"{TestConstants.CatalogBasePath}/customer-levels");
+        (await levels.DeserializeAsync<List<CustomerLevelDto>>())
+            .ShouldContain(level => level.Id == levelId && level.CustomerCount == 1 && level.Code == storedCode);
+        using var byLevel = await client.GetAsync($"{TestConstants.CatalogBasePath}/price-lists?customerLevelId={levelId}");
+        (await byLevel.DeserializeAsync<List<PriceListDto>>())
+            .ShouldHaveSingleItem().CustomerLevelId.ShouldBe(levelId);
+
+        await AssignLevelAsync(client, vipOrg, null);
+        var afterClear = await QuoteAsync(client, vipOrg, discounted, 1m);
+        afterClear.UnitPrice.ShouldBe(20m);
+        afterClear.Source.ShouldBe("Catalog");
+    }
+
+    [Fact]
     public async Task PlaceOrder_Should_FailClosed_WhileContractQuoteAndCartRemainAvailable()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
@@ -103,6 +167,14 @@ public sealed class PriceListTests
         var line = (await getCart.DeserializeAsync<CartDto>()).Lines.ShouldHaveSingleItem();
         line.ProductId.ShouldBe(productId);
         line.Quantity.ShouldBe(4m);
+    }
+
+    private static async Task AssignLevelAsync(HttpClient client, Guid customerOrgId, Guid? customerLevelId)
+    {
+        using var response = await client.PutAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/customer-levels/assignments/{customerOrgId}",
+            new { customerLevelId });
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
     }
 
     private static async Task<PriceQuoteDto> QuoteAsync(

@@ -19,6 +19,9 @@ internal static class PriceListMappings
                 .OrderBy(l => l.ProductId)
                 .ThenBy(l => l.MinQty)
                 .Select(l => new PriceListLineDto(l.Id, l.ProductId, l.MinQty, l.UnitPrice, l.Currency))
-                .ToList());
+                .ToList())
+        {
+            CustomerLevelId = list.CustomerLevelId,
+        };
     }
 }

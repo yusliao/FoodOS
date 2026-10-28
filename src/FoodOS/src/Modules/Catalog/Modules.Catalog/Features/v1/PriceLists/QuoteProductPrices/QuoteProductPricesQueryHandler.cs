@@ -43,11 +43,8 @@ public sealed class QuoteProductPricesQueryHandler(CatalogDbContext dbContext, T
             .Where(item => item.CustomerOrgId == query.CustomerOrgId && productIds.Contains(item.ProductId))
             .ToDictionaryAsync(item => item.ProductId, cancellationToken)
             .ConfigureAwait(false);
-        var priceLists = await dbContext.PriceLists
-            .AsNoTracking()
-            .Where(list => list.CustomerOrgId == query.CustomerOrgId || list.CustomerOrgId == null)
-            .Include(list => list.Lines)
-            .ToListAsync(cancellationToken)
+        var (level, priceLists) = await CustomerPricingScope
+            .LoadAsync(dbContext, query.CustomerOrgId, cancellationToken)
             .ConfigureAwait(false);
 
         return requests.Select(request =>
@@ -61,7 +58,8 @@ public sealed class QuoteProductPricesQueryHandler(CatalogDbContext dbContext, T
                 request.Quantity,
                 asOf,
                 priceLock,
-                priceLists);
+                priceLists,
+                level);
             return new PriceQuoteDto(
                 query.CustomerOrgId,
                 request.ProductId,

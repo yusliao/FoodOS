@@ -47,7 +47,6 @@ const StoresPage = lazyNamed(() => import("@/pages/customers/stores"), "StoresPa
 const BrandsPage = lazyNamed(() => import("@/pages/catalog/brands"), "BrandsPage");
 const CategoriesPage = lazyNamed(() => import("@/pages/catalog/categories"), "CategoriesPage");
 const ProductsPage = lazyNamed(() => import("@/pages/catalog/products"), "ProductsPage");
-const PricingPage = lazyNamed(() => import("@/pages/catalog/pricing"), "PricingPage");
 const OrdersPage = lazyNamed(() => import("@/pages/orders/orders"), "OrdersPage");
 const SuppliersPage = lazyNamed(() => import("@/pages/procurement/suppliers"), "SuppliersPage");
 const VehiclesPage = lazyNamed(() => import("@/pages/logistics/vehicles"), "VehiclesPage");
@@ -120,13 +119,14 @@ export const router = createBrowserRouter([
           { path: "orders", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrdersPage /></RouteGuard> },
           { path: "orders/:id", element: <RouteGuard perms={[OrderingPermissions.Orders.View]}><OrderDetailPage /></RouteGuard> },
           { path: "order-desk", element: <RouteGuard perms={[OrderingPermissions.OrderDesk.View]}><OrderDeskPage /></RouteGuard> },
-          { path: "customers", element: <RouteGuard perms={[OrderingPermissions.Customers.View]}><CustomersPage /></RouteGuard> },
+          { path: "customers", element: <RouteGuard perms={[]} anyOf={[OrderingPermissions.Customers.View, CatalogPermissions.PriceLists.View]}><CustomersPage /></RouteGuard> },
           { path: "stores", element: <RouteGuard perms={[OrderingPermissions.Stores.View]}><StoresPage /></RouteGuard> },
           { path: "catalog", element: <Navigate to="/catalog/products" replace /> },
           { path: "catalog/products", element: <RouteGuard perms={[CatalogPermissions.Products.View]}><ProductsPage /></RouteGuard> },
           { path: "catalog/brands", element: <RouteGuard perms={[CatalogPermissions.Brands.View]}><BrandsPage /></RouteGuard> },
           { path: "catalog/categories", element: <RouteGuard perms={[CatalogPermissions.Categories.View]}><CategoriesPage /></RouteGuard> },
-          { path: "catalog/pricing", element: <RouteGuard perms={[CatalogPermissions.PriceLists.View]}><PricingPage /></RouteGuard> },
+          // 协议定价已并入合作客户页的「等级与合约价」页签，旧链接继续可用
+          { path: "catalog/pricing", element: <Navigate to="/customers?tab=pricing" replace /> },
 
           // Tenants — root-only
           {

@@ -156,6 +156,8 @@ export type PriceListDto = {
   id: string;
   name: string;
   customerOrgId?: string | null;
+  /** Set when the list prices a customer level rather than one customer or the whole catalog. */
+  customerLevelId?: string | null;
   priority: number;
   validFrom: string;
   validTo?: string | null;
@@ -171,9 +173,12 @@ export type PriceQuoteDto = {
   source: string;
 };
 
-export function getPriceLists(customerOrgId = "", signal?: AbortSignal) {
+export type PriceListScope = { customerOrgId?: string; customerLevelId?: string };
+
+export function getPriceLists(scope: PriceListScope = {}, signal?: AbortSignal) {
   const query = new URLSearchParams();
-  if (customerOrgId) query.set("customerOrgId", customerOrgId);
+  if (scope.customerOrgId) query.set("customerOrgId", scope.customerOrgId);
+  if (scope.customerLevelId) query.set("customerLevelId", scope.customerLevelId);
   const suffix = query.size > 0 ? `?${query}` : "";
   return apiFetch<PriceListDto[]>(`/api/v1/catalog/price-lists${suffix}`, { signal });
 }
@@ -181,6 +186,7 @@ export function getPriceLists(customerOrgId = "", signal?: AbortSignal) {
 export function createPriceList(input: {
   name: string;
   customerOrgId?: string | null;
+  customerLevelId?: string | null;
   priority: number;
   validFrom: string;
   validTo?: string | null;
@@ -232,3 +238,56 @@ export function quoteProductPrice(input: {
   });
   return apiFetch<PriceQuoteDto>(`/api/v1/catalog/quotes?${query}`, { signal });
 }
+
+// -----------------------------
+// Customer pricing levels
+// -----------------------------
+
+export type CustomerLevelDto = {
+  id: string;
+  code: string;
+  name: string;
+  /** Percent off the catalog price (10 = pay 90%). */
+  discountPercent: number;
+  customerCount: number;
+};
+
+export type CustomerLevelAssignmentDto = { customerOrgId: string; customerLevelId: string };
+
+export type CustomerLevelInput = { code: string; name: string; discountPercent: number };
+
+export function getCustomerLevels(signal?: AbortSignal) {
+  return apiFetch<CustomerLevelDto[]>("/api/v1/catalog/customer-levels", { signal });
+}
+
+export function createCustomerLevel(input: CustomerLevelInput, idempotencyKey: string) {
+  return apiFetch<string>("/api/v1/catalog/customer-levels", {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCustomerLevel(id: string, input: CustomerLevelInput) {
+  return apiFetch<void>(`/api/v1/catalog/customer-levels/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getCustomerLevelAssignments(signal?: AbortSignal) {
+  return apiFetch<CustomerLevelAssignmentDto[]>("/api/v1/catalog/customer-levels/assignments", { signal });
+}
+
+/** A null level returns the customer to normal catalog pricing. */
+export function assignCustomerLevel(customerOrgId: string, customerLevelId: string | null) {
+  return apiFetch<void>(`/api/v1/catalog/customer-levels/assignments/${encodeURIComponent(customerOrgId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ customerLevelId }),
+  });
+}
+
+export const customerLevelKeys = {
+  levels: ["catalog", "customer-levels"] as const,
+  assignments: ["catalog", "customer-levels", "assignments"] as const,
+};

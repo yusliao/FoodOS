@@ -6,6 +6,8 @@ export function quoteSourceLabel(source: string): string {
       return "Locked";
     case "Contract":
       return "Contract";
+    case "Level":
+      return "Level";
     case "Catalog":
       return "Catalog";
     default:

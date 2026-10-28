@@ -16,7 +16,7 @@ public static class GetProductPriceQuoteEndpoint
                 (Guid customerOrgId, Guid productId, decimal quantity, DateTimeOffset? asOf, IMediator mediator, CancellationToken ct) =>
                     mediator.Send(new QuoteProductPriceQuery(customerOrgId, productId, quantity, asOf), ct))
             .WithName("GetProductPriceQuote")
-            .WithSummary("Resolve unit price for a customer and SKU (lock → contract tier → catalog)")
+            .WithSummary("Resolve unit price for a customer and SKU (lock → contract tier → level → catalog)")
             .RequirePermission(CatalogPermissions.Products.View);
     }
 }

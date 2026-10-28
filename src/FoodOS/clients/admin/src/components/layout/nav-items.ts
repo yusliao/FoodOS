@@ -1,6 +1,5 @@
 import {
   Activity,
-  BadgeDollarSign,
   Bell,
   Building2,
   FolderTree,
@@ -40,6 +39,8 @@ export type NavSpec = {
   icon: LucideIcon;
   /** One or more permissions the user must hold to see this item. */
   perms?: readonly string[];
+  /** Optional: the item is shown when at least one of these is held. */
+  anyPerms?: readonly string[];
 };
 
 /** A collapsible section that groups related NavSpecs. */
@@ -69,13 +70,12 @@ export const sections: NavSection[] = [
       { to: "/catalog/products", label: "Products", icon: Package, perms: [CatalogPermissions.Products.View] },
       { to: "/catalog/brands", label: "Brands", icon: Tags, perms: [CatalogPermissions.Brands.View] },
       { to: "/catalog/categories", label: "Categories", icon: FolderTree, perms: [CatalogPermissions.Categories.View] },
-      { to: "/catalog/pricing", label: "Contract pricing", icon: BadgeDollarSign, perms: [CatalogPermissions.PriceLists.View] },
     ],
   },
   {
     id: "partners", caption: "Customers and stores", icon: Building2,
     items: [
-      { to: "/customers", label: "Partner customers", icon: Building2, perms: [OrderingPermissions.Customers.View] },
+      { to: "/customers", label: "Partner customers", icon: Building2, anyPerms: [OrderingPermissions.Customers.View, CatalogPermissions.PriceLists.View] },
       { to: "/stores", label: "Restaurant stores", icon: Building2, perms: [OrderingPermissions.Stores.View] },
     ],
   },
@@ -146,10 +146,12 @@ export function isNavItemActive(item: NavSpec, pathname: string): boolean {
 
 /** Filter nav items (and sections) based on granted permissions. */
 export function filterNavSpec(items: NavSpec[], granted: readonly string[]): NavSpec[] {
-  return items.filter((item) => {
-    if (!item.perms || item.perms.length === 0) return true;
-    return item.perms.every((p) => granted.includes(p));
-  });
+  return items.filter((item) => canSeeNavItem(item, granted));
+}
+
+function canSeeNavItem(item: NavSpec, granted: readonly string[]): boolean {
+  if (item.anyPerms && item.anyPerms.length > 0 && !item.anyPerms.some((p) => granted.includes(p))) return false;
+  return !item.perms || item.perms.every((p) => granted.includes(p));
 }
 
 // ── Legacy flat export (used by sidebar-content & permission gating elsewhere) ──
@@ -162,8 +164,5 @@ export const NAV_ITEMS: NavItem[] = [...topNavTop, ...sections.flatMap(section =
 
 /** @deprecated Use filterNavSpec instead. */
 export function filterNavItems(items: NavItem[], grantedPermissions: readonly string[]): NavItem[] {
-  return items.filter((item) => {
-    if (!item.perms || item.perms.length === 0) return true;
-    return item.perms.every((p) => grantedPermissions.includes(p));
-  });
+  return items.filter((item) => canSeeNavItem(item, grantedPermissions));
 }

@@ -14,12 +14,24 @@ public sealed class CreatePriceListCommandHandler(CatalogDbContext dbContext)
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        if (command.CustomerLevelId is { } levelId && levelId != Guid.Empty)
+        {
+            bool levelExists = await dbContext.CustomerLevels
+                .AnyAsync(level => level.Id == levelId, cancellationToken)
+                .ConfigureAwait(false);
+            if (!levelExists)
+            {
+                throw new NotFoundException($"Customer level {levelId} not found.");
+            }
+        }
+
         var list = PriceList.Create(
             command.Name,
             command.CustomerOrgId,
             command.ValidFrom,
             command.ValidTo,
-            command.Priority);
+            command.Priority,
+            command.CustomerLevelId);
 
         IReadOnlyList<PriceListLineInput> lines = command.Lines ?? [];
         if (lines.Count > 0)

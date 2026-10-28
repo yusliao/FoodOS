@@ -13,6 +13,11 @@ public sealed class PriceListConfiguration : IEntityTypeConfiguration<PriceList>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.HasIndex(x => x.CustomerOrgId);
+        builder.HasIndex(x => x.CustomerLevelId);
+        builder.HasOne<CustomerLevel>()
+            .WithMany()
+            .HasForeignKey(x => x.CustomerLevelId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => new { x.ValidFrom, x.ValidTo });
 
         builder.HasMany(x => x.Lines)
