@@ -114,6 +114,30 @@ public sealed partial class CustomerShopIsolationTests
         orderLine.Sku.ShouldBe(sku);
         orderLine.ProductName.ShouldBe($"冰鲜三文鱼刺身 {suffix}");
 
+        // 下过单的门店出现在这个客服的「常下单客户」里
+        using var mine = await rootClient.GetAsync($"{OrderDeskBasePath}/callers/mine?limit=20");
+        mine.StatusCode.ShouldBe(HttpStatusCode.OK, await mine.Content.ReadAsStringAsync());
+        (await mine.DeserializeAsync<IReadOnlyList<OrderDeskFrequentCallerDto>>())
+            .ShouldContain(item => item.Caller.StoreId == storeId && item.OrderCount >= 1);
+
+        // 客户分级后，客服选客户时直接看到折扣级别（客服不需要价目表权限）
+        string levelCode = $"L{suffix}";
+        using var createLevel = await rootClient.PostAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/customer-levels",
+            new { code = levelCode, name = "VIP", discountPercent = 10m });
+        createLevel.StatusCode.ShouldBe(HttpStatusCode.OK, await createLevel.Content.ReadAsStringAsync());
+        var levelId = await createLevel.DeserializeAsync<Guid>();
+        using var assign = await rootClient.PutAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/customer-levels/assignments/{orgId}",
+            new { customerLevelId = levelId });
+        assign.StatusCode.ShouldBe(HttpStatusCode.NoContent, await assign.Content.ReadAsStringAsync());
+        using var leveled = await rootClient.GetAsync($"{OrderDeskBasePath}/callers?term={phoneDigits}");
+        var withLevel = (await leveled.DeserializeAsync<IReadOnlyList<OrderDeskCallerDto>>())
+            .Single(item => item.StoreId == storeId);
+        withLevel.LevelName.ShouldBe("VIP");
+        withLevel.LevelCode.ShouldBe(levelCode.ToUpperInvariant());
+        withLevel.LevelDiscountPercent.ShouldBe(10m);
+
         // The restaurant sees the order placed on its behalf, still waiting for the warehouse.
         using var customer = await CreateDashboardClientAsync(email, tenantId);
         await GrantSelfStoreAccessAsync(customer, storeId);

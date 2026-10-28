@@ -9,6 +9,8 @@ export type OrderDeskCaller = {
   customerOrgId: string; customerOrgCode: string; customerOrgName: string; creditHold: boolean;
   canPlaceOrders: boolean; blockingReason: "customerAccountMissing" | "addressMissing" | "creditHold" | null;
   contacts: StoreContact[]; lastOrderAt: string | null;
+  /** Customer pricing level; absent when the customer pays the standard price. */
+  levelCode?: string | null; levelName?: string | null; levelDiscountPercent?: number | null;
 };
 
 export type OrderDeskProduct = {
@@ -42,6 +44,13 @@ export type OrderDeskLineInput = { productId: string; quantity: number };
 
 export function searchCallers(term: string, signal?: AbortSignal) {
   return apiFetch<OrderDeskCaller[]>(`${base}/callers?${new URLSearchParams({ term, limit: "10" })}`, { signal });
+}
+
+export type OrderDeskFrequentCaller = { caller: OrderDeskCaller; orderCount: number };
+
+/** Stores the signed-in agent placed service orders for in the last 90 days, most frequent first. */
+export function getMyCallers(signal?: AbortSignal) {
+  return apiFetch<OrderDeskFrequentCaller[]>(`${base}/callers/mine?limit=12`, { signal });
 }
 
 export function suggestProducts(storeId: string, term: string, signal?: AbortSignal) {

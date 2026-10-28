@@ -14,7 +14,18 @@ public sealed record OrderDeskCallerDto(
     bool CanPlaceOrders,
     string? BlockingReason,
     IReadOnlyList<StoreContactDto> Contacts,
-    DateTimeOffset? LastOrderAt);
+    DateTimeOffset? LastOrderAt)
+{
+    /// <summary>Customer pricing level shown to customer service; null when the customer pays the standard price.</summary>
+    public string? LevelCode { get; init; }
+    public string? LevelName { get; init; }
+
+    /// <summary>Percent off the standard price (10 = 9折).</summary>
+    public decimal? LevelDiscountPercent { get; init; }
+}
+
+/// <summary>A store the current agent often orders for, with how many service orders they placed.</summary>
+public sealed record OrderDeskFrequentCallerDto(OrderDeskCallerDto Caller, int OrderCount);
 
 /// <summary>Type-ahead product candidate with the store's contract price and WMS availability.</summary>
 public sealed record OrderDeskProductDto(

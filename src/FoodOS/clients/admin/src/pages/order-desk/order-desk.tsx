@@ -1,10 +1,10 @@
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Headset, History, Minus, Plus, Search, Star, Trash2 } from "lucide-react";
 import {
-  getStoreHistory, placeOrderDeskOrder, quoteLines, searchCallers, suggestProducts,
+  getMyCallers, getStoreHistory, placeOrderDeskOrder, quoteLines, searchCallers, suggestProducts,
   type OrderDeskCaller, type OrderDeskOrder, type OrderDeskProduct, type OrderDeskStoreHistory,
 } from "@/api/order-desk";
 import { useAuth } from "@/auth/use-auth";
@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { describe } from "@/pages/customers/request-error";
+import { discountLabel } from "@/pages/customers/level-format";
 
 type DeskLine = {
   productId: string; sku: string; name: string; baseUom: string; catchWeight: boolean;
@@ -58,30 +59,62 @@ function CallerLookup({ onSelect }: { onSelect: (caller: OrderDeskCaller) => voi
         placeholder={t("orderDesk.callerPlaceholder")} onChange={event => setInput(event.target.value)} />
     </label>
     {term.length < 2 && <p className="text-sm text-[var(--color-muted-foreground)]">{t("orderDesk.callerHint")}</p>}
+    {term.length < 2 && <MyCallers onSelect={onSelect} />}
     {term.length >= 2 && (callers.isPending || debouncing) && <LoadingRow label={t("orderDesk.searching")} />}
     {callers.isError && <ErrorBand message={describe(callers.error, t("orderDesk.requestFailed"))} />}
     {callers.isSuccess && !debouncing && callers.data.length === 0 && <p role="status">{t("orderDesk.noCallers")}</p>}
     {callers.isSuccess && callers.data.length > 0 && <ul className="grid gap-3 md:grid-cols-2">
-      {callers.data.map(item => <li key={item.storeId}>
-        <button type="button" onClick={() => onSelect(item)}
-          className="w-full min-w-0 space-y-1 rounded-lg border border-[var(--color-border)] p-4 text-left text-sm transition-colors hover:bg-[var(--color-accent)] focus-visible:outline-2">
-          <span className="flex flex-wrap items-center gap-2 font-semibold"><span className="break-words">{item.customerOrgName}</span><Badge variant="muted">{item.customerOrgCode}</Badge>
-            {!item.canPlaceOrders && <Badge variant="warning">{t(`orderDesk.blocking.${item.blockingReason}`)}</Badge>}</span>
-          <span className="block break-words">{t("orderDesk.store")}：{item.storeName} · {item.storeCode}</span>
-          <span className="block break-words text-[var(--color-muted-foreground)]">{item.address || t("orderDesk.addressMissing")}</span>
-          {item.contacts.length > 0 && <span className="block break-words">{item.contacts.map(contact => `${contact.name} ${contact.phone}`).join(" / ")}</span>}
-        </button>
+      {callers.data.map(item => <li key={item.storeId}><CallerCard item={item} onSelect={onSelect} /></li>)}
+    </ul>}
+  </section>;
+}
+
+/** The agent's own frequent customers, so a repeat caller is one click away. */
+function MyCallers({ onSelect }: { onSelect: (caller: OrderDeskCaller) => void }) {
+  const { t } = useLocale();
+  const mine = useQuery({ queryKey: ["order-desk", "callers", "mine"], queryFn: ({ signal }) => getMyCallers(signal) });
+  return <section aria-labelledby="my-callers" className="space-y-2 pt-2">
+    <div>
+      <h3 id="my-callers" className="text-sm font-semibold">{t("orderDesk.myCustomersTitle")}</h3>
+      <p className="text-xs text-[var(--color-muted-foreground)]">{t("orderDesk.myCustomersHint")}</p>
+    </div>
+    {mine.isPending && <LoadingRow label={t("orderDesk.loading")} />}
+    {mine.isError && <ErrorBand message={describe(mine.error, t("orderDesk.requestFailed"))} />}
+    {mine.isSuccess && mine.data.length === 0 && <p role="status" className="text-sm text-[var(--color-muted-foreground)]">{t("orderDesk.noMyCustomers")}</p>}
+    {mine.isSuccess && mine.data.length > 0 && <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {mine.data.map(({ caller, orderCount }) => <li key={caller.storeId}>
+        <CallerCard item={caller} onSelect={onSelect} extra={<Badge variant="muted">{t("orderDesk.orderCount").replace("{n}", String(orderCount))}</Badge>} />
       </li>)}
     </ul>}
   </section>;
 }
 
+function CallerCard({ item, onSelect, extra }: { item: OrderDeskCaller; onSelect: (caller: OrderDeskCaller) => void; extra?: ReactNode }) {
+  const { t } = useLocale();
+  return <button type="button" onClick={() => onSelect(item)}
+    className="w-full min-w-0 space-y-1 rounded-lg border border-[var(--color-border)] p-4 text-left text-sm transition-colors hover:bg-[var(--color-accent)] focus-visible:outline-2">
+    <span className="flex flex-wrap items-center gap-2 font-semibold"><span className="break-words">{item.customerOrgName}</span><Badge variant="muted">{item.customerOrgCode}</Badge>
+      {item.levelName && <Badge variant="info">{levelText(t, item)}</Badge>}
+      {extra}
+      {!item.canPlaceOrders && <Badge variant="warning">{t(`orderDesk.blocking.${item.blockingReason}`)}</Badge>}</span>
+    <span className="block break-words">{t("orderDesk.store")}：{item.storeName} · {item.storeCode}</span>
+    <span className="block break-words text-[var(--color-muted-foreground)]">{item.address || t("orderDesk.addressMissing")}</span>
+    {item.contacts.length > 0 && <span className="block break-words">{item.contacts.map(contact => `${contact.name} ${contact.phone}`).join(" / ")}</span>}
+  </button>;
+}
+
+/** "VIP · 9 折" for a level-priced customer. */
+function levelText(t: (key: string) => string, caller: OrderDeskCaller) {
+  return `${caller.levelName} · ${discountLabel(t, caller.levelDiscountPercent ?? 0)}`;
+}
+
 function SelectedCaller({ caller, onChange }: { caller: OrderDeskCaller; onChange: () => void }) {
   const { t, culture } = useLocale();
   return <section className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5" aria-label={t("orderDesk.callerTitle")}>
-    <dl className="grid min-w-0 flex-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+    <dl className="grid min-w-0 flex-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
       <div className="min-w-0"><dt className="text-[var(--color-muted-foreground)]">{t("orderDesk.store")}</dt><dd className="break-words font-semibold">{caller.storeName} · {caller.storeCode}</dd></div>
       <div className="min-w-0"><dt className="text-[var(--color-muted-foreground)]">{t("orderDesk.customer")}</dt><dd className="break-words">{caller.customerOrgName}</dd></div>
+      <div className="min-w-0"><dt className="text-[var(--color-muted-foreground)]">{t("orderDesk.level")}</dt><dd className="break-words font-semibold">{caller.levelName ? levelText(t, caller) : t("partners.noLevel")}</dd></div>
       <div className="min-w-0"><dt className="text-[var(--color-muted-foreground)]">{t("orderDesk.address")}</dt><dd className="break-words">{caller.address || t("orderDesk.addressMissing")}{caller.deliveryWindow ? ` · ${caller.deliveryWindow}` : ""}</dd></div>
       <div className="min-w-0"><dt className="text-[var(--color-muted-foreground)]">{t("orderDesk.lastOrder")}</dt><dd>{caller.lastOrderAt ? new Intl.DateTimeFormat(culture, { dateStyle: "medium", timeStyle: "short" }).format(new Date(caller.lastOrderAt)) : t("orderDesk.never")}</dd></div>
     </dl>

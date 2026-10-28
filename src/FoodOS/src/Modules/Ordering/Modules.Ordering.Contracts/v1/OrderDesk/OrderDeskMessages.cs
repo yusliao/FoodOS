@@ -9,6 +9,9 @@ namespace FSH.Modules.Ordering.Contracts.v1.OrderDesk;
 /// </summary>
 public sealed record SearchOrderDeskCallersQuery(string Term, int Limit = 10) : IQuery<IReadOnlyList<OrderDeskCallerDto>>;
 
+/// <summary>Stores the current agent placed service orders for in the last 90 days, most frequent first.</summary>
+public sealed record GetMyOrderDeskCallersQuery(int Limit = 12) : IQuery<IReadOnlyList<OrderDeskFrequentCallerDto>>;
+
 public sealed record SuggestOrderDeskProductsQuery(Guid StoreId, string Term, int Limit = 10)
     : IQuery<IReadOnlyList<OrderDeskProductDto>>;
 

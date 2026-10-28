@@ -34,6 +34,7 @@ async function setup(page: Page, permissions: string[]) {
   await seedAuthedSession(page, { ...TEST_USER, permissions });
   await installAdminShellMocks(page, permissions);
   await page.route("**/api/v1/ordering/order-desk/callers**", route => route.fulfill({ json: [caller] }));
+  await page.route("**/api/v1/ordering/order-desk/callers/mine**", route => route.fulfill({ json: [] }));
   await page.route("**/api/v1/ordering/order-desk/stores/*/products**", route => route.fulfill({ json: [salmon] }));
   await page.route("**/api/v1/ordering/order-desk/stores/*/history**", route => route.fulfill({ json: history }));
   await page.route("**/api/v1/ordering/order-desk/stores/*/quote", async route => {
@@ -82,6 +83,30 @@ test("customer service chooses the customer, adds products by pinyin and frequen
   expect(placements[0].key).toMatch(/^[0-9a-f-]{36}$/);
   expect(placements[0].body).toEqual({ lines: [{ productId: salmonId, quantity: 2 }, { productId: shrimpId, quantity: 3 }] });
   await expect(page.getByText("Search a product, pick a frequent item or copy a recent order.")).toBeVisible();
+});
+
+test("the agent's frequent customers show level and order count and open the desk in one click", async ({ page }) => {
+  await setup(page, [deskView, deskPlace]);
+  const vip = { ...caller, levelCode: "VIP", levelName: "VIP", levelDiscountPercent: 10 };
+  await page.route("**/api/v1/ordering/order-desk/callers/mine**", route => route.fulfill({ json: [{ caller: vip, orderCount: 7 }] }));
+  await page.goto("/order-desk");
+  const mine = page.getByRole("region", { name: "My frequent customers" });
+  const card = mine.getByRole("button", { name: /Harbor Group/ });
+  await expect(card).toContainText("VIP · Pay 90%");
+  await expect(card).toContainText("7 orders");
+  await card.click();
+  const selected = page.getByRole("region", { name: "Choose customer" });
+  await expect(selected).toContainText("Discount level");
+  await expect(selected).toContainText("VIP · Pay 90%");
+});
+
+test("a customer without a level is shown at the standard price", async ({ page }) => {
+  await setup(page, [deskView]);
+  await page.goto("/order-desk");
+  await expect(page.getByText("You have not placed service orders in the last 90 days.")).toBeVisible();
+  await page.getByRole("textbox", { name: "Find a customer" }).fill("Harbor");
+  await page.getByRole("button", { name: /Harbor Group/ }).click();
+  await expect(page.getByRole("region", { name: "Choose customer" })).toContainText("Standard price (no level)");
 });
 
 test("a view-only agent can prepare lines but has no place action", async ({ page }) => {

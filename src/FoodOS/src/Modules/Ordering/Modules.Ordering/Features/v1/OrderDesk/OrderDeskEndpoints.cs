@@ -20,6 +20,13 @@ public static class OrderDeskEndpoints
             .WithSummary("Find the calling restaurant store by phone number, name or code")
             .RequirePermission(OrderingPermissions.OrderDesk.View);
 
+        endpoints.MapGet("/callers/mine",
+                (int? limit, IMediator mediator, CancellationToken ct) =>
+                    mediator.Send(new GetMyOrderDeskCallersQuery(limit ?? 12), ct))
+            .WithName("GetMyOrderDeskCallers")
+            .WithSummary("Stores the current agent placed service orders for in the last 90 days, most frequent first")
+            .RequirePermission(OrderingPermissions.OrderDesk.View);
+
         endpoints.MapGet("/stores/{storeId:guid}/products",
                 (Guid storeId, string term, int? limit, IMediator mediator, CancellationToken ct) =>
                     mediator.Send(new SuggestOrderDeskProductsQuery(storeId, term, limit ?? 10), ct))

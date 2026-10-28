@@ -1,6 +1,7 @@
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Catalog.Contracts.Dtos;
+using FSH.Modules.Catalog.Contracts.v1.CustomerLevels;
 using FSH.Modules.Catalog.Contracts.v1.PriceLists;
 using FSH.Modules.Catalog.Contracts.v1.Products;
 using FSH.Modules.Ordering.Contracts.Dtos;
@@ -27,6 +28,7 @@ public sealed class OrderDeskHandler(
     IMediator mediator,
     TimeProvider clock)
     : IQueryHandler<SearchOrderDeskCallersQuery, IReadOnlyList<OrderDeskCallerDto>>,
+      IQueryHandler<GetMyOrderDeskCallersQuery, IReadOnlyList<OrderDeskFrequentCallerDto>>,
       IQueryHandler<SuggestOrderDeskProductsQuery, IReadOnlyList<OrderDeskProductDto>>,
       IQueryHandler<QuoteOrderDeskLinesQuery, IReadOnlyList<OrderDeskQuoteLineDto>>,
       IQueryHandler<GetOrderDeskStoreHistoryQuery, OrderDeskStoreHistoryDto>,
@@ -73,40 +75,45 @@ public sealed class OrderDeskHandler(
             return [];
         }
 
-        var orgIds = stores.Select(store => store.CustomerOrgId).Distinct().ToList();
-        var orgs = await dbContext.CustomerOrgs.AsNoTracking()
-            .Where(org => orgIds.Contains(org.Id))
-            .ToDictionaryAsync(org => org.Id, cancellationToken)
-            .ConfigureAwait(false);
-        var storeIds = stores.Select(store => store.Id).ToList();
-        var lastOrders = await dbContext.SalesOrders.AsNoTracking()
-            .Where(order => storeIds.Contains(order.StoreId))
-            .GroupBy(order => order.StoreId)
-            .Select(group => new { StoreId = group.Key, LastOrderAt = group.Max(order => order.CreatedAt) })
-            .ToDictionaryAsync(item => item.StoreId, item => item.LastOrderAt, cancellationToken)
-            .ConfigureAwait(false);
+        return await ToCallersAsync(stores, cancellationToken).ConfigureAwait(false);
+    }
 
-        return stores
-            .Where(store => orgs.ContainsKey(store.CustomerOrgId))
-            .Select(store =>
-            {
-                var org = orgs[store.CustomerOrgId];
-                string? blocking = BlockingReason(store, org);
-                return new OrderDeskCallerDto(
-                    store.Id,
-                    store.Code,
-                    store.Name,
-                    store.Address,
-                    store.DeliveryWindow,
-                    org.Id,
-                    org.Code,
-                    org.Name,
-                    org.CreditHold,
-                    CanPlaceOrders: blocking is null,
-                    blocking,
-                    StoreContactsHandler.ToDtos(store.Contacts),
-                    lastOrders.TryGetValue(store.Id, out var lastOrderAt) ? lastOrderAt : null);
-            })
+    public async ValueTask<IReadOnlyList<OrderDeskFrequentCallerDto>> Handle(
+        GetMyOrderDeskCallersQuery query,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        Guid userId = currentUser.GetUserId();
+        DateTimeOffset since = clock.GetUtcNow().AddDays(-HistoryDays);
+        // 只统计这个客服自己通过客服下单渠道下的单
+        var counts = await dbContext.SalesOrders.AsNoTracking()
+            .Where(order => order.PlacedByUserId == userId
+                && order.PlacementChannel == SalesOrderPlacementChannel.OrderDesk
+                && order.CreatedAt >= since)
+            .GroupBy(order => order.StoreId)
+            .Select(group => new { StoreId = group.Key, Count = group.Count(), LastAt = group.Max(order => order.CreatedAt) })
+            .OrderByDescending(item => item.Count)
+            .ThenByDescending(item => item.LastAt)
+            .Take(Math.Clamp(query.Limit, 1, 20))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (counts.Count == 0)
+        {
+            return [];
+        }
+
+        var storeIds = counts.Select(item => item.StoreId).ToList();
+        var stores = await dbContext.Stores.AsNoTracking()
+            .Include(store => store.Contacts)
+            .Where(store => storeIds.Contains(store.Id))
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var callers = (await ToCallersAsync(stores, cancellationToken).ConfigureAwait(false))
+            .ToDictionary(caller => caller.StoreId);
+        return counts
+            .Where(item => callers.ContainsKey(item.StoreId))
+            .Select(item => new OrderDeskFrequentCallerDto(callers[item.StoreId], item.Count))
             .ToList();
     }
 
@@ -351,4 +358,52 @@ public sealed class OrderDeskHandler(
         .Replace(Escape, Escape + Escape, StringComparison.Ordinal)
         .Replace("%", Escape + "%", StringComparison.Ordinal)
         .Replace("_", Escape + "_", StringComparison.Ordinal);
+
+    /// <summary>Turns stores into caller cards: customer, last order, pricing level and whether orders can be placed.</summary>
+    private async Task<List<OrderDeskCallerDto>> ToCallersAsync(List<Store> stores, CancellationToken cancellationToken)
+    {
+        var orgIds = stores.Select(store => store.CustomerOrgId).Distinct().ToList();
+        var orgs = await dbContext.CustomerOrgs.AsNoTracking()
+            .Where(org => orgIds.Contains(org.Id))
+            .ToDictionaryAsync(org => org.Id, cancellationToken)
+            .ConfigureAwait(false);
+        var storeIds = stores.Select(store => store.Id).ToList();
+        var lastOrders = await dbContext.SalesOrders.AsNoTracking()
+            .Where(order => storeIds.Contains(order.StoreId))
+            .GroupBy(order => order.StoreId)
+            .Select(group => new { StoreId = group.Key, LastOrderAt = group.Max(order => order.CreatedAt) })
+            .ToDictionaryAsync(item => item.StoreId, item => item.LastOrderAt, cancellationToken)
+            .ConfigureAwait(false);
+        // 等级归 Catalog 管，客服通常没有价目表权限，所以由后端一并带出
+        var levels = (await mediator.Send(new GetCustomerLevelsByCustomersQuery(orgIds), cancellationToken).ConfigureAwait(false))
+            .ToDictionary(item => item.CustomerOrgId);
+
+        return stores
+            .Where(store => orgs.ContainsKey(store.CustomerOrgId))
+            .Select(store =>
+            {
+                var org = orgs[store.CustomerOrgId];
+                string? blocking = BlockingReason(store, org);
+                return new OrderDeskCallerDto(
+                    store.Id,
+                    store.Code,
+                    store.Name,
+                    store.Address,
+                    store.DeliveryWindow,
+                    org.Id,
+                    org.Code,
+                    org.Name,
+                    org.CreditHold,
+                    CanPlaceOrders: blocking is null,
+                    blocking,
+                    StoreContactsHandler.ToDtos(store.Contacts),
+                    lastOrders.TryGetValue(store.Id, out var lastOrderAt) ? lastOrderAt : null)
+                {
+                    LevelCode = levels.GetValueOrDefault(org.Id)?.Code,
+                    LevelName = levels.GetValueOrDefault(org.Id)?.Name,
+                    LevelDiscountPercent = levels.GetValueOrDefault(org.Id)?.DiscountPercent,
+                };
+            })
+            .ToList();
+    }
 }
