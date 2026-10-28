@@ -14,7 +14,7 @@ test("ordinary root employee can sign in without an Admin role", async ({ page }
   await installAdminShellMocks(page, []);
   await mockJsonResponse(page, "**/api/v1/identity/token/issue", { accessToken: token(), refreshToken: "refresh" });
   await page.goto("/login");
-  await page.getByLabel("Email").fill("warehouse@root.test");
+  await page.getByLabel("Login name").fill("warehouse@root.test");
   await page.getByLabel("Password", { exact: true }).fill("TestPassword!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("main").getByRole("heading", { name: "Operator workbench" })).toBeVisible();
@@ -24,7 +24,7 @@ test("ordinary root employee can sign in without an Admin role", async ({ page }
 test("customer token returned from login is never admitted", async ({ page }) => {
   await mockJsonResponse(page, "**/api/v1/identity/token/issue", { accessToken: token("acme"), refreshToken: "refresh" });
   await page.goto("/login");
-  await page.getByLabel("Email").fill("customer@acme.test");
+  await page.getByLabel("Login name").fill("customer@acme.test");
   await page.getByLabel("Password", { exact: true }).fill("TestPassword!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.locator("#login-error")).toContainText("operator employees only");

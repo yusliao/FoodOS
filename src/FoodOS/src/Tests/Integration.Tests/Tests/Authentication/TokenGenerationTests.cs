@@ -44,6 +44,36 @@ public sealed class TokenGenerationTests
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    [Theory]
+    [InlineData("root.admin")]
+    [InlineData("ROOT.ADMIN")]
+    public async Task GenerateToken_Should_AcceptUserName_AsLoginName(string userName)
+    {
+        // The seeded root admin's user name is "<tenant>.admin"; lookup is case-insensitive.
+        using var client = _factory.CreateClient();
+        using var response = await IssueAsync(client, userName, TestConstants.DefaultPassword);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        (await response.Content.ReadAsStringAsync()).ShouldContain("accessToken");
+    }
+
+    [Fact]
+    public async Task GenerateToken_Should_Return401_When_UserNameExistsButPasswordIsWrong()
+    {
+        using var client = _factory.CreateClient();
+        using var response = await IssueAsync(client, "root.admin", "WrongPassword123!");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    private static async Task<HttpResponseMessage> IssueAsync(HttpClient client, string login, string password)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{TestConstants.IdentityBasePath}/token/issue");
+        request.Headers.Add("tenant", TestConstants.RootTenantId);
+        request.Content = JsonContent.Create(new { email = login, password });
+        return await client.SendAsync(request);
+    }
+
     [Fact]
     public async Task GenerateToken_Should_Return401_When_EmailDoesNotExist()
     {

@@ -43,20 +43,22 @@ public sealed class GenerateTokenCommandValidatorTests
     }
 
     [Theory]
-    [InlineData("invalid")]
-    [InlineData("invalid@")]
-    [InlineData("@example.com")]
-    [InlineData("user@")]
-    [InlineData("user.example.com")]
-    public void Email_Should_Fail_When_InvalidFormat(string email)
+    [InlineData("cook")]
+    [InlineData("root.admin")]
+    [InlineData("user_name-1")]
+    public void Email_Should_Pass_When_LoginIsUserName(string login)
     {
-        // Arrange
-        var command = new GenerateTokenCommand(email, "password123");
+        // The login field accepts a user name as well as an email address.
+        var result = _sut.Validate(new GenerateTokenCommand(login, "password123"));
 
-        // Act
-        var result = _sut.Validate(command);
+        result.Errors.ShouldNotContain(e => e.PropertyName == "Email");
+    }
 
-        // Assert
+    [Fact]
+    public void Email_Should_Fail_When_TooLong()
+    {
+        var result = _sut.Validate(new GenerateTokenCommand(new string('a', 257), "password123"));
+
         result.IsValid.ShouldBeFalse();
         result.Errors.ShouldContain(e => e.PropertyName == "Email");
     }

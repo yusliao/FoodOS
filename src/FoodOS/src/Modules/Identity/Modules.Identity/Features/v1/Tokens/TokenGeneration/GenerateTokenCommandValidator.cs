@@ -10,7 +10,7 @@ public sealed class GenerateTokenCommandValidator : AbstractValidator<GenerateTo
         RuleFor(p => p.Email)
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
-            .EmailAddress();
+            .MaximumLength(256); // email or user name
 
         RuleFor(p => p.Password)
             .Cascade(CascadeMode.Stop)

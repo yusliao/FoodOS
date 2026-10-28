@@ -8,8 +8,7 @@ const password = "Password123!";
 
 async function signIn(page: Page, userEmail = email) {
   await page.goto("/login");
-  await expect(page.getByLabel("Tenant")).toHaveValue(tenant);
-  await page.getByLabel("Email").fill(userEmail);
+  await page.getByLabel("Login name").fill(userEmail);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
@@ -54,8 +53,7 @@ function createTotp(sharedKey: string) {
 
 test("operator signs in and loads the workbench with real permissions", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByLabel("Tenant")).toHaveValue(tenant);
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Login name").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
 
   const tokenResponse = page.waitForResponse((response) =>
@@ -175,8 +173,7 @@ test("operator completes a real authenticator challenge and can disable it again
 
   try {
     await page.goto("/login");
-    await expect(page.getByLabel("Tenant")).toHaveValue(tenant);
-    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Login name").fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/\/$/);
@@ -205,8 +202,7 @@ test("operator completes a real authenticator challenge and can disable it again
       .getByRole("button", { name: "Sign out", exact: true })
       .click();
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByLabel("Tenant")).toHaveValue(tenant);
-    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Login name").fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
 
     const challengeResponse = page.waitForResponse((response) =>
@@ -260,8 +256,7 @@ test("operator receives a real chat event without refreshing the page", async ({
     });
 
     await page.goto("/login");
-    await expect(page.getByLabel("Tenant")).toHaveValue(tenant);
-    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Login name").fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/\/$/);

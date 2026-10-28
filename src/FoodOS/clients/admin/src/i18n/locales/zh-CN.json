@@ -485,6 +485,8 @@
   },
   "auth": {
     "welcomeBack": "欢迎回来",
+    "loginName": "登录名",
+    "loginNamePlaceholder": "用户名或邮箱",
     "signInSubtitle": "登录运营账号",
     "tenant": "租户",
     "email": "邮箱",

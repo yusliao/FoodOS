@@ -185,7 +185,11 @@ public sealed class IdentityService : IIdentityService
 
     private async Task<FshUser> FindAndValidateUserByCredentialsAsync(string email, string password)
     {
-        var user = await _userManager.FindByEmailAsync(email.Trim().Normalize());
+        // 登录名可以是邮箱或用户名。Identity 允许用户名里带 @，所以邮箱查不到时再按用户名兜底
+        string login = email.Trim().Normalize();
+        var user = login.Contains('@', StringComparison.Ordinal)
+            ? await _userManager.FindByEmailAsync(login) ?? await _userManager.FindByNameAsync(login)
+            : await _userManager.FindByNameAsync(login);
         if (user is null)
         {
             // Generic 401 — never confirm or deny account existence from this path.

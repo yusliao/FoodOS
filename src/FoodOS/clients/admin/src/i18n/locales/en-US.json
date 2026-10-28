@@ -485,6 +485,8 @@
   },
   "auth": {
     "welcomeBack": "Welcome back",
+    "loginName": "Login name",
+    "loginNamePlaceholder": "User name or email",
     "signInSubtitle": "Sign in to your operator account",
     "tenant": "Tenant",
     "email": "Email",

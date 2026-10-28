@@ -124,7 +124,7 @@ public sealed class GenerateTokenCommandHandler
             CorrelationId: correlationId,
             Source: "Identity",
             UserId: subject,
-            Email: request.Email,
+            Email: claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value ?? request.Email,
             ClientId: clientId!,
             IpAddress: ip,
             UserAgent: ua,

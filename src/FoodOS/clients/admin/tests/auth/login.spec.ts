@@ -41,8 +41,8 @@ test.describe("admin login", () => {
 
     // Form fields (plain labels). Password is exact — a "Show password"
     // toggle button shares the substring otherwise.
-    await expect(page.getByLabel("Tenant")).toBeVisible();
-    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.getByLabel("Tenant")).toHaveCount(0);
+    await expect(page.getByLabel("Login name")).toBeVisible();
     await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
 
     // Submit (exact — the dev demo button also contains "Sign in") + forgot link.
@@ -57,10 +57,9 @@ test.describe("admin login", () => {
 
     await page.goto("/login");
 
-    // Tenant pre-fills from env.defaultTenant ("root"); set email + password.
-    await expect(page.getByLabel("Tenant")).toHaveValue("root");
-    await expect(page.getByLabel("Tenant")).toHaveAttribute("readonly");
-    await page.getByLabel("Email").fill("operator@root.example");
+    // The operator workbench is always the root tenant; there is no tenant field to edit.
+    await expect(page.getByLabel("Tenant")).toHaveCount(0);
+    await page.getByLabel("Login name").fill("operator@root.example");
     await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
 
     const reqPromise = page.waitForRequest(
@@ -80,6 +79,18 @@ test.describe("admin login", () => {
     expect(body.password).toBe("Sup3rSecret!");
   });
 
+  test("a user name is accepted as the login name and still signs into root", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/identity/token/issue", TOKEN_RESPONSE);
+    await page.goto("/login");
+    await page.getByLabel("Login name").fill("cook");
+    await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
+    const reqPromise = page.waitForRequest(r => r.url().includes("/api/v1/identity/token/issue") && r.method() === "POST");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    const req = await reqPromise;
+    expect(req.headers().tenant).toBe("root");
+    expect(JSON.parse(req.postData() ?? "{}").email).toBe("cook");
+  });
+
   test("surfaces a 401 from token/issue and stays on /login", async ({ page }) => {
     await mockProblemDetails(page, "**/api/v1/identity/token/issue", 401, {
       title: "Unauthorized",
@@ -87,8 +98,7 @@ test.describe("admin login", () => {
     });
 
     await page.goto("/login");
-    await expect(page.getByLabel("Tenant")).toHaveValue("root");
-    await page.getByLabel("Email").fill("operator@root.example");
+    await page.getByLabel("Login name").fill("operator@root.example");
     await page.getByLabel("Password", { exact: true }).fill("wrong-password");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
@@ -117,14 +127,14 @@ test.describe("admin login", () => {
     });
 
     await page.goto("/login");
-    await page.getByLabel("Email").fill("operator@root.example");
+    await page.getByLabel("Login name").fill("operator@root.example");
     await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
     const code = page.getByLabel("Authenticator code");
     await expect(code).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeDisabled();
-    await expect(page.getByLabel("Email")).toHaveValue("operator@root.example");
+    await expect(page.getByLabel("Login name")).toHaveValue("operator@root.example");
     await expect(page.getByLabel("Password", { exact: true })).toHaveValue("Sup3rSecret!");
 
     await code.fill("123 456");

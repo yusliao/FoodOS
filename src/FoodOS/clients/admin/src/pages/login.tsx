@@ -176,46 +176,30 @@ export function LoginPage() {
                 noValidate
                 aria-describedby={error ? "login-error" : undefined}
               >
-                {/* Tenant */}
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="tenant"
-                    className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
-                  >
-                    {t("auth.tenant")}
-                  </Label>
-                  <Input
-                    id="tenant"
-                    value={tenant}
-                    readOnly
-                    autoComplete="organization"
-                    placeholder="root"
-                    required
-                    aria-invalid={error ? true : undefined}
-                    className="h-11 text-[14px]"
-                  />
-                  <p className="text-xs text-[var(--color-muted-foreground)]">{t("workbench.operatorOnly")}</p>
-                </div>
+                {/* 运营工作台固定 root 租户，不给用户看也不给改 */}
+                <p className="text-xs text-[var(--color-muted-foreground)]">{t("workbench.operatorOnly")}</p>
 
-                {/* Email */}
+                {/* Login name: email or user name */}
                 <div className="space-y-1.5">
                   <Label
                     htmlFor="email"
                     className="block text-[11.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]"
                   >
-                    {t("auth.email")}
+                    {t("auth.loginName")}
                   </Label>
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
                       setTwoFactorCode("");
                       setTwoFactorRequired(false);
                     }}
-                    autoComplete="email"
-                    placeholder="operator@root.example"
+                    autoComplete="username"
+                    placeholder={t("auth.loginNamePlaceholder")}
                     required
                     aria-invalid={error ? true : undefined}
                     className="h-11 text-[14px]"
