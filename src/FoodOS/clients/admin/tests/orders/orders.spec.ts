@@ -25,6 +25,18 @@ test("order reader navigates to detail without restricted lookups or writes", as
   expect(urls.some(url => /api\/v1\/(catalog|inventory)|ordering\/(stores|customer-orgs)/.test(url))).toBe(false);
 });
 
+test("order detail shows customer, store, warehouse and product names instead of ids", async ({ page }) => {
+  await setup(page, [view]);
+  const named = { ...order, customerOrgCode: "ACME", customerOrgName: "Acme Foods", storeCode: "AC-DT", storeName: "Acme Downtown", warehouseCode: "WH1", warehouseName: "Boston DC",
+    lines: [{ ...order.lines[0], sku: "SAL-001", productName: "Salmon fillet", baseUom: "KG" }] };
+  await page.route(`**/api/v1/ordering/orders/${id}`, route => route.fulfill({ json: named }));
+  await page.goto(`/orders/${id}`);
+  for (const text of ["ACME · Acme Foods", "AC-DT · Acme Downtown", "WH1 · Boston DC", "SAL-001 · KG"]) await expect(page.getByText(text, { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Salmon fillet" })).toBeVisible();
+  await expect(page.getByText(order.storeId)).toHaveCount(0);
+  await expect(page.getByText("product-1")).toHaveCount(0);
+});
+
 for (const path of ["/orders", `/orders/${id}`]) test(`unauthorized direct URL ${path} sends no order request`, async ({ page }) => {
   await setup(page, []);
   const urls: string[] = [];

@@ -6,13 +6,22 @@ export type OrderLine = {
   deliveredQty: number; returnedQty: number; shortageQty: number;
   shortageReason: string | null; varianceReason: string | null;
   unitPrice: number; currency: string; reservationId: string | null;
+  sku?: string | null; productName?: string | null; baseUom?: string | null;
   lots: { lotId: string; lotNo: string; shippedQty: number; deliveredQty: number; returnedQty: number }[];
 };
 export type SalesOrder = {
   id: string; number: string; customerTenantId: string | null; storeId: string;
   customerOrgId: string; warehouseId: string; routeId: string | null; status: string;
   businessDate: string; cutoffAt: string; placedAt: string | null; revision: number; lines: OrderLine[];
+  storeCode?: string | null; storeName?: string | null; customerOrgCode?: string | null; customerOrgName?: string | null;
+  warehouseCode?: string | null; warehouseName?: string | null;
 };
+
+/** "CODE · Name" when the server resolved it, otherwise the raw id so nothing is silently hidden. */
+export function displayName(code: string | null | undefined, name: string | null | undefined, id: string) {
+  if (name) return code ? `${code} · ${name}` : name;
+  return id;
+}
 export const orderStatuses = ["Draft", "Reserved", "Planned", "Picking", "Packed", "InTransit", "Received", "Reconciled", "Cancelled"] as const;
 export function searchOrders(pageNumber: number, status: string, signal?: AbortSignal, storeId = "") {
   const query = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: "20" });

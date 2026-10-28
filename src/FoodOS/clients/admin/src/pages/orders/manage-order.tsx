@@ -48,7 +48,7 @@ export function ManageOrder({ order, canReadProducts }: { order: SalesOrder; can
 function AmendDialog({ order, canReadProducts, onClose }: { order: SalesOrder; canReadProducts: boolean; onClose: () => void }) {
   const t = useT();
   const cache = useQueryClient();
-  const [lines, setLines] = useState(() => order.lines.map(line => ({ productId: line.productId, quantity: String(line.orderedQty) })));
+  const [lines, setLines] = useState(() => order.lines.map(line => ({ productId: line.productId, label: line.productName ? `${line.sku ?? ""} · ${line.productName}` : line.productId, quantity: String(line.orderedQty) })));
   const [search, setSearch] = useState("");
   const [searchTerm, searchPending] = useDebouncedSearch(search);
   const [page, setPage] = useState(1);
@@ -68,14 +68,17 @@ function AmendDialog({ order, canReadProducts, onClose }: { order: SalesOrder; c
     <DialogHeader><DialogTitle>{t("orderManage.amend")}</DialogTitle><DialogDescription>{t("orderManage.amendHint")}</DialogDescription></DialogHeader>
     <form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="space-y-4">
       {lines.map((line, index) => <div key={line.productId} className="space-y-2 rounded-lg border p-3">
-        <label className="block space-y-2 text-sm"><span className="block break-all">{line.productId}</span><Input aria-label={`${t("orderManage.quantity")} ${index + 1}`} type="number" min="0.001" step="0.001" required value={line.quantity} onChange={event => setLines(current => current.map((item, i) => i === index ? { ...item, quantity: event.target.value } : item))} /></label>
+        <label className="block space-y-2 text-sm"><span className="block break-words">{line.label}</span><Input aria-label={`${t("orderManage.quantity")} ${index + 1}`} type="number" min="0.001" step="0.001" required value={line.quantity} onChange={event => setLines(current => current.map((item, i) => i === index ? { ...item, quantity: event.target.value } : item))} /></label>
         <Button type="button" variant="outline" size="sm" onClick={() => setLines(current => current.filter(item => item.productId !== line.productId))}>{t("orderManage.remove")}</Button>
       </div>)}
       {canReadProducts ? <section className="space-y-3">
         <SearchableSelect label={t("orderManage.search")} value="" search={search} searchLabel={t("orderManage.search")}
           onSearchChange={value => { setSearch(value); setPage(1); }} disabled={mutation.isPending} loading={products.isFetching || searchPending}
           options={(products.isSuccess ? products.data.items : []).map(product => ({ value: product.id, label: `${product.sku} · ${product.name}`, disabled: lines.some(line => line.productId === product.id) }))}
-          onChange={productId => setLines(current => [...current, { productId, quantity: "1" }])}>
+          onChange={productId => {
+            const product = products.data?.items.find(item => item.id === productId);
+            setLines(current => [...current, { productId, label: product ? `${product.sku} · ${product.name}` : productId, quantity: "1" }]);
+          }}>
           {products.isPending && <LoadingRow label={t("orders.loading")} />}
           {products.isError && <><ErrorBand message={describe(products.error, t("orders.failed"))} /><Button type="button" onClick={() => void products.refetch()}>{t("workbench.retry")}</Button></>}
           {products.isSuccess && <>

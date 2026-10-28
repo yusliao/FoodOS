@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Receipt } from "lucide-react";
 import { toast } from "sonner";
-import { getOrder, orderStatuses, reconcileOrder, searchOrders } from "@/api/orders";
+import { displayName, getOrder, orderStatuses, reconcileOrder, searchOrders } from "@/api/orders";
 import { useAuth } from "@/auth/use-auth";
 import { EntityPageHeader, ErrorBand, LoadingRow, Pagination } from "@/components/list";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ export function OrdersPage() {
   const canReadStores = !!user?.permissions.includes(OrderingPermissions.Stores.View);
   const stores = useQuery({ queryKey: ["ordering", "order-store-filter"], queryFn: ({ signal }) => listStores("", signal), enabled: canReadStores });
   const query = useQuery({ queryKey: [...key, page, status, storeId], queryFn: ({ signal }) => searchOrders(page, status, signal, storeId) });
+  const storeLabel = (id: string) => { const store = stores.data?.find(item => item.id === id); return displayName(store?.code, store?.name, id); };
   return <div className="space-y-6">
     <EntityPageHeader icon={Receipt} title={t("orders.title")} description={t("orders.description")} />
     <label className="block space-y-2 text-sm"><span>{t("orders.status")}</span><select className="block h-10 w-full max-w-sm rounded-lg border bg-[var(--color-card)] px-3" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
@@ -43,7 +44,7 @@ export function OrdersPage() {
       {query.data.items.length === 0 && <p role="status">{t("orders.empty")}</p>}
       <div className="grid gap-4 lg:grid-cols-2">{query.data.items.map(order => <article className="min-w-0 space-y-3 rounded-xl border p-5" key={order.id}>
         <div className="flex flex-wrap justify-between gap-2"><Link className="font-semibold underline" to={`/orders/${order.id}`}>{order.number}</Link><span>{t(`orders.states.${order.status}`, order.status)}</span></div>
-        <dl className="space-y-2 text-sm"><div><dt>{t("orders.store")}</dt><dd className="break-all">{order.storeId}</dd></div><div><dt>{t("orders.businessDate")}</dt><dd>{order.businessDate}</dd></div></dl>
+        <dl className="space-y-2 text-sm"><div><dt>{t("orders.store")}</dt><dd className="break-words">{storeLabel(order.storeId)}</dd></div><div><dt>{t("orders.businessDate")}</dt><dd>{order.businessDate}</dd></div></dl>
       </article>)}</div>
       <Pagination page={page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} shown={query.data.items.length} fetching={query.isFetching} hasPrev={query.data.hasPrevious} hasNext={query.data.hasNext} onPrev={() => setPage(value => value - 1)} onNext={() => setPage(value => value + 1)} />
     </>}
@@ -74,13 +75,14 @@ export function OrderDetailPage() {
     {query.isError && <div className="space-y-2"><ErrorBand message={describe(query.error, t("orders.failed"))} /><Button onClick={() => void query.refetch()}>{t("workbench.retry")}</Button></div>}
     {order && <>
       <dl className="grid gap-4 rounded-xl border p-5 text-sm sm:grid-cols-2">
-        {[["status", t(`orders.states.${order.status}`, order.status)], ["customer", order.customerOrgId], ["store", order.storeId], ["warehouse", order.warehouseId], ["businessDate", order.businessDate], ["cutoff", new Intl.DateTimeFormat(culture, { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.cutoffAt))]].map(([label, value]) => <div className="min-w-0" key={label}><dt className="text-[var(--color-muted-foreground)]">{t(`orders.${label}`)}</dt><dd className="break-all">{value}</dd></div>)}
+        {[["status", t(`orders.states.${order.status}`, order.status)], ["customer", displayName(order.customerOrgCode, order.customerOrgName, order.customerOrgId)], ["store", displayName(order.storeCode, order.storeName, order.storeId)], ["warehouse", displayName(order.warehouseCode, order.warehouseName, order.warehouseId)], ["businessDate", order.businessDate], ["cutoff", new Intl.DateTimeFormat(culture, { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.cutoffAt))]].map(([label, value]) => <div className="min-w-0" key={label}><dt className="text-[var(--color-muted-foreground)]">{t(`orders.${label}`)}</dt><dd className="break-words">{value}</dd></div>)}
       </dl>
       {canReconcile && <Button onClick={() => { mutation.reset(); setConfirming(true); }}>{t("orders.reconcile")}</Button>}
       {user?.permissions.includes(OrderingPermissions.Orders.Manage) && <ManageOrder key={order.id} order={order} canReadProducts={user.permissions.includes(CatalogPermissions.Products.View)} />}
       <h2 className="font-semibold">{t("orders.lines")}</h2>
       <div className="grid gap-4 lg:grid-cols-2">{order.lines.map(line => <article key={line.id} className="min-w-0 space-y-3 rounded-xl border p-5 text-sm">
-        <h3 className="break-all font-semibold">{line.productId}</h3>
+        <h3 className="break-words font-semibold">{line.productName ?? line.productId}</h3>
+        {line.sku && <p className="text-[var(--color-muted-foreground)]">{line.sku}{line.baseUom ? ` · ${line.baseUom}` : ""}</p>}
         <dl className="grid grid-cols-2 gap-3">{[["ordered", line.orderedQty], ["reserved", line.reservedQty], ["delivered", line.deliveredQty], ["returned", line.returnedQty], ["shortage", line.shortageQty], ["unitPrice", money(line.unitPrice, line.currency)]].map(([label, value]) => <div key={label}><dt>{t(`orders.${label}`)}</dt><dd>{value}</dd></div>)}</dl>
         {line.shortageReason && <p>{line.shortageReason}</p>}{line.varianceReason && <p>{line.varianceReason}</p>}
         {line.lots.map(lot => <p className="break-all" key={lot.lotId}>{t("orders.lot")}: {lot.lotNo} · {t("orders.delivered")}: {lot.deliveredQty} · {t("orders.returned")}: {lot.returnedQty}</p>)}

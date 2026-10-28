@@ -21,4 +21,10 @@ public sealed record SalesOrderLineDto(
     decimal UnitPrice,
     string Currency,
     Guid? ReservationId,
-    IReadOnlyList<SalesOrderLineLotDto> Lots);
+    IReadOnlyList<SalesOrderLineLotDto> Lots)
+{
+    /// <summary>Product display fields resolved for operator screens; null when not looked up.</summary>
+    public string? Sku { get; init; }
+    public string? ProductName { get; init; }
+    public string? BaseUom { get; init; }
+}

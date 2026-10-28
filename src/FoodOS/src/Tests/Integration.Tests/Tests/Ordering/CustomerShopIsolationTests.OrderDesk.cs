@@ -101,7 +101,15 @@ public sealed partial class CustomerShopIsolationTests
         order.Status.ShouldBe("Reserved");
         order.PlacementChannel.ShouldBe("OrderDesk");
         order.CustomerTenantId.ShouldBe(tenantId.ToUpperInvariant());
-        order.Lines.ShouldHaveSingleItem().UnitPrice.ShouldBe(9.5m);
+        var orderLine = order.Lines.ShouldHaveSingleItem();
+        orderLine.UnitPrice.ShouldBe(9.5m);
+        // Operator detail shows names, not raw ids.
+        order.StoreCode.ShouldBe(storeCode);
+        order.CustomerOrgName.ShouldBe(caller.CustomerOrgName);
+        order.CustomerOrgCode.ShouldBe(caller.CustomerOrgCode);
+        order.WarehouseName.ShouldBe(warehouse.Name);
+        orderLine.Sku.ShouldBe(sku);
+        orderLine.ProductName.ShouldBe($"冰鲜三文鱼刺身 {suffix}");
 
         // The restaurant sees the order placed on its behalf, still waiting for the warehouse.
         using var customer = await CreateDashboardClientAsync(email, tenantId);
