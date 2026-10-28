@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Mail, ShieldCheck, User as UserIcon, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
+  adminConfirmUserEmail,
   assignUserRoles,
   getUser,
   getUserRoles,
@@ -34,6 +35,7 @@ export function UserDetailPage() {
   const canView = !!actor?.permissions.includes(IdentityPermissions.Users.View);
   const canUpdate = !!actor?.permissions.includes(IdentityPermissions.Users.Update);
   const canManageRoles = !!actor?.permissions.includes(IdentityPermissions.Users.ManageRoles);
+  const canConfirmEmail = !!actor?.permissions.includes(IdentityPermissions.Users.ConfirmEmail);
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -60,6 +62,19 @@ export function UserDetailPage() {
       ]);
     },
     onError: (err) => toast.error(t("users.statusFailed"), { description: describeErr(err) }),
+  });
+
+  // 登录要求邮箱已确认；收不到确认邮件时由管理员直接确认
+  const confirmEmailMutation = useMutation({
+    mutationFn: () => adminConfirmUserEmail(id),
+    onSuccess: async () => {
+      toast.success(t("users.emailConfirmedToast"));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["user", id] }),
+        queryClient.invalidateQueries({ queryKey: ["users"] }),
+      ]);
+    },
+    onError: (err) => toast.error(t("users.confirmEmailFailed"), { description: describeErr(err) }),
   });
 
   const user = userQuery.data;
@@ -135,6 +150,16 @@ export function UserDetailPage() {
                 </div>
               </div>
 
+              <div className="flex shrink-0 flex-wrap gap-2">
+              {canConfirmEmail && !user.emailConfirmed && <Button
+                variant="default"
+                onClick={() => { if (!confirmEmailMutation.isPending) confirmEmailMutation.mutate(); }}
+                disabled={confirmEmailMutation.isPending || userQuery.isError}
+                className="h-9 gap-1.5 rounded-lg px-4 text-[13px]"
+              >
+                <Mail className="size-3.5" />
+                {confirmEmailMutation.isPending ? t("users.confirmingEmail") : t("users.confirmEmail")}
+              </Button>}
               {canUpdate && <Button
                 variant={user.isActive ? "outline" : "default"}
                 onClick={() => { if (canUpdate && !toggleMutation.isPending && !userQuery.isError) toggleMutation.mutate(!user.isActive); }}
@@ -147,6 +172,7 @@ export function UserDetailPage() {
                     ? t("users.deactivateAccount")
                     : t("users.activateAccount")}
               </Button>}
+              </div>
             </div>
           </div>
 

@@ -486,6 +486,7 @@
   "auth": {
     "welcomeBack": "欢迎回来",
     "loginName": "登录名",
+    "emailNotConfirmed": "该账号邮箱尚未确认。请联系管理员在用户详情页确认邮箱，或点击确认邮件中的链接。",
     "loginNamePlaceholder": "用户名或邮箱",
     "signInSubtitle": "登录运营账号",
     "tenant": "租户",
@@ -994,6 +995,10 @@
     "activated": "用户已启用",
     "deactivated": "用户已停用",
     "statusFailed": "状态变更失败",
+    "confirmEmail": "确认邮箱",
+    "confirmingEmail": "正在确认…",
+    "emailConfirmedToast": "邮箱已确认，用户现在可以登录",
+    "confirmEmailFailed": "确认邮箱失败",
     "loadingAccount": "正在加载账号",
     "updating": "正在更新…",
     "deactivateAccount": "停用账号",

@@ -272,6 +272,7 @@ test.describe("user detail page", () => {
     // Status + email badges.
     await expect(main.getByText("Active", { exact: true }).first()).toBeVisible();
     await expect(main.getByText(/Email confirmed/i).first()).toBeVisible();
+    await expect(main.getByRole("button", { name: "Confirm email" })).toHaveCount(0);
 
     // Section headings. Identity + roles now render via SettingsSection (h2
     // with plain titles); the sessions card still uses FormSection ("\ Sessions").
@@ -289,6 +290,32 @@ test.describe("user detail page", () => {
 
     // Session row rendered from the sessions endpoint.
     await expect(main.getByText(/Chrome 120 on Windows/i)).toBeVisible();
+  });
+
+  test("operator confirms a pending email so the user can sign in", async ({ page }) => {
+    const pending = USERS[1];
+    let confirmed = false;
+    await page.route(`**/api/v1/identity/users/${pending.id}`, (route) =>
+      route.fulfill({ json: { ...pending, emailConfirmed: confirmed } }),
+    );
+    await page.route(`**/api/v1/identity/users/${pending.id}/confirm-email`, async (route) => {
+      expect(route.request().method()).toBe("POST");
+      confirmed = true;
+      await route.fulfill({ status: 204 });
+    });
+    await mockJsonResponse(page, `**/api/v1/identity/users/${pending.id}/roles`, []);
+    await mockJsonResponse(page, `**/api/v1/identity/users/${pending.id}/sessions`, []);
+
+    await page.goto(`/users/${pending.id}`);
+
+    const main = page.getByRole("main");
+    await expect(main.getByText(/Email pending/i).first()).toBeVisible({ timeout: 10_000 });
+    await main.getByRole("button", { name: "Confirm email" }).click();
+
+    await expect(page.getByText("Email confirmed; the user can sign in now")).toBeVisible();
+    await expect(main.getByText(/Email confirmed/i).first()).toBeVisible();
+    await expect(main.getByRole("button", { name: "Confirm email" })).toHaveCount(0);
+    expect(confirmed).toBe(true);
   });
 
   test("surfaces a server error band when the user fails to load", async ({ page }) => {

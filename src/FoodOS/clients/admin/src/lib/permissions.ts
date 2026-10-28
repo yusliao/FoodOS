@@ -81,6 +81,7 @@ export const IdentityPermissions = Object.freeze({
     Delete: "Permissions.Users.Delete",
     Export: "Permissions.Users.Export",
     ManageRoles: "Permissions.Users.ManageRoles",
+    ConfirmEmail: "Permissions.Users.ConfirmEmail",
     Impersonate: "Permissions.Users.Impersonate",
   },
   UserRoles: {

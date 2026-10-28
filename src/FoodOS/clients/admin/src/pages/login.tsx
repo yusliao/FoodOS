@@ -85,6 +85,8 @@ export function LoginPage() {
       } else if (err instanceof ApiRequestError && err.status === 401 && reason.startsWith("two_factor_invalid:")) {
         setTwoFactorRequired(true);
         setError(t("auth.twoFactorInvalid"));
+      } else if (err instanceof ApiRequestError && err.status === 401 && reason === "email not confirmed") {
+        setError(t("auth.emailNotConfirmed"));
       } else {
         setError(detail);
       }

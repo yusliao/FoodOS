@@ -486,6 +486,7 @@
   "auth": {
     "welcomeBack": "Welcome back",
     "loginName": "Login name",
+    "emailNotConfirmed": "This account's email is not confirmed yet. Ask an administrator to confirm it on the user page, or use the link in the confirmation email.",
     "loginNamePlaceholder": "User name or email",
     "signInSubtitle": "Sign in to your operator account",
     "tenant": "Tenant",
@@ -994,6 +995,10 @@
     "activated": "User activated",
     "deactivated": "User deactivated",
     "statusFailed": "Status change failed",
+    "confirmEmail": "Confirm email",
+    "confirmingEmail": "Confirming…",
+    "emailConfirmedToast": "Email confirmed; the user can sign in now",
+    "confirmEmailFailed": "Failed to confirm email",
     "loadingAccount": "Loading account",
     "updating": "Updating…",
     "deactivateAccount": "Deactivate account",

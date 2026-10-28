@@ -106,6 +106,24 @@ test.describe("admin login", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
+  test("explains an unconfirmed email instead of showing the raw server text", async ({ page }) => {
+    await page.route("**/api/v1/identity/token/issue", (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/problem+json",
+        json: { status: 401, title: "Unauthorized", detail: "email not confirmed" },
+      }),
+    );
+
+    await page.goto("/login");
+    await page.getByLabel("Login name").fill("cook");
+    await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    await expect(page.getByRole("alert")).toContainText("email is not confirmed yet");
+    await expect(page.getByRole("alert")).not.toContainText("email not confirmed");
+  });
+
   test("prompts for an authenticator code and forwards retries without clearing credentials", async ({ page }) => {
     const bodies: Array<Record<string, unknown>> = [];
     await page.route("**/api/v1/identity/token/issue", async (route) => {

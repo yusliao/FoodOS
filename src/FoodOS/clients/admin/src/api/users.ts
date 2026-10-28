@@ -145,6 +145,11 @@ export async function assignUserRoles(id: string, roles: UserRoleDto[]): Promise
   });
 }
 
+/** Operator marks a user's email as confirmed without the emailed token (idempotent). */
+export async function adminConfirmUserEmail(id: string): Promise<void> {
+  await apiFetch<void>(`${BASE}/${encodeURIComponent(id)}/confirm-email`, { method: "POST" });
+}
+
 // -----------------------------
 // Anonymous password-reset trio
 //   forgot-password → reset-password → confirm-email
