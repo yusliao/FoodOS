@@ -149,7 +149,7 @@
     "createHint": "Register a supplier with a unique code and delivery lead time.",
     "save": "Create supplier"
   },
-  "orderDesk": {"title":"Phone orders","description":"Recognise the calling restaurant, find products fast and place the order on its behalf. Orders are platform commitments; the warehouse confirms them asynchronously.","callerTitle":"Incoming call","callerSearch":"Find the caller","callerPlaceholder":"Phone number, store or customer name, or code","callerHint":"Type at least 2 characters. Four or more digits match contact phone numbers.","searching":"Searching…","loading":"Loading…","requestFailed":"Request failed. Check the connection and try again.","noCallers":"No matching store. Check the number or search by store name.","addressMissing":"Delivery address pending","store":"Store","customer":"Customer","address":"Delivery address","lastOrder":"Last order","never":"No orders yet","changeCaller":"Change caller","blocking":{"customerAccountMissing":"No restaurant account linked","addressMissing":"Address pending","creditHold":"Credit hold"},"linesTitle":"Order lines","productSearch":"Search products","productPlaceholder":"Name, pinyin (e.g. swy), SKU or barcode — ↑↓ to choose, Enter to add","noProducts":"No matching product.","noLines":"Search a product, pick a frequent item or copy a recent order.","decrease":"Decrease quantity","increase":"Increase quantity","quantity":"Quantity","remove":"Remove","total":"Estimated total","priceHint":"Contract prices for this customer; final prices are fixed when the order is placed.","place":"Place order","placing":"Placing…","readOnly":"You can prepare lines but cannot place orders.","placed":"Order placed","placedHint":"Order placed and waiting for warehouse confirmation.","viewOrder":"View order","placeFailed":"The order was not placed.","quoteFailed":"Prices could not be refreshed.","stock":{"available":"In stock","insufficient":"Low stock","pending":"Awaiting WMS"},"frequentTitle":"Frequently ordered","noFrequent":"No orders in the last 90 days.","orderedTimes":"Ordered","inactive":"No longer available","recentTitle":"Recent orders","noRecent":"This store has no orders yet.","byPhone":"Phone order","linesUnit":"lines","showLines":"Show lines","hideLines":"Hide lines","copyOrder":"Add these lines","short":"short"},
+  "orderDesk": {"title":"Service orders","description":"Choose the customer, find products fast and place the order on its behalf. Orders are platform commitments; the warehouse confirms them asynchronously.","callerTitle":"Choose customer","callerSearch":"Find a customer","callerPlaceholder":"Customer or store name, code, or contact phone","callerHint":"Type at least 2 characters to search customer and store names or codes; four or more digits also match contact phones.","searching":"Searching…","loading":"Loading…","requestFailed":"Request failed. Check the connection and try again.","noCallers":"No matching customer or store. Check the spelling, code or phone number.","addressMissing":"Delivery address pending","store":"Store","customer":"Customer","address":"Delivery address","lastOrder":"Last order","never":"No orders yet","changeCaller":"Change customer","blocking":{"customerAccountMissing":"No restaurant account linked","addressMissing":"Address pending","creditHold":"Credit hold"},"linesTitle":"Order lines","productSearch":"Search products","productPlaceholder":"Name, pinyin (e.g. swy), SKU or barcode — ↑↓ to choose, Enter to add","noProducts":"No matching product.","noLines":"Search a product, pick a frequent item or copy a recent order.","decrease":"Decrease quantity","increase":"Increase quantity","quantity":"Quantity","remove":"Remove","total":"Estimated total","priceHint":"Contract prices for this customer; final prices are fixed when the order is placed.","place":"Place order","placing":"Placing…","readOnly":"You can prepare lines but cannot place service orders.","placed":"Order placed","placedHint":"Order placed and waiting for warehouse confirmation.","viewOrder":"View order","placeFailed":"The order was not placed.","quoteFailed":"Prices could not be refreshed.","stock":{"available":"In stock","insufficient":"Low stock","pending":"Awaiting WMS"},"frequentTitle":"Frequently ordered","noFrequent":"No orders in the last 90 days.","orderedTimes":"Ordered","inactive":"No longer available","recentTitle":"Recent orders","noRecent":"This store has no orders yet.","byPhone":"Service order","linesUnit":"lines","showLines":"Show lines","hideLines":"Hide lines","copyOrder":"Add these lines","short":"short"},
   "orderManage": {
     "amend": "Amend order",
     "cancel": "Cancel order",
@@ -355,7 +355,7 @@
     "boundaries": "Price list metadata and tiers cannot be deleted, and price locks cannot be listed or deleted. This workbench only exposes the create, upsert, and quote operations that exist on the server."
   },
   "partners": {
-    "contacts":"Caller contacts","contactsHint":"Phone numbers the order desk uses to recognise this store.","contactName":"Contact name","contactPhone":"Phone","addContact":"Add contact","removeContact":"Remove contact","saveContacts":"Save contacts","contactsSaved":"Contacts saved.","noContacts":"No contacts yet.","editContacts":"Edit contacts",
+    "contacts":"Caller contacts","contactsHint":"Customer service uses these numbers to find the store when the restaurant calls.","contactName":"Contact name","contactPhone":"Phone","addContact":"Add contact","removeContact":"Remove contact","saveContacts":"Save contacts","contactsSaved":"Contacts saved.","noContacts":"No contacts yet.","editContacts":"Edit contacts","codeUniqueHint":"Codes are unique across customers and stored in upper case.","searchStores":"Find stores","searchStoresHint":"Store name, code, address or contact phone","noStoreMatches":"No store matches the search.","column":{"store":"Store","customer":"Customer","address":"Delivery address","contacts":"Contacts"},"actions":"Actions","storeSaved":"Store saved.","editStoreHint":"Update the name, delivery address and the contacts customer service uses to recognise this store.","duplicatePhone":"Each phone number can only be listed once.","searchCustomerHint":"Search customer code or name",
     "customerCreated": "Partner customer created.",
     "storeCreated": "Store created for the selected customer. Your list filter is unchanged.",
     "requestFailed": "The request failed. Check your connection and try again.",
@@ -389,7 +389,7 @@
     "addressPending": "Address pending; ordering is unavailable until completed",
     "operatorWarehouseAutomatic": "Operator warehouse selected automatically at ordering",
     "editStore": "Edit store",
-    "editCustomer": "Edit customer name",
+    "editCustomer": "Edit customer",
     "saveChanges": "Save changes",
     "cancel": "Cancel",
     "deliveryWindow": "Delivery window",
@@ -459,7 +459,7 @@
       "logistics": { "vehicles": "Vehicles", "drivers": "Drivers", "routes": "Delivery routes" },
       "procurement": { "suppliers": "Suppliers", "purchase-orders": "Purchase orders" },
       "orders": "Order center",
-      "order-desk": "Phone orders",
+      "order-desk": "Service orders",
       "customers": "Partner customers",
       "stores": "Restaurant stores",
       "catalog": {
@@ -1141,7 +1141,7 @@
       "Operations": "Operations"
     },
     "resource": {
-      "Ordering": { "OrderDesk": "Phone order desk", "Customers": "Customers", "Stores": "Stores" },
+      "Ordering": { "OrderDesk": "Service orders", "Customers": "Customers", "Stores": "Stores" },
       "Inventory": { "Warehouses": "Warehouses" },
       "WmsIntegration": "WMS integration",
       "Notifications": { "Inbox": "Notifications" }
@@ -1165,7 +1165,7 @@
         "Ordering": {
           "Customers": { "View": "View customers", "Create": "Create customers", "Update": "Update customers" },
           "Stores": { "View": "View stores", "Create": "Create stores", "Update": "Update stores" },
-          "OrderDesk": { "View": "Use the phone order desk", "Place": "Place phone orders on a restaurant's behalf" }
+          "OrderDesk": { "View": "Use the service order desk", "Place": "Place service orders on a restaurant's behalf" }
         },
         "Inventory": { "Warehouses": { "View": "View warehouses" } },
         "WmsIntegration": { "View": "View WMS integration" },

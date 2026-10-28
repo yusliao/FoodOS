@@ -234,8 +234,8 @@ const PERMISSION_DISPLAY_GROUPS: readonly PermissionGroup[] = [
       { name: OrderingPermissions.Orders.View, description: "View orders and after-sales claims" },
       { name: OrderingPermissions.Orders.Manage, description: "Manage orders and register after-sales claims" },
       { name: OrderingPermissions.Orders.Reconcile, description: "Reconcile received orders" },
-      { name: OrderingPermissions.OrderDesk.View, description: "Use the phone order desk: recognise callers, look up products and order history" },
-      { name: OrderingPermissions.OrderDesk.Place, description: "Place phone orders on a restaurant's behalf" },
+      { name: OrderingPermissions.OrderDesk.View, description: "Use the service order desk: choose customers, look up products and order history" },
+      { name: OrderingPermissions.OrderDesk.Place, description: "Place service orders on a restaurant's behalf" },
     ],
   },
   {

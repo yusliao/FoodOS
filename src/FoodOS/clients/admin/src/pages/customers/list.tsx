@@ -24,6 +24,7 @@ export function CustomersPage() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftCode, setDraftCode] = useState("");
   const queryClient = useQueryClient();
   const update = useMutation({
     mutationFn: updateCustomer,
@@ -50,11 +51,13 @@ export function CustomersPage() {
           <div><dt className="text-[var(--color-muted-foreground)]">{t("partners.tenant")}</dt><dd>{customer.customerTenantId ?? t("partners.unlinked")}</dd></div>
           <div><dt className="text-[var(--color-muted-foreground)]">{t("partners.creditStatus")}</dt><dd>{t(customer.creditHold ? "partners.held" : "partners.clear")}</dd></div>
         </dl>
-        {canEdit && editingId !== customer.id && <Button variant="outline" onClick={() => { setEditingId(customer.id); setDraftName(customer.name); update.reset(); }}>{t("partners.editCustomer")}</Button>}
-        {canEdit && editingId === customer.id && <form className="space-y-3" onSubmit={event => { event.preventDefault(); update.mutate({ id: customer.id, name: draftName.trim() }); }}>
+        {canEdit && editingId !== customer.id && <Button variant="outline" onClick={() => { setEditingId(customer.id); setDraftName(customer.name); setDraftCode(customer.code); update.reset(); }}>{t("partners.editCustomer")}</Button>}
+        {canEdit && editingId === customer.id && <form className="space-y-3" onSubmit={event => { event.preventDefault(); update.mutate({ id: customer.id, name: draftName.trim(), code: draftCode.trim() }); }}>
+          <Input aria-label={t("partners.code")} value={draftCode} maxLength={16} onChange={event => setDraftCode(event.target.value)} required />
+          <p className="text-xs text-[var(--color-muted-foreground)]">{t("partners.codeUniqueHint")}</p>
           <Input aria-label={t("partners.name")} value={draftName} maxLength={128} onChange={event => setDraftName(event.target.value)} required />
           {update.isError && <ErrorBand message={describe(update.error, t("partners.requestFailed"))} />}
-          <div className="flex gap-2"><Button type="submit" disabled={update.isPending || !draftName.trim()}>{t("partners.saveChanges")}</Button><Button type="button" variant="outline" onClick={() => setEditingId(null)}>{t("partners.cancel")}</Button></div>
+          <div className="flex gap-2"><Button type="submit" disabled={update.isPending || !draftName.trim() || !draftCode.trim()}>{t("partners.saveChanges")}</Button><Button type="button" variant="outline" onClick={() => setEditingId(null)}>{t("partners.cancel")}</Button></div>
         </form>}
         {canViewStores && <Link className="inline-block text-sm underline" to={`/stores?customerOrgId=${encodeURIComponent(customer.id)}`}>{t("partners.viewStores")}</Link>}
       </article>)}

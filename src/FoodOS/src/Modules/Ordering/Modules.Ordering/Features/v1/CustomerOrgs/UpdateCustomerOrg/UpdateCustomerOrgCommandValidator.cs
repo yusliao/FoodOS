@@ -9,5 +9,6 @@ public sealed class UpdateCustomerOrgCommandValidator : AbstractValidator<Update
     {
         RuleFor(command => command.CustomerOrgId).NotEmpty();
         RuleFor(command => command.Name).NotEmpty().MaximumLength(128);
+        RuleFor(command => command.Code!).NotEmpty().MaximumLength(16).When(command => command.Code is not null);
     }
 }

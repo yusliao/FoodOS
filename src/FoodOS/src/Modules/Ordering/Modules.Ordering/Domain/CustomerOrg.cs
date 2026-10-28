@@ -25,7 +25,7 @@ public sealed class CustomerOrg : AggregateRoot<Guid>, IOperatorOwnedEntity
         {
             Id = Guid.CreateVersion7(),
             CustomerTenantId = NormalizeTenantId(customerTenantId),
-            Code = code.Trim().ToUpperInvariant(),
+            Code = NormalizeCode(code),
             Name = name.Trim(),
             CreditHold = creditHold,
             CreatedAtUtc = DateTime.UtcNow
@@ -38,6 +38,18 @@ public sealed class CustomerOrg : AggregateRoot<Guid>, IOperatorOwnedEntity
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         Name = name.Trim();
+    }
+
+    public void ChangeCode(string code)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        Code = NormalizeCode(code);
+    }
+
+    public static string NormalizeCode(string code)
+    {
+        ArgumentNullException.ThrowIfNull(code);
+        return code.Trim().ToUpperInvariant();
     }
 
     public void AssignCustomerTenant(string customerTenantId)

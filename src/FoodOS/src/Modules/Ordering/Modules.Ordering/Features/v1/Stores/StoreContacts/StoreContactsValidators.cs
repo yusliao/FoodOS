@@ -17,7 +17,16 @@ public sealed class ReplaceStoreContactsCommandValidator : AbstractValidator<Rep
     public ReplaceStoreContactsCommandValidator()
     {
         RuleFor(command => command.StoreId).NotEmpty();
-        RuleFor(command => command.Contacts).NotNull()
+        RuleFor(command => command.Contacts).NotNull().SetValidator(new StoreContactInputsValidator());
+    }
+}
+
+/// <summary>Contact list rules shared by store creation and contact replacement.</summary>
+internal sealed class StoreContactInputsValidator : AbstractValidator<IReadOnlyList<StoreContactInput>>
+{
+    public StoreContactInputsValidator()
+    {
+        RuleFor(contacts => contacts)
             .Must(contacts => contacts.Count <= StoreContact.MaxPerStore)
             .WithMessage($"A store can have at most {StoreContact.MaxPerStore} contacts.")
             .Must(contacts => contacts
@@ -25,7 +34,7 @@ public sealed class ReplaceStoreContactsCommandValidator : AbstractValidator<Rep
                 .Distinct(StringComparer.Ordinal)
                 .Count() == contacts.Count)
             .WithMessage("Each contact phone can only be listed once per store.");
-        RuleForEach(command => command.Contacts).ChildRules(contact =>
+        RuleForEach(contacts => contacts).ChildRules(contact =>
         {
             contact.RuleFor(item => item.Name).NotEmpty().MaximumLength(100);
             contact.RuleFor(item => item.Phone).NotEmpty().MaximumLength(40)

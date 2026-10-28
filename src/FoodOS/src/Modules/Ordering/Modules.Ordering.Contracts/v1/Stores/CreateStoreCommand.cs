@@ -9,4 +9,5 @@ public sealed record CreateStoreCommand(
     string Address,
     Guid DefaultWarehouseId,
     Guid? DefaultRouteId = null,
-    string? DeliveryWindow = null) : ICommand<Guid>;
+    string? DeliveryWindow = null,
+    IReadOnlyList<StoreContactInput>? Contacts = null) : ICommand<Guid>;

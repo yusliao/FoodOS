@@ -14,13 +14,13 @@ public sealed class GetStoresQueryHandler(OrderingDbContext dbContext)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        IQueryable<Store> q = dbContext.Stores.AsNoTracking();
+        IQueryable<Store> q = dbContext.Stores.AsNoTracking().Include(s => s.Contacts);
         if (query.CustomerOrgId is { } orgId && orgId != Guid.Empty)
         {
             q = q.Where(s => s.CustomerOrgId == orgId);
         }
 
         var items = await q.OrderBy(s => s.Code).ToListAsync(cancellationToken).ConfigureAwait(false);
-        return items.Select(s => s.ToDto()).ToList();
+        return items.Select(s => s.ToDto(includeContacts: true)).ToList();
     }
 }

@@ -6,12 +6,15 @@ import { searchWarehouses, type WarehouseDto } from "@/api/inventory";
 import { SearchableSelect } from "@/components/list/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, LoadingRow, Pagination, Select } from "@/components/list";
+import { Field, LoadingRow, Pagination } from "@/components/list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useT } from "@/i18n/locale-provider";
 import { describe } from "./request-error";
 import { newUuid } from "@/lib/uuid";
+import { CustomerPicker } from "./customer-picker";
+import { ContactRows } from "./store-contacts";
+import { contactDraftsValid, toContactInputs, type ContactDraft } from "./store-contacts-model";
 
 export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string; onClose: () => void }) {
   const t = useT();
@@ -22,6 +25,7 @@ export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string;
   const [address, setAddress] = useState("");
   const [deliveryWindow, setDeliveryWindow] = useState("");
   const [warehouse, setWarehouse] = useState<WarehouseDto | null>(null);
+  const [contacts, setContacts] = useState<ContactDraft[]>([]);
   const [search, setSearch] = useState("");
   const [searchTerm, searchPending] = useDebouncedSearch(search);
   const [page, setPage] = useState(1);
@@ -35,12 +39,13 @@ export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string;
     onSuccess: async () => { await cache.invalidateQueries({ queryKey: ["stores"] }); toast.success(t("partners.storeCreated")); onClose(); },
   });
   const valid = customers.isSuccess && eligibleCustomers.some(c => c.id === customer)
-    && warehouse !== null && Boolean(code.trim() && name.trim() && address.trim());
+    && warehouse !== null && Boolean(code.trim() && name.trim() && address.trim()) && contactDraftsValid(contacts);
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!valid || !warehouse || mutation.isPending) return;
     const input: CreateStoreInput = { customerOrgId: customer, code: code.trim(), name: name.trim(),
-      address: address.trim(), defaultWarehouseId: warehouse.id, defaultRouteId: null, deliveryWindow: deliveryWindow.trim() || null };
+      address: address.trim(), defaultWarehouseId: warehouse.id, defaultRouteId: null, deliveryWindow: deliveryWindow.trim() || null,
+      ...(contacts.length > 0 ? { contacts: toContactInputs(contacts) } : {}) };
     const body = JSON.stringify(input);
     if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() };
     mutation.mutate({ input, key: attempt.current.key });
@@ -53,8 +58,8 @@ export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string;
           {customers.isPending && <LoadingRow label={t("partners.loading")} />}
           {customers.isError && <div role="alert"><p>{describe(customers.error, t("partners.requestFailed"))}</p><Button type="button" variant="outline" onClick={() => void customers.refetch()}>{t("workbench.retry")}</Button></div>}
           <Field id="store-customer" label={t("partners.customer")} required>
-            <Select id="store-customer" value={customer} onValueChange={setCustomer} emptyLabel={t("partners.chooseCustomer")}
-              disabled={!customers.isSuccess || mutation.isPending} options={eligibleCustomers.map(c => ({ value: c.id, label: `${c.code} · ${c.name}` }))} />
+            <CustomerPicker id="store-customer" label={t("partners.customer")} value={customer} onChange={setCustomer}
+              customers={eligibleCustomers} disabled={!customers.isSuccess || mutation.isPending} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id="store-code" label={t("partners.code")} required><Input id="store-code" required maxLength={32} value={code} onChange={e => setCode(e.target.value)} /></Field>
@@ -77,6 +82,7 @@ export function StoreCreate({ customerOrgId, onClose }: { customerOrgId: string;
             </SearchableSelect>
           </Field>
         </fieldset>
+        <ContactRows drafts={contacts} onChange={setContacts} disabled={mutation.isPending} />
         {mutation.isError && <p role="alert" className="text-sm text-[var(--color-destructive)]">{describe(mutation.error, t("partners.requestFailed"))}</p>}
       </DialogBody><DialogFooter>
         <Button type="button" variant="outline" disabled={mutation.isPending} onClick={onClose}>{t("chrome.cancel")}</Button>

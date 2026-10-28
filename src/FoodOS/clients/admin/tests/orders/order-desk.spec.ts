@@ -45,7 +45,7 @@ async function setup(page: Page, permissions: string[]) {
   });
 }
 
-test("customer service recognises the caller, adds products by pinyin and frequent items, and places the order", async ({ page }) => {
+test("customer service chooses the customer, adds products by pinyin and frequent items, and places the order", async ({ page }) => {
   await setup(page, [deskView, deskPlace, ordersView]);
   const placements: { key: string | undefined; body: unknown }[] = [];
   await page.route("**/api/v1/ordering/order-desk/stores/*/orders", async route => {
@@ -54,7 +54,7 @@ test("customer service recognises the caller, adds products by pinyin and freque
   });
 
   await page.goto("/order-desk");
-  const lookup = page.getByRole("textbox", { name: "Find the caller" });
+  const lookup = page.getByRole("textbox", { name: "Find a customer" });
   await expect(lookup).toBeFocused();
   const callerRequest = page.waitForRequest(request => request.url().includes("/order-desk/callers?term=6175550101"));
   await lookup.fill("6175550101");
@@ -63,7 +63,7 @@ test("customer service recognises the caller, adds products by pinyin and freque
 
   await expect(page.getByText("Harbor Group")).toBeVisible();
   await expect(page.getByRole("link", { name: "SO20261027001" })).toBeVisible();
-  await expect(page.getByText("Phone order", { exact: true })).toBeVisible();
+  await expect(page.getByText("Service order", { exact: true })).toBeVisible();
 
   const products = page.getByRole("combobox", { name: "Search products" });
   await products.fill("swy");
@@ -87,12 +87,12 @@ test("customer service recognises the caller, adds products by pinyin and freque
 test("a view-only agent can prepare lines but has no place action", async ({ page }) => {
   await setup(page, [deskView]);
   await page.goto("/order-desk");
-  await page.getByRole("textbox", { name: "Find the caller" }).fill("HB-DT");
+  await page.getByRole("textbox", { name: "Find a customer" }).fill("HB-DT");
   await page.getByRole("button", { name: /Harbor Downtown/ }).click();
   await page.getByRole("button", { name: "Add these lines" }).click();
   await expect(page.getByRole("spinbutton", { name: "Quantity Peeled shrimp" })).toHaveValue("3");
   await expect(page.getByRole("button", { name: "Place order" })).toHaveCount(0);
-  await expect(page.getByText("You can prepare lines but cannot place orders.")).toBeVisible();
+  await expect(page.getByText("You can prepare lines but cannot place service orders.")).toBeVisible();
 });
 
 test("the order desk is hidden and blocked without the order desk permission", async ({ page }) => {
@@ -100,7 +100,7 @@ test("the order desk is hidden and blocked without the order desk permission", a
   const deskRequests: string[] = [];
   page.on("request", request => { if (request.url().includes("/order-desk/")) deskRequests.push(request.url()); });
   await page.goto("/order-desk");
-  await expect(page.getByRole("link", { name: "Phone orders" })).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: "Find the caller" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Service orders" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Find a customer" })).toHaveCount(0);
   expect(deskRequests).toEqual([]);
 });

@@ -65,10 +65,6 @@ export function placeOrderDeskOrder(input: { storeId: string; lines: OrderDeskLi
   });
 }
 
-export function getStoreContacts(storeId: string, signal?: AbortSignal) {
-  return apiFetch<StoreContact[]>(`/api/v1/ordering/stores/${encodeURIComponent(storeId)}/contacts`, { signal });
-}
-
 export function replaceStoreContacts(input: { storeId: string; contacts: { name: string; phone: string }[] }) {
   return apiFetch<StoreContact[]>(`/api/v1/ordering/stores/${encodeURIComponent(input.storeId)}/contacts`, {
     method: "PUT", body: JSON.stringify({ contacts: input.contacts }),

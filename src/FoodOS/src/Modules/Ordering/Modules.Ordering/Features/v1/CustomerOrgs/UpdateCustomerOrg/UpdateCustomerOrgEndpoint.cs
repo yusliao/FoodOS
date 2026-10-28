@@ -19,7 +19,7 @@ public static class UpdateCustomerOrgEndpoint
                     return Results.NoContent();
                 })
             .WithName("UpdateCustomerOrg")
-            .WithSummary("Update an operator-owned customer organization name")
+            .WithSummary("Update an operator-owned customer organization's name and unique code")
             .RequirePermission(OrderingPermissions.Customers.Update);
     }
 }

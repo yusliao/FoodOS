@@ -6,7 +6,7 @@ import {
   FolderTree,
   LayoutDashboard,
   Package,
-  PhoneCall,
+  Headset,
   Receipt,
   ScrollText,
   Settings,
@@ -89,7 +89,7 @@ export const sections: NavSection[] = [
   {
     id: "operations", caption: "Operations", icon: Activity,
     items: [
-      { to: "/order-desk", label: "Phone orders", icon: PhoneCall, perms: [OrderingPermissions.OrderDesk.View] },
+      { to: "/order-desk", label: "Service orders", icon: Headset, perms: [OrderingPermissions.OrderDesk.View] },
       { to: "/reports", label: "Operations reports", icon: Activity, perms: [OpsPermissions.Kpis.View] },
       { to: "/procurement/purchase-orders", label: "Purchase orders", icon: Receipt, perms: [ProcurementPermissions.Purchase.View] },
       { to: "/procurement/suppliers", label: "Suppliers", icon: Building2, perms: [ProcurementPermissions.Suppliers.View] },

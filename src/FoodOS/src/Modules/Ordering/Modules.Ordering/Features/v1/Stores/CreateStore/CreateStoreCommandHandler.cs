@@ -49,6 +49,11 @@ public sealed class CreateStoreCommandHandler(OrderingDbContext dbContext, IMedi
                 HttpStatusCode.Conflict);
         }
 
+        if (command.Contacts is { Count: > 0 } contacts)
+        {
+            store.ReplaceContacts(contacts.Select(contact => (contact.Name, contact.Phone)).ToList());
+        }
+
         dbContext.Stores.Add(store);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return store.Id;

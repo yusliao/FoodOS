@@ -51,7 +51,7 @@ test("customer search preserves root identity and customer link filters stores",
   const filtered = page.waitForRequest(r => r.url().includes(`stores?customerOrgId=${A}`));
   await page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Acme Restaurant" }) }).getByRole("link", { name: "View stores" }).click();
   expect((await filtered).headers().tenant).toBe("root");
-  await expect(page.getByRole("heading", { name: "Acme Main" })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: /Acme Main/ })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`customerOrgId=${A}`));
 });
 
@@ -69,17 +69,20 @@ test("operator can complete the initial customer and store template", async ({ p
 
   await page.goto("/customers");
   await page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Acme Restaurant" }) })
-    .getByRole("button", { name: "Edit customer name" }).click();
+    .getByRole("button", { name: "Edit customer" }).click();
+  await page.getByRole("textbox", { name: "Code" }).fill("acme-dn");
   await page.getByRole("textbox", { name: "Name" }).fill("Acme Dining");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect.poll(() => updates.length).toBe(1);
-  expect(updates[0]).toEqual({ customerOrgId: A, name: "Acme Dining" });
+  expect(updates[0]).toEqual({ customerOrgId: A, name: "Acme Dining", code: "acme-dn" });
 
+  await page.route("**/api/v1/ordering/stores/s-1/contacts", route => route.fulfill({ json: [] }));
   await page.goto("/stores");
-  await page.getByRole("button", { name: "Edit store" }).click();
-  await page.getByRole("textbox", { name: "Name" }).fill("Main Branch");
-  await page.getByRole("textbox", { name: "Address" }).fill("1 Main St");
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByRole("button", { name: "Edit store Acme Main" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Main Branch");
+  await dialog.getByRole("textbox", { name: "Address" }).fill("1 Main St");
+  await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect.poll(() => updates.length).toBe(2);
   expect(updates[1]).toEqual({ storeId: store.id, name: "Main Branch", address: "1 Main St" });
 });
@@ -152,7 +155,7 @@ test("stores-only reader does not fetch customers, warehouses or identity domain
   const requests: string[] = [];
   page.on("request", r => requests.push(r.url()));
   await page.goto("/stores");
-  await expect(page.getByRole("heading", { name: "Acme Main" })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: /Acme Main/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "New store" })).toHaveCount(0);
   expect(requests.some(url => /customer-orgs|inventory\/warehouses|\/tenants/.test(url))).toBe(false);
 });
@@ -176,7 +179,7 @@ for (const id of ["invalid-id", "00000000-0000-0000-0000-000000000000"]) {
     await expect(page.getByRole("alert")).toContainText("Invalid customer ID");
     expect(requests.some(url => url.includes("/ordering/stores"))).toBe(false);
     await page.getByRole("button", { name: "Clear filter" }).click();
-    await expect(page.getByRole("heading", { name: "Acme Main" })).toBeVisible();
+    await expect(page.getByRole("rowheader", { name: /Acme Main/ })).toBeVisible();
   });
 }
 
@@ -200,7 +203,7 @@ test("store creation uses the current customer and paged warehouse, refreshes th
   await page.getByRole("button", { name: "New store" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Partner customer", exact: true }).click();
-  await page.getByRole("menuitem", { name: /BETA/ }).click();
+  await page.getByRole("menuitemradio", { name: /BETA/ }).click();
   await dialog.getByRole("textbox", { name: "Code", exact: true }).fill("B1");
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Beta Main");
   await dialog.getByRole("textbox", { name: "Address", exact: true }).fill("456 Main Street");
@@ -269,8 +272,8 @@ test("unlinked or operator-owned legacy customers cannot be selected for a new r
   await page.getByRole("button", { name: "New store" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Partner customer", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: /Unlinked customer|Operator record/ })).toHaveCount(0);
-  await page.getByRole("menuitem", { name: /ACME/ }).click();
+  await expect(page.getByRole("menuitemradio", { name: /Unlinked customer|Operator record/ })).toHaveCount(0);
+  await page.getByRole("menuitemradio", { name: /ACME/ }).click();
   await dialog.getByRole("button", { name: "Search warehouses", exact: true }).click();
   await expect(page.getByRole("menuitemradio", { name: "WH1 · Main warehouse" })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -287,33 +290,53 @@ test("Chinese mobile customer and store pages fit the viewport", async ({ page }
   await expect(page.getByRole("heading", { name: "Acme Restaurant" })).toBeVisible();
   await page.screenshot({ path: info.outputPath("customers-mobile.png"), fullPage: true });
   await page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Acme Restaurant" }) }).getByRole("link", { name: "查看门店" }).click();
-  await expect(page.getByRole("heading", { name: "Acme Main" })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: /Acme Main/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("stores-mobile.png"), fullPage: true });
 });
 
-test("store editor maintains the caller contacts used by the phone order desk", async ({ page }) => {
-  await setup(page, [SV, SU]);
+test("store table shows contacts and the editor saves them for customer service orders", async ({ page }) => {
+  await setup(page, [CV, SV, SU]);
+  await mockJsonResponse(page, "**/api/v1/ordering/stores**",
+    [{ ...store, contacts: [{ id: "c-0", name: "Front desk", phone: "617-555-0101" }] }], { method: "GET" });
   let saved: unknown = null;
   await page.route("**/api/v1/ordering/stores/s-1/contacts", async route => {
-    if (route.request().method() === "PUT") {
-      saved = route.request().postDataJSON();
-      const body = saved as { contacts: { name: string; phone: string }[] };
-      await route.fulfill({ json: body.contacts.map((contact, index) => ({ id: `c-${index}`, ...contact })) });
-      return;
-    }
-    await route.fulfill({ json: [{ id: "c-0", name: "Front desk", phone: "617-555-0101" }] });
+    saved = route.request().postDataJSON();
+    const body = saved as { contacts: { name: string; phone: string }[] };
+    await route.fulfill({ json: body.contacts.map((contact, index) => ({ id: `c-${index}`, ...contact })) });
   });
 
   await page.goto("/stores");
-  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Acme Main" }) });
-  await expect(card.getByText("Front desk · 617-555-0101")).toBeVisible();
-  await card.getByRole("button", { name: "Edit contacts" }).click();
-  await card.getByRole("button", { name: "Add contact" }).click();
-  await card.getByRole("textbox", { name: "Contact name 2" }).fill("Chef Lin");
-  await card.getByRole("textbox", { name: "Phone 2" }).fill("617 555 0111");
-  await card.getByRole("button", { name: "Save contacts" }).click();
+  const row = page.getByRole("row").filter({ has: page.getByRole("rowheader", { name: /Acme Main/ }) });
+  await expect(row.getByText("Front desk · 617-555-0101")).toBeVisible();
+  await page.getByRole("searchbox", { name: "Find stores" }).fill("0101");
+  await expect(row).toBeVisible();
+  await page.getByRole("searchbox", { name: "Find stores" }).fill("nothing-matches");
+  await expect(page.getByText("No store matches the search.")).toBeVisible();
+  await page.getByRole("searchbox", { name: "Find stores" }).fill("");
 
-  await expect(card.getByText("Chef Lin · 617 555 0111")).toBeVisible();
+  await row.getByRole("button", { name: "Edit store Acme Main" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Add contact" }).click();
+  await dialog.getByRole("textbox", { name: "Contact name 2" }).fill("Chef Lin");
+  await dialog.getByRole("textbox", { name: "Phone 2" }).fill("617 555 0101");
+  await expect(dialog.getByText("Each phone number can only be listed once.")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  await dialog.getByRole("textbox", { name: "Phone 2" }).fill("617 555 0111");
+  await dialog.getByRole("button", { name: "Save changes" }).click();
+
+  await expect(dialog).toHaveCount(0);
   expect(saved).toEqual({ contacts: [{ name: "Front desk", phone: "617-555-0101" }, { name: "Chef Lin", phone: "617 555 0111" }] });
+});
+
+test("store filter finds a customer by typing part of its name or code", async ({ page }) => {
+  await setup(page, [CV, SV]);
+  await page.goto("/stores");
+  await page.getByRole("button", { name: "Partner customer", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Search customer code or name" }).fill("beta");
+  await expect(page.getByRole("menuitemradio", { name: /ACME/ })).toHaveCount(0);
+  const filtered = page.waitForRequest(request => request.url().includes(`stores?customerOrgId=${B}`));
+  await page.getByRole("menuitemradio", { name: "BETA · Beta Restaurant" }).click();
+  await filtered;
+  await expect(page).toHaveURL(new RegExp(`customerOrgId=${B}`));
 });

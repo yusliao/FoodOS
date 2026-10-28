@@ -54,6 +54,15 @@ public sealed partial class CustomerShopIsolationTests
         using var byCode = await rootClient.GetAsync($"{OrderDeskBasePath}/callers?term=dk{suffix}");
         (await byCode.DeserializeAsync<IReadOnlyList<OrderDeskCallerDto>>())
             .ShouldContain(item => item.StoreId == storeId);
+        // Tenant onboarding creates the customer organization, so search with its actual code and name.
+        foreach (string customerTerm in new[] { caller.CustomerOrgCode.ToUpperInvariant(), caller.CustomerOrgName })
+        {
+            using var byCustomer = await rootClient.GetAsync(
+                $"{OrderDeskBasePath}/callers?term={Uri.EscapeDataString(customerTerm)}");
+            byCustomer.StatusCode.ShouldBe(HttpStatusCode.OK, await byCustomer.Content.ReadAsStringAsync());
+            (await byCustomer.DeserializeAsync<IReadOnlyList<OrderDeskCallerDto>>())
+                .ShouldContain(item => item.StoreId == storeId);
+        }
 
         // Type-ahead: pinyin initials, full pinyin and exact SKU all find the product with the store price.
         foreach (string term in new[] { "bxswycs", "sanwenyu", "三文鱼", $"desk-{suffix}" })
@@ -181,6 +190,78 @@ public sealed partial class CustomerShopIsolationTests
             var saved = await ordering.SalesOrders.AsNoTracking().SingleAsync(item => item.Id == orderId);
             saved.PlacedByUserId.ShouldBe(Guid.Parse(agentId));
         }
+    }
+
+    [Fact]
+    public async Task Customer_Code_Should_Be_Editable_And_Unique_And_Store_Contacts_Saved_On_Create()
+    {
+        using var rootClient = await _auth.CreateRootAdminClientAsync();
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string tenantA = $"code-a-{suffix}";
+        string tenantB = $"code-b-{suffix}";
+        foreach (string tenant in new[] { tenantA, tenantB })
+        {
+            await CreateTenantAsync(rootClient, tenant, $"admin-{tenant}@tenant.test");
+            await WaitForProvisioningAsync(rootClient, tenant);
+        }
+
+        Guid orgA = await CreateCustomerOrgAsync(rootClient, tenantA, $"A{suffix}");
+        Guid orgB = await CreateCustomerOrgAsync(rootClient, tenantB, $"B{suffix}");
+        string newCode = $"n{suffix}";
+        using var renamed = await rootClient.PutAsJsonAsync($"{TestConstants.OrderingBasePath}/customer-orgs/details",
+            new { customerOrgId = orgA, name = "Sysco Harbor", code = newCode });
+        renamed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await renamed.Content.ReadAsStringAsync());
+        using var taken = await rootClient.PutAsJsonAsync($"{TestConstants.OrderingBasePath}/customer-orgs/details",
+            new { customerOrgId = orgB, name = "Other", code = newCode.ToUpperInvariant() });
+        taken.StatusCode.ShouldBe(HttpStatusCode.Conflict, await taken.Content.ReadAsStringAsync());
+        using var nameOnly = await rootClient.PutAsJsonAsync($"{TestConstants.OrderingBasePath}/customer-orgs/details",
+            new { customerOrgId = orgB, name = "Renamed only" });
+        nameOnly.StatusCode.ShouldBe(HttpStatusCode.NoContent, await nameOnly.Content.ReadAsStringAsync());
+
+        using var list = await rootClient.GetAsync($"{TestConstants.OrderingBasePath}/customer-orgs");
+        var orgs = await list.DeserializeAsync<IReadOnlyList<CustomerOrgDto>>();
+        orgs.Single(org => org.Id == orgA).Code.ShouldBe(newCode.ToUpperInvariant());
+        orgs.Single(org => org.Id == orgB).Name.ShouldBe("Renamed only");
+
+        var warehouse = await CreateWarehouseAsync(rootClient);
+        string storeCode = $"SC{suffix}".ToUpperInvariant();
+        int line = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1000, 9999);
+        string phone = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"021-6{line}-{line}");
+        using var created = await rootClient.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/stores", new
+        {
+            customerOrgId = orgA,
+            code = storeCode,
+            name = "Sysco Harbor Downtown",
+            address = "1 Harbor St",
+            defaultWarehouseId = warehouse.Id,
+            defaultRouteId = (Guid?)null,
+            deliveryWindow = "05:00-08:00",
+            contacts = new[] { new { name = "Manager", phone } },
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
+        Guid storeId = await created.DeserializeAsync<Guid>();
+
+        using var stores = await rootClient.GetAsync($"{TestConstants.OrderingBasePath}/stores?customerOrgId={orgA}");
+        (await stores.DeserializeAsync<IReadOnlyList<StoreDto>>()).Single(store => store.Id == storeId)
+            .Contacts.ShouldNotBeNull().ShouldHaveSingleItem().Phone.ShouldBe(phone);
+        foreach (string term in new[] { new string(phone.Where(char.IsAsciiDigit).ToArray()), newCode, "sysco harbor" })
+        {
+            using var callers = await rootClient.GetAsync($"{OrderDeskBasePath}/callers?term={Uri.EscapeDataString(term)}");
+            callers.StatusCode.ShouldBe(HttpStatusCode.OK, await callers.Content.ReadAsStringAsync());
+            (await callers.DeserializeAsync<IReadOnlyList<OrderDeskCallerDto>>())
+                .ShouldContain(item => item.StoreId == storeId, $"term '{term}'");
+        }
+
+        using var invalidContacts = await rootClient.PostAsJsonAsync($"{TestConstants.OrderingBasePath}/stores", new
+        {
+            customerOrgId = orgA,
+            code = $"SX{suffix}".ToUpperInvariant(),
+            name = "Bad contacts",
+            address = "2 Harbor St",
+            defaultWarehouseId = warehouse.Id,
+            contacts = new[] { new { name = "A", phone = "12" } },
+        });
+        invalidContacts.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     private static Task<HttpResponseMessage> PostOrderDeskOrderAsync(

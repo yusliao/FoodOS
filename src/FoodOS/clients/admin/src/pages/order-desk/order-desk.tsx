@@ -2,7 +2,7 @@ import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { History, Minus, PhoneCall, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Headset, History, Minus, Plus, Search, Star, Trash2 } from "lucide-react";
 import {
   getStoreHistory, placeOrderDeskOrder, quoteLines, searchCallers, suggestProducts,
   type OrderDeskCaller, type OrderDeskOrder, type OrderDeskProduct, type OrderDeskStoreHistory,
@@ -32,7 +32,7 @@ export function OrderDeskPage() {
   const [caller, setCaller] = useState<OrderDeskCaller | null>(null);
 
   return <div className="space-y-6">
-    <EntityPageHeader icon={PhoneCall} title={t("orderDesk.title")} description={t("orderDesk.description")} />
+    <EntityPageHeader icon={Headset} title={t("orderDesk.title")} description={t("orderDesk.description")} />
     {caller
       ? <SelectedCaller caller={caller} onChange={() => setCaller(null)} />
       : <CallerLookup onSelect={setCaller} />}
@@ -65,9 +65,10 @@ function CallerLookup({ onSelect }: { onSelect: (caller: OrderDeskCaller) => voi
       {callers.data.map(item => <li key={item.storeId}>
         <button type="button" onClick={() => onSelect(item)}
           className="w-full min-w-0 space-y-1 rounded-lg border border-[var(--color-border)] p-4 text-left text-sm transition-colors hover:bg-[var(--color-accent)] focus-visible:outline-2">
-          <span className="flex flex-wrap items-center gap-2 font-semibold"><span className="break-words">{item.storeName}</span><Badge variant="muted">{item.storeCode}</Badge>
+          <span className="flex flex-wrap items-center gap-2 font-semibold"><span className="break-words">{item.customerOrgName}</span><Badge variant="muted">{item.customerOrgCode}</Badge>
             {!item.canPlaceOrders && <Badge variant="warning">{t(`orderDesk.blocking.${item.blockingReason}`)}</Badge>}</span>
-          <span className="block break-words text-[var(--color-muted-foreground)]">{item.customerOrgName} · {item.address || t("orderDesk.addressMissing")}</span>
+          <span className="block break-words">{t("orderDesk.store")}：{item.storeName} · {item.storeCode}</span>
+          <span className="block break-words text-[var(--color-muted-foreground)]">{item.address || t("orderDesk.addressMissing")}</span>
           {item.contacts.length > 0 && <span className="block break-words">{item.contacts.map(contact => `${contact.name} ${contact.phone}`).join(" / ")}</span>}
         </button>
       </li>)}

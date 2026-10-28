@@ -10,4 +10,5 @@ public sealed record StoreDto(
     Guid DefaultWarehouseId,
     Guid? DefaultRouteId,
     string? DeliveryWindow,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    IReadOnlyList<StoreContactDto>? Contacts = null);

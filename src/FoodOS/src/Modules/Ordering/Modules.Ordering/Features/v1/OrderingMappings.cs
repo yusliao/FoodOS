@@ -8,7 +8,9 @@ internal static class OrderingMappings
     public static CustomerOrgDto ToDto(this CustomerOrg org)
         => new(org.Id, org.CustomerTenantId, org.Code, org.Name, org.CreditHold, org.CreatedAtUtc);
 
-    public static StoreDto ToDto(this Store store)
+    /// <param name="store">The store.</param>
+    /// <param name="includeContacts">Set only when <see cref="Store.Contacts"/> was loaded.</param>
+    public static StoreDto ToDto(this Store store, bool includeContacts = false)
         => new(
             store.Id,
             store.CustomerTenantId,
@@ -19,7 +21,8 @@ internal static class OrderingMappings
             store.DefaultWarehouseId,
             store.DefaultRouteId,
             store.DeliveryWindow,
-            store.CreatedAtUtc);
+            store.CreatedAtUtc,
+            includeContacts ? Stores.StoreContacts.StoreContactsHandler.ToDtos(store.Contacts) : null);
 
     public static CartDto ToDto(this Cart cart)
         => new(
