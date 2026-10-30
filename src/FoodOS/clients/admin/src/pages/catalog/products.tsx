@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Package } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { changeProductPrice, createProduct, deleteProduct, searchBrands, searchCategories, searchProducts, updateProduct, type ProductDto, type PagedResponse } from "@/api/catalog";
 import { useAuth } from "@/auth/use-auth";
@@ -14,6 +15,10 @@ import { CatalogPermissions } from "@/lib/permissions";
 import { CatalogChoice } from "./catalog-choice";
 import { ProductInventory } from "./product-inventory";
 import { describe } from "@/pages/customers/request-error";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+
+type StatusFilter = "all" | "active" | "hidden";
+const statusValue = (status: StatusFilter) => status === "all" ? undefined : status === "active";
 
 export function ProductsPage() {
   const t = useT();
@@ -23,15 +28,25 @@ export function ProductsPage() {
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState<StatusFilter>("all");
+  // 分类筛选放在 URL 上，分类页的「在商品列表中打开」直接带过来
+  const [params, setParams] = useSearchParams();
+  const categoryId = params.get("categoryId") ?? "";
   const [editing, setEditing] = useState<ProductDto | null | undefined>(undefined);
   const [pricing, setPricing] = useState<ProductDto | null>(null);
   const [deleting, setDeleting] = useState<ProductDto | null>(null);
-  const query = useQuery({ queryKey: ["catalog", "products", search, page], queryFn: ({ signal }) => searchProducts({ search, pageNumber: page }, signal) });
+  const query = useQuery({ queryKey: ["catalog", "products", search, status, categoryId, page], queryFn: ({ signal }) => searchProducts({ search, pageNumber: page, isActive: statusValue(status), categoryId: categoryId || undefined }, signal) });
   const canReadLookups = granted.includes(CatalogPermissions.Brands.View) && granted.includes(CatalogPermissions.Categories.View);
   const canCreate = granted.includes(CatalogPermissions.Products.Create) && canReadLookups;
   const canUpdate = granted.includes(CatalogPermissions.Products.Update);
   const canEditProduct = canUpdate && canReadLookups;
   const canDelete = granted.includes(CatalogPermissions.Products.Delete);
+  const canFilterCategory = granted.includes(CatalogPermissions.Categories.View);
+  const categoryOptions = useQuery({ queryKey: ["catalog", "categories", "product-filter"], queryFn: ({ signal }) => searchCategories({ pageSize: 100 }, signal), enabled: canFilterCategory, staleTime: 60_000 });
+  function changeCategory(value: string) {
+    setPage(1);
+    setParams(current => { const next = new URLSearchParams(current); if (value) next.set("categoryId", value); else next.delete("categoryId"); return next; }, { replace: true });
+  }
   const lookupsNeeded = editing !== undefined && (editing ? canEditProduct : canCreate);
   const brands = useQuery({ queryKey: ["catalog", "brands", "product-form"], queryFn: ({ signal }) => searchBrands({ pageSize: 50 }, signal), enabled: lookupsNeeded && canReadLookups });
   const categories = useQuery({ queryKey: ["catalog", "categories", "product-form"], queryFn: ({ signal }) => searchCategories({ pageSize: 50 }, signal), enabled: lookupsNeeded && canReadLookups });
@@ -41,12 +56,30 @@ export function ProductsPage() {
     void cache.cancelQueries({ queryKey: ["catalog", "categories", "product-form"], exact: true });
   }
   const remove = useMutation({ mutationFn: deleteProduct, onSuccess: async () => { await cache.invalidateQueries({ queryKey: ["catalog", "products"] }); toast.success(t("catalog.deleted")); setDeleting(null); } });
-  function submitSearch(event: FormEvent) { event.preventDefault(); setPage(1); setSearch(draft.trim()); }
+  function applySearch(value: string) { setPage(1); setSearch(value.trim()); }
   return <div className="space-y-6">
     <EntityPageHeader icon={Package} title={t("catalog.products.title")} description={t("catalog.products.description")}>
       {canCreate && <Button onClick={() => setEditing(null)}>{t("catalog.products.new")}</Button>}
     </EntityPageHeader>
-    <form onSubmit={submitSearch} className="flex max-w-xl flex-col gap-2 sm:flex-row"><Input type="search" aria-label={t("catalog.search")} value={draft} onChange={event => setDraft(event.target.value)} /><Button type="submit" variant="outline">{t("catalog.search")}</Button></form>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+      <ProductSearchBox value={draft} onChange={setDraft} onSearch={applySearch} isActive={statusValue(status)} categoryId={categoryId || undefined} />
+      {canFilterCategory && <label className="flex items-center gap-2 text-sm">
+        <span className="whitespace-nowrap text-[var(--color-muted-foreground)]">{t("catalog.products.categoryFilter")}</span>
+        <select aria-label={t("catalog.products.categoryFilter")} className="h-9 max-w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2" value={categoryId} onChange={event => changeCategory(event.target.value)}>
+          <option value="">{t("catalog.products.allCategories")}</option>
+          {categoryOptions.data?.items.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+          {categoryId && categoryOptions.isSuccess && !categoryOptions.data.items.some(category => category.id === categoryId) && <option value={categoryId}>{categoryId}</option>}
+        </select>
+      </label>}
+      <label className="flex items-center gap-2 text-sm">
+        <span className="whitespace-nowrap text-[var(--color-muted-foreground)]">{t("catalog.products.statusFilter")}</span>
+        <select aria-label={t("catalog.products.statusFilter")} className="h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2" value={status} onChange={event => { setStatus(event.target.value as StatusFilter); setPage(1); }}>
+          <option value="all">{t("catalog.products.allStatuses")}</option>
+          <option value="active">{t("catalog.products.active")}</option>
+          <option value="hidden">{t("catalog.products.hidden")}</option>
+        </select>
+      </label>
+    </div>
     {query.isPending && <LoadingRow label={t("catalog.loading")} />}
     {query.isError && <div className="space-y-2"><ErrorBand message={describe(query.error, t("catalog.loadFailed"))} /><Button variant="outline" onClick={() => void query.refetch()}>{t("workbench.retry")}</Button></div>}
     {query.isSuccess && query.data.items.length === 0 && <p role="status">{t("catalog.products.empty")}</p>}
@@ -68,6 +101,53 @@ export function ProductsPage() {
     {pricing && canUpdate && <PriceDialog product={pricing} onClose={() => setPricing(null)} />}
     <ConfirmDialog open={!!deleting && canDelete} onOpenChange={open => { if (!open && !remove.isPending) { setDeleting(null); remove.reset(); } }} title={t("catalog.products.deleteTitle")} description={<>{t("catalog.deleteConfirm").replace("{name}", deleting?.name ?? "")}{remove.isError && <span role="alert" className="mt-3 block text-[var(--color-destructive)]">{describe(remove.error, t("catalog.requestFailed"))}</span>}</>} confirmLabel={t("catalog.delete")} destructive pending={remove.isPending} onConfirm={() => { if (deleting && canDelete && !remove.isPending) remove.mutate(deleting.id); }} />
   </div>;
+}
+
+/** 搜索框：边输边列出匹配商品，选中后按 SKU 精确搜索；回车按当前文本搜索。 */
+function ProductSearchBox({ value, onChange, onSearch, isActive, categoryId }: { value: string; onChange: (value: string) => void; onSearch: (value: string) => void; isActive?: boolean; categoryId?: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+  const [term, pending] = useDebouncedSearch(value);
+  const suggestions = useQuery({
+    queryKey: ["catalog", "products", "suggest", term, isActive, categoryId],
+    queryFn: ({ signal }) => searchProducts({ search: term, pageSize: 8, isActive, categoryId }, signal),
+    enabled: open && term.length > 0,
+    staleTime: 30_000,
+  });
+  const items = suggestions.data?.items ?? [];
+  const showList = open && term.length > 0 && !pending && suggestions.isSuccess;
+  function choose(product: ProductDto) { onChange(product.sku); onSearch(product.sku); setOpen(false); setHighlight(-1); }
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const picked = showList ? items[highlight] : undefined;
+    if (picked) { choose(picked); return; }
+    onSearch(value); setOpen(false);
+  }
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") { setOpen(false); return; }
+    if (!showList || items.length === 0) return;
+    if (event.key === "ArrowDown") { event.preventDefault(); setHighlight(index => (index + 1) % items.length); }
+    if (event.key === "ArrowUp") { event.preventDefault(); setHighlight(index => (index <= 0 ? items.length : index) - 1); }
+  }
+  return <form onSubmit={submit} className="flex w-full max-w-xl flex-col gap-2 sm:flex-row">
+    <div className="relative flex-1">
+      <Input type="search" role="combobox" aria-expanded={showList} aria-controls="product-suggestions" aria-autocomplete="list" autoComplete="off"
+        aria-label={t("catalog.search")} placeholder={t("catalog.products.searchPlaceholder")} value={value}
+        onChange={event => { onChange(event.target.value); setOpen(true); setHighlight(-1); if (!event.target.value) onSearch(""); }}
+        onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={onKeyDown} />
+      {showList && <ul id="product-suggestions" role="listbox" className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] py-1 shadow-lg">
+        {items.length === 0 && <li className="px-3 py-2 text-sm text-[var(--color-muted-foreground)]">{t("catalog.products.noSuggestions")}</li>}
+        {items.map((product, index) => <li key={product.id} role="option" aria-selected={index === highlight}
+          className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm ${index === highlight ? "bg-[var(--color-muted)]" : "hover:bg-[var(--color-muted)]"}`}
+          onMouseDown={event => { event.preventDefault(); choose(product); }} onMouseEnter={() => setHighlight(index)}>
+          <span className="min-w-0"><span className="block truncate">{product.name}</span><span className="font-mono text-xs text-[var(--color-muted-foreground)]">{product.sku}</span></span>
+          <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs">{t(product.isActive ? "catalog.products.active" : "catalog.products.hidden")}</span>
+        </li>)}
+      </ul>}
+    </div>
+    <Button type="submit" variant="outline">{t("catalog.search")}</Button>
+  </form>;
 }
 
 function ProductDialog({ product, brands, categories, onClose }: { product: ProductDto | null; brands: PagedResponse<{ id: string; name: string }>; categories: PagedResponse<{ id: string; name: string }>; onClose: () => void }) {
