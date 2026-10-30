@@ -186,6 +186,31 @@ deactivate them before onboarding real customers. This command is additive: do
 not expect it to remove data on rollback. A read-only verification query is in
 `deploy/ip-server/showcase-verify.sql`.
 
+### Import the client's product list
+
+`import-products` loads the client's product list workbook (`.xlsx` with `Item No.` / `Item Name` /
+`Unit` / `Sub-Unit` columns) into the operator catalog. The file contains real commercial data: keep it out
+of git (`doc/产品编码.xlsx` is ignored) and only copy it to the server for the import.
+
+- Preview by default; nothing is written until `--apply-import` is added.
+- Item No. becomes the SKU, so the WMS SKU mapping stays one-to-one. Rows are matched by SKU, so re-running is safe.
+- New SKUs are created **inactive with price 0** (the list has no prices), brand `未指定品牌`, category from the
+  item-number prefix (11 禽肉, 12 牛肉, 22 海鲜水产 …), units normalized (箱/CS/CASE → `CS`, 磅 → `LB`, …),
+  catch weight when sold by case but priced by pound, temperature zone from category and name.
+- Existing SKUs only get their name refreshed; price, activation, brand, category and zone set by operators are kept.
+- Note rows (`PAY FIRST`, `… Order***`) are skipped; gifts (送… / FREE …) are imported inactive under `赠品`.
+
+On the IP server the migrator container only mounts the release directory, so mount the file explicitly
+(container user 1654 must be able to read it):
+
+```bash
+mkdir -p /opt/foodos/imports && chmod 755 /opt/foodos/imports   # copy 产品编码.xlsx here, chmod 644
+docker compose --profile ops run --rm -v /opt/foodos/imports:/imports:ro migrator import-products --file /imports/产品编码.xlsx
+docker compose --profile ops run --rm -v /opt/foodos/imports:/imports:ro migrator import-products --file /imports/产品编码.xlsx --apply-import
+```
+
+Back up the database before `--apply-import`. Prices are filled in later from the client's price list.
+
 ## API behavior when schema is behind
 
 If the API boots against a database whose schema is behind the running

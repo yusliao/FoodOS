@@ -4,7 +4,7 @@ namespace FoodOS.DbMigrator;
 /// Lightweight command-line parser. Avoids dragging in System.CommandLine for
 /// a handful of flags — keep this honest and minimal.
 ///
-/// Verbs:   apply | seed | seed-demo | list-pending  (default: apply)
+/// Verbs:   apply | seed | seed-demo | seed-showcase | import-products | list-pending  (default: apply)
 /// Flags:   --tenant &lt;id&gt;   scope to one tenant id
 ///          --catalog-only   skip per-tenant migrations
 ///          --seed           after apply, also run SeedAsync per tenant
@@ -18,7 +18,13 @@ internal sealed record MigratorCommand(
     bool ApplyShowcase,
     bool Help)
 {
-    private static readonly string[] KnownVerbs = ["apply", "seed", "seed-demo", "seed-showcase", "list-pending"];
+    private static readonly string[] KnownVerbs = ["apply", "seed", "seed-demo", "seed-showcase", "import-products", "list-pending"];
+
+    /// <summary>Path of the workbook for import-products.</summary>
+    public string? File { get; init; }
+
+    /// <summary>import-products writes only when this is set; otherwise it previews.</summary>
+    public bool ApplyImport { get; init; }
 
     public static MigratorCommand Parse(string[] args)
     {
@@ -36,7 +42,11 @@ internal sealed record MigratorCommand(
         var applyShowcase = args.Any(a => string.Equals(a, "--apply-showcase", StringComparison.OrdinalIgnoreCase));
         var help = args.Any(a => a is "-h" or "--help");
 
-        return new MigratorCommand(verb, tenant, catalogOnly, seedAfter, applyShowcase, help);
+        return new MigratorCommand(verb, tenant, catalogOnly, seedAfter, applyShowcase, help)
+        {
+            File = ExtractValue(args, "--file"),
+            ApplyImport = args.Any(a => string.Equals(a, "--apply-import", StringComparison.OrdinalIgnoreCase)),
+        };
     }
 
     private static string? ExtractValue(string[] args, string flag)
@@ -72,6 +82,9 @@ internal sealed record MigratorCommand(
                           Dev-only — refuses to run unless DOTNET_ENVIRONMENT=Development.
           seed-showcase   Preview restaurant showcase data for an existing customer tenant.
                           Add --apply-showcase to insert missing records; never resets passwords.
+          import-products Preview importing the client's product list (.xlsx) into the operator catalog.
+                          Requires --file <path>; add --apply-import to write. New SKUs are created
+                          inactive at price 0; existing SKUs only get their name refreshed.
           list-pending    Print pending migrations without applying anything.
 
         Options:
@@ -79,6 +92,8 @@ internal sealed record MigratorCommand(
           --catalog-only       Skip the per-tenant pass; only the tenant catalog is migrated.
           --seed               After apply, also call ITenantService.SeedTenantAsync.
           --apply-showcase     Allow seed-showcase to write missing showcase records.
+          --file <path>        Workbook for import-products.
+          --apply-import       Allow import-products to write to the catalog.
           -h, --help           Print this help text.
 
         Exit codes:

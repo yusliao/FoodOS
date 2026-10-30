@@ -40,4 +40,9 @@
         <ProjectReference Include="..\..\Host\FoodOS.Api\FoodOS.Api.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- 和 Catalog.Tests 共用同一个 xlsx 构造器，不复制代码 -->
+        <Compile Include="..\Catalog.Tests\Import\XlsxTestWorkbook.cs" Link="Shared\XlsxTestWorkbook.cs" />
+    </ItemGroup>
+
 </Project>

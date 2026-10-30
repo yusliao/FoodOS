@@ -26,6 +26,7 @@ using FSH.Modules.Tickets;
 using FSH.Modules.Webhooks;
 using FoodOS.DbMigrator;
 using FoodOS.DbMigrator.DemoSeed;
+using FoodOS.DbMigrator.Imports;
 using Finbuckle.MultiTenant.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -236,6 +237,19 @@ try
 
         var seeder = new ShowcaseSeeder(host.Services);
         await seeder.RunAsync(cli.Tenant, cli.ApplyShowcase, CancellationToken.None).ConfigureAwait(false);
+        await Console.Out.WriteLineAsync("[migrator] finished successfully.").ConfigureAwait(false);
+        return 0;
+    }
+
+    if (cli.Command == "import-products")
+    {
+        if (string.IsNullOrWhiteSpace(cli.File))
+        {
+            throw new ArgumentException("import-products requires --file <path to .xlsx>.");
+        }
+
+        await new ProductListImporter(host.Services)
+            .RunAsync(cli.File, cli.ApplyImport, CancellationToken.None).ConfigureAwait(false);
         await Console.Out.WriteLineAsync("[migrator] finished successfully.").ConfigureAwait(false);
         return 0;
     }
