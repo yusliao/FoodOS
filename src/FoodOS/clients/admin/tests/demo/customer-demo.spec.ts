@@ -4,8 +4,8 @@ const dashboardUrl = process.env.PLAYWRIGHT_DEMO_DASHBOARD_URL ?? "http://localh
 
 test("operator demo picker signs a purchaser into the deployed workbench", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByRole("img", { name: "东方味力" }).first()).toBeVisible();
-  await expect(page.getByText("东方味力").first()).toBeVisible();
+  await expect(page.getByRole("img", { name: "榕华食品" }).first()).toBeVisible();
+  await expect(page.getByText("榕华食品").first()).toBeVisible();
   await page.getByRole("button", { name: /sign in with a demo account/i }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("purchaser@root.com")).toBeVisible();
@@ -21,8 +21,8 @@ test("restaurant demo picker signs Acme in and places an order through the demo 
   test.setTimeout(120_000);
   await request.post("http://127.0.0.1:19083/demo/mode", { data: { mode: "accepted" } });
   await page.goto(`${dashboardUrl}/login`);
-  await expect(page.getByRole("img", { name: "东方味力" })).toBeVisible();
-  await expect(page.getByText("东方味力").first()).toBeVisible();
+  await expect(page.getByRole("img", { name: "榕华食品" })).toBeVisible();
+  await expect(page.getByText("榕华食品").first()).toBeVisible();
   await page.getByRole("button", { name: /sign in with a demo account/i }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("admin@acme.com")).toBeVisible();

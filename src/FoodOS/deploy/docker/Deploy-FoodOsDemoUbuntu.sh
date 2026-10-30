@@ -212,7 +212,7 @@ curl --fail --silent --show-error "http://127.0.0.1:19083/demo/status" >/dev/nul
 
 cat <<EOF
 
-东方味力客户演示环境已部署：
+榕华食品客户演示环境已部署：
   运营工作台: http://${PUBLIC_HOST}:19081
   饭店订货端: http://${PUBLIC_HOST}:19082
   API:        http://${PUBLIC_HOST}:19080

@@ -94,17 +94,8 @@ export function MobileNavRoot() {
         {/* Brand row — matches Topbar height so the drawer top aligns
             with the rest of the chrome. */}
         <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
-          <span
-            aria-hidden
-            className={cn(
-              "brand-mark grid h-7 w-7 place-items-center rounded-md",
-              "text-[11px] font-bold tracking-tight text-[var(--color-primary-foreground)]",
-              "shadow-[0_1px_0_oklch(1_0_0_/_0.18)_inset,0_4px_14px_-4px_oklch(from_var(--color-primary)_l_c_h_/_0.45)]",
-            )}
-          >
-            东
-          </span>
-          <span className="font-semibold tracking-tight">东方味力</span>
+          <img src="/logo.png" alt="" aria-hidden className="size-7 shrink-0 object-contain" />
+          <span className="font-semibold tracking-tight">榕华食品</span>
         </div>
 
         <SidebarNavBody

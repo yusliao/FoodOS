@@ -81,12 +81,12 @@ export function ForgotPasswordPage() {
         <div className="mb-8 flex flex-col items-center">
           <div className="flex items-center gap-2.5">
             <img
-              src="/logo-fullstackhero.png"
-              alt="东方味力"
+              src="/logo.png"
+              alt="榕华食品"
               className="size-9 object-contain"
             />
             <span className="font-display text-[26px] font-semibold tracking-tight text-[var(--color-foreground)]">
-              东方<span className="text-[var(--color-primary)]">味力</span>
+              榕华<span className="text-[var(--color-primary)]">食品</span>
             </span>
           </div>
           <div className="mt-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[oklch(from_var(--color-muted-foreground)_l_c_h_/_0.7)]">
