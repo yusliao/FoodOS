@@ -42,7 +42,9 @@ export function ProductsPage() {
   const canEditProduct = canUpdate && canReadLookups;
   const canDelete = granted.includes(CatalogPermissions.Products.Delete);
   const canFilterCategory = granted.includes(CatalogPermissions.Categories.View);
-  const categoryOptions = useQuery({ queryKey: ["catalog", "categories", "product-filter"], queryFn: ({ signal }) => searchCategories({ pageSize: 100 }, signal), enabled: canFilterCategory, staleTime: 60_000 });
+  // 鼠标移上或聚焦时才拉分类清单，进页面不多打一次请求；URL 带了分类则直接拉，好显示名称
+  const [wantCategories, setWantCategories] = useState(false);
+  const categoryOptions = useQuery({ queryKey: ["catalog", "categories", "product-filter"], queryFn: ({ signal }) => searchCategories({ pageSize: 100 }, signal), enabled: canFilterCategory && (wantCategories || !!categoryId), staleTime: 60_000 });
   function changeCategory(value: string) {
     setPage(1);
     setParams(current => { const next = new URLSearchParams(current); if (value) next.set("categoryId", value); else next.delete("categoryId"); return next; }, { replace: true });
@@ -65,7 +67,7 @@ export function ProductsPage() {
       <ProductSearchBox value={draft} onChange={setDraft} onSearch={applySearch} isActive={statusValue(status)} categoryId={categoryId || undefined} />
       {canFilterCategory && <label className="flex items-center gap-2 text-sm">
         <span className="whitespace-nowrap text-[var(--color-muted-foreground)]">{t("catalog.products.categoryFilter")}</span>
-        <select aria-label={t("catalog.products.categoryFilter")} className="h-9 max-w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2" value={categoryId} onChange={event => changeCategory(event.target.value)}>
+        <select aria-label={t("catalog.products.categoryFilter")} className="h-9 max-w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-2" value={categoryId} onPointerEnter={() => setWantCategories(true)} onFocus={() => setWantCategories(true)} onChange={event => changeCategory(event.target.value)}>
           <option value="">{t("catalog.products.allCategories")}</option>
           {categoryOptions.data?.items.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
           {categoryId && categoryOptions.isSuccess && !categoryOptions.data.items.some(category => category.id === categoryId) && <option value={categoryId}>{categoryId}</option>}
