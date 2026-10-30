@@ -21,6 +21,7 @@ public sealed class GetPriceListByIdQueryHandler(CatalogDbContext dbContext)
             .ConfigureAwait(false)
             ?? throw new NotFoundException($"Price list {query.PriceListId} not found.");
 
-        return list.ToDto();
+        var dtos = await new[] { list }.ToDtosAsync(dbContext, cancellationToken).ConfigureAwait(false);
+        return dtos[0];
     }
 }

@@ -10,7 +10,7 @@ const PV = "Permissions.Catalog.Products.View";
 const CV = "Permissions.Ordering.Customers.View";
 const customer = { id: "11111111-1111-1111-1111-111111111111", customerTenantId: "acme", code: "ACME", name: "Acme Restaurant", creditHold: false, createdAtUtc: "2026-09-16T00:00:00Z" };
 const product = { id: "22222222-2222-2222-2222-222222222222", sku: "VEG-01", name: "Baby spinach", slug: "baby-spinach", description: null, brandId: "b-1", categoryId: "c-1", price: { amount: 3.5, currency: "USD" }, isActive: true, createdAtUtc: "2026-09-16T00:00:00Z" };
-const priceList = { id: "33333333-3333-3333-3333-333333333333", name: "Acme contract", customerOrgId: customer.id, priority: 10, validFrom: "2026-09-01T00:00:00Z", validTo: "2026-12-31T23:59:59Z", lines: [{ id: "line-1", productId: product.id, minQty: 5, unitPrice: 2.75, currency: "USD" }] };
+const priceList = { id: "33333333-3333-3333-3333-333333333333", name: "Acme contract", customerOrgId: customer.id, priority: 10, validFrom: "2026-09-01T00:00:00Z", validTo: "2026-12-31T23:59:59Z", lines: [{ id: "line-1", productId: product.id, productSku: product.sku, productName: product.name, minQty: 5, unitPrice: 2.75, currency: "USD" }] };
 
 async function setup(page: Page, permissions: string[]) {
   await seedAuthedSession(page, { ...TEST_USER, permissions });
@@ -27,7 +27,7 @@ test("price-list reader does not request customer or product lookups without the
   await page.goto("/catalog/pricing");
   await expect(page.getByRole("heading", { name: "Acme contract" })).toBeVisible();
   await expect(page.getByText(customer.id)).toBeVisible();
-  await expect(page.getByRole("cell", { name: product.id })).toBeVisible();
+  await expect(page.getByRole("cell", { name: `${product.sku} · ${product.name}`, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /New price list|Set price lock|Add or replace tier/ })).toHaveCount(0);
   expect(requests.some(url => url.includes("/ordering/customer-orgs") || url.includes("/catalog/products"))).toBe(false);
 });
@@ -85,7 +85,7 @@ test("tier upsert uses product choice, USD and the price-list update permission"
     await route.fulfill({ json: "line-2" });
   });
   await page.goto("/catalog/pricing");
-  await expect(page.getByRole("cell", { name: "Baby spinach" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: `${product.sku} · ${product.name}`, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add or replace tier" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Product", exact: true }).click();

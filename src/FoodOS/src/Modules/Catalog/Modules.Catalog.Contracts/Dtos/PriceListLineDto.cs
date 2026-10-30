@@ -5,4 +5,11 @@ public sealed record PriceListLineDto(
     Guid ProductId,
     decimal MinQty,
     decimal UnitPrice,
-    string Currency);
+    string Currency)
+{
+    /// <summary>Product SKU for display; null when the product no longer exists.</summary>
+    public string? ProductSku { get; init; }
+
+    /// <summary>Product name for display; null when the product no longer exists.</summary>
+    public string? ProductName { get; init; }
+}

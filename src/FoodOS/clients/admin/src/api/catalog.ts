@@ -150,6 +150,9 @@ export function deleteProduct(id: string) {
 export type PriceListLineDto = {
   id: string;
   productId: string;
+  /** Null when the product no longer exists. */
+  productSku?: string | null;
+  productName?: string | null;
   minQty: number;
   unitPrice: number;
   currency: string;

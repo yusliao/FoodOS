@@ -7,11 +7,11 @@ import {
   getCustomerLevels,
   getPriceLists,
   quoteProductPrice,
-  searchProducts,
   upsertPriceListLine,
   upsertPriceLock,
   type CustomerLevelDto,
   type PriceListDto,
+  type PriceListLineDto,
   type PriceListScope,
 } from "@/api/catalog";
 import { searchCustomers, type CustomerOrgDto } from "@/api/customers";
@@ -54,13 +54,7 @@ export function PricingPanel() {
     queryFn: ({ signal }) => searchCustomers("", signal),
     enabled: canReadCustomers,
   });
-  const products = useQuery({
-    queryKey: ["catalog", "products", "choice", "", 1],
-    queryFn: ({ signal }) => searchProducts({ pageSize: 50 }, signal),
-    enabled: canReadProducts,
-  });
   const customerItems = useMemo(() => customers.isSuccess ? customers.data : [], [customers.data, customers.isSuccess]);
-  const productItems = useMemo(() => products.isSuccess ? products.data.items : [], [products.data, products.isSuccess]);
   const levelItems = useMemo(() => levels.isSuccess ? levels.data : [], [levels.data, levels.isSuccess]);
   const customerNames = useMemo(() => new Map(customerItems.map(item => [item.id, item.name])), [customerItems]);
   const levelNames = useMemo(() => new Map(levelItems.map(item => [item.id, item.name])), [levelItems]);
@@ -69,7 +63,10 @@ export function PricingPanel() {
     : list.customerLevelId
       ? t("pricing.levelScope").replace("{name}", levelNames.get(list.customerLevelId) ?? list.customerLevelId)
       : t("pricing.global");
-  const productNames = useMemo(() => new Map(productItems.map(item => [item.id, item.name])), [productItems]);
+  // 价盘行自带商品名称和 SKU，不再靠第一页商品列表反查，商品多了也不会只剩 ID
+  const productLabel = (line: PriceListLineDto) => line.productName
+    ? line.productSku ? `${line.productSku} · ${line.productName}` : line.productName
+    : line.productId;
   const canCreateCustomerPrice = canCreate && canReadCustomers;
   const canEditTiers = canUpdate && canReadProducts;
   const canLock = canUpdate && canReadCustomers && canReadProducts;
@@ -90,7 +87,6 @@ export function PricingPanel() {
     {levels.isError && <section aria-label={t("pricing.levelsFailed")} className="space-y-2"><ErrorBand message={describe(levels.error, t("pricing.levelsFailed"))} /><Button disabled={levels.isFetching} variant="outline" onClick={() => void levels.refetch()}>{t("workbench.retry")}</Button></section>}
     {canReadCustomers && customers.isFetching && <LoadingRow label={t("common.loading")} />}
     {canReadCustomers && customers.isError && <section aria-label={t("pricing.customersFailed")} className="space-y-2"><ErrorBand message={describe(customers.error, t("pricing.customersFailed"))} /><Button disabled={customers.isFetching} variant="outline" onClick={() => { if (canReadCustomers) void customers.refetch(); }}>{t("workbench.retry")}</Button></section>}
-    {canReadProducts && products.isError && <section aria-label={t("pricing.productsFailed")} className="space-y-2"><ErrorBand message={describe(products.error, t("pricing.productsFailed"))} /><Button disabled={products.isFetching} variant="outline" onClick={() => { if (canReadProducts) void products.refetch(); }}>{t("workbench.retry")}</Button></section>}
 
     {lists.isPending && <LoadingRow label={t("pricing.loading")} />}
     {lists.isError && <div className="space-y-2"><ErrorBand message={describe(lists.error, t("pricing.loadFailed"))} /><Button variant="outline" onClick={() => void lists.refetch()}>{t("workbench.retry")}</Button></div>}
@@ -100,8 +96,8 @@ export function PricingPanel() {
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start"><div><h2 className="font-semibold break-words">{list.name}</h2><p className="text-sm text-[var(--color-muted-foreground)]">{scopeLabel(list)}</p></div><span className="rounded-full border px-2 py-1 text-xs">{t("pricing.priority")} {list.priority}</span></div>
         <p className="text-sm text-[var(--color-muted-foreground)]">{formatDate(list.validFrom)} – {list.validTo ? formatDate(list.validTo) : t("pricing.noEnd")}</p>
         {list.lines.length === 0 ? <p className="text-sm">{t("pricing.noLines")}</p> : <>
-          <dl className="space-y-3 sm:hidden">{list.lines.map(line => <div key={line.id} className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--color-border)] p-3 text-sm"><dt className="col-span-2 text-[var(--color-muted-foreground)]">{t("pricing.product")}</dt><dd className="col-span-2 break-all">{productNames.get(line.productId) ?? line.productId}</dd><dt className="text-[var(--color-muted-foreground)]">{t("pricing.minQty")}</dt><dt className="text-[var(--color-muted-foreground)]">{t("pricing.unitPrice")}</dt><dd>{line.minQty}</dd><dd>{formatMoney(line.unitPrice, line.currency)}</dd></div>)}</dl>
-          <div className="hidden overflow-x-auto sm:block"><table className="w-full min-w-[28rem] text-left text-sm"><thead><tr className="border-b"><th className="py-2">{t("pricing.product")}</th><th>{t("pricing.minQty")}</th><th>{t("pricing.unitPrice")}</th></tr></thead><tbody>{list.lines.map(line => <tr key={line.id} className="border-b border-[var(--color-border)]"><td className="py-2">{productNames.get(line.productId) ?? line.productId}</td><td>{line.minQty}</td><td>{formatMoney(line.unitPrice, line.currency)}</td></tr>)}</tbody></table></div>
+          <dl className="space-y-3 sm:hidden">{list.lines.map(line => <div key={line.id} className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--color-border)] p-3 text-sm"><dt className="col-span-2 text-[var(--color-muted-foreground)]">{t("pricing.product")}</dt><dd className="col-span-2 break-all">{productLabel(line)}</dd><dt className="text-[var(--color-muted-foreground)]">{t("pricing.minQty")}</dt><dt className="text-[var(--color-muted-foreground)]">{t("pricing.unitPrice")}</dt><dd>{line.minQty}</dd><dd>{formatMoney(line.unitPrice, line.currency)}</dd></div>)}</dl>
+          <div className="hidden overflow-x-auto sm:block"><table className="w-full min-w-[28rem] text-left text-sm"><thead><tr className="border-b"><th className="py-2">{t("pricing.product")}</th><th>{t("pricing.minQty")}</th><th>{t("pricing.unitPrice")}</th></tr></thead><tbody>{list.lines.map(line => <tr key={line.id} className="border-b border-[var(--color-border)]"><td className="py-2">{productLabel(line)}</td><td>{line.minQty}</td><td>{formatMoney(line.unitPrice, line.currency)}</td></tr>)}</tbody></table></div>
         </>}
         {canEditTiers && <Button size="sm" variant="outline" onClick={() => setEditingLines(list)}>{t("pricing.addOrReplaceTier")}</Button>}
       </article>)}</div>}

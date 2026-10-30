@@ -32,6 +32,6 @@ public sealed class GetPriceListsQueryHandler(CatalogDbContext dbContext)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return items.Select(l => l.ToDto()).ToList();
+        return await items.ToDtosAsync(dbContext, cancellationToken).ConfigureAwait(false);
     }
 }
