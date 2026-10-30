@@ -170,6 +170,53 @@ public sealed class PriceListTests
         line.Quantity.ShouldBe(4m);
     }
 
+    [Fact]
+    public async Task PriceLists_Should_RejectSamePriorityOverlap_AndRemoveLines()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        var productId = await CreateProductAsync(client, listPrice: 20m);
+        var org = await CreateCustomerOrgAsync(client);
+        await CreatePriceListAsync(client, org, productId, 8m);
+
+        // 同客户、同优先级、有效期重叠，又包含同一商品 → 报价会不确定，必须拒绝
+        using var clash = await client.PostAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/price-lists",
+            new
+            {
+                name = Unique("Clash"),
+                customerOrgId = org,
+                validFrom = DateTimeOffset.UtcNow,
+                priority = 1,
+                lines = new[] { new { productId, minQty = 1m, unitPrice = 7m, currency = "USD" } },
+            });
+        clash.StatusCode.ShouldBe(HttpStatusCode.Conflict, await clash.Content.ReadAsStringAsync());
+
+        // 换个优先级就能建；再往里加同商品的阶梯也没问题
+        using var created = await client.PostAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/price-lists",
+            new { name = Unique("Higher"), customerOrgId = org, validFrom = DateTimeOffset.UtcNow.AddDays(-1), priority = 5, lines = Array.Empty<object>() });
+        created.StatusCode.ShouldBe(HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
+        var higherId = await created.DeserializeAsync<Guid>();
+        using var tier = await client.PutAsJsonAsync(
+            $"{TestConstants.CatalogBasePath}/price-lists/{higherId}/lines",
+            new { productId, minQty = 1m, unitPrice = 7m, currency = "USD" });
+        tier.StatusCode.ShouldBe(HttpStatusCode.OK, await tier.Content.ReadAsStringAsync());
+        (await QuoteAsync(client, org, productId, 1m)).UnitPrice.ShouldBe(7m);
+
+        using var listResponse = await client.GetAsync($"{TestConstants.CatalogBasePath}/price-lists/{higherId}");
+        var higher = await listResponse.DeserializeAsync<PriceListDto>();
+        var line = higher.Lines.ShouldHaveSingleItem();
+        line.ProductName.ShouldNotBeNullOrWhiteSpace();
+
+        // 拿别的价盘 ID 删不掉这一行
+        using var wrongList = await client.DeleteAsync($"{TestConstants.CatalogBasePath}/price-lists/{Guid.NewGuid()}/lines/{line.Id}");
+        wrongList.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        using var removed = await client.DeleteAsync($"{TestConstants.CatalogBasePath}/price-lists/{higherId}/lines/{line.Id}");
+        removed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await removed.Content.ReadAsStringAsync());
+        (await QuoteAsync(client, org, productId, 1m)).UnitPrice.ShouldBe(8m);
+    }
+
     private static async Task AssignLevelAsync(HttpClient client, Guid customerOrgId, Guid? customerLevelId)
     {
         using var response = await client.PutAsJsonAsync(

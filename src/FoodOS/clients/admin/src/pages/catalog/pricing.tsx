@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   createPriceList,
   customerLevelKeys,
+  deletePriceListLine,
   getCustomerLevels,
   getPriceLists,
   quoteProductPrice,
@@ -22,7 +23,9 @@ import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
 import { CatalogPermissions, OrderingPermissions } from "@/lib/permissions";
 import { describe } from "@/pages/customers/request-error";
@@ -40,6 +43,12 @@ export function PricingPanel() {
   const [creating, setCreating] = useState(false);
   const [editingLines, setEditingLines] = useState<PriceListDto | null>(null);
   const [locking, setLocking] = useState(false);
+  const [removing, setRemoving] = useState<{ list: PriceListDto; line: PriceListLineDto } | null>(null);
+  const cache = useQueryClient();
+  const remove = useMutation({
+    mutationFn: ({ list, line }: { list: PriceListDto; line: PriceListLineDto }) => deletePriceListLine(list.id, line.id),
+    onSuccess: async () => { await cache.invalidateQueries({ queryKey: priceKey }); toast.success(t("pricing.tierRemoved")); setRemoving(null); },
+  });
   const canCreate = granted.includes(CatalogPermissions.PriceLists.Create);
   const canUpdate = granted.includes(CatalogPermissions.PriceLists.Update);
   const canReadProducts = granted.includes(CatalogPermissions.Products.View);
@@ -81,6 +90,8 @@ export function PricingPanel() {
       </div>
     </div>
 
+    <PriorityGuide />
+
     <label className="block max-w-md space-y-1 text-sm"><span>{t("pricing.scopeFilter")}</span>
       <ScopeSelect value={scopeFilter} onChange={setScopeFilter} levels={levelItems} customers={canReadCustomers ? customerItems : []} emptyLabel={t("pricing.allLists")} />
     </label>
@@ -96,8 +107,8 @@ export function PricingPanel() {
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start"><div><h2 className="font-semibold break-words">{list.name}</h2><p className="text-sm text-[var(--color-muted-foreground)]">{scopeLabel(list)}</p></div><span className="rounded-full border px-2 py-1 text-xs">{t("pricing.priority")} {list.priority}</span></div>
         <p className="text-sm text-[var(--color-muted-foreground)]">{formatDate(list.validFrom)} – {list.validTo ? formatDate(list.validTo) : t("pricing.noEnd")}</p>
         {list.lines.length === 0 ? <p className="text-sm">{t("pricing.noLines")}</p> : <>
-          <dl className="space-y-3 sm:hidden">{list.lines.map(line => <div key={line.id} className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--color-border)] p-3 text-sm"><dt className="col-span-2 text-[var(--color-muted-foreground)]">{t("pricing.product")}</dt><dd className="col-span-2 break-all">{productLabel(line)}</dd><dt className="text-[var(--color-muted-foreground)]">{t("pricing.minQty")}</dt><dt className="text-[var(--color-muted-foreground)]">{t("pricing.unitPrice")}</dt><dd>{line.minQty}</dd><dd>{formatMoney(line.unitPrice, line.currency)}</dd></div>)}</dl>
-          <div className="hidden overflow-x-auto sm:block"><table className="w-full min-w-[28rem] text-left text-sm"><thead><tr className="border-b"><th className="py-2">{t("pricing.product")}</th><th>{t("pricing.minQty")}</th><th>{t("pricing.unitPrice")}</th></tr></thead><tbody>{list.lines.map(line => <tr key={line.id} className="border-b border-[var(--color-border)]"><td className="py-2">{productLabel(line)}</td><td>{line.minQty}</td><td>{formatMoney(line.unitPrice, line.currency)}</td></tr>)}</tbody></table></div>
+          <dl className="space-y-3 sm:hidden">{list.lines.map(line => <div key={line.id} className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--color-border)] p-3 text-sm"><dt className="col-span-2 text-[var(--color-muted-foreground)]">{t("pricing.product")}</dt><dd className="col-span-2 break-all">{productLabel(line)}</dd><dt className="text-[var(--color-muted-foreground)]">{t("pricing.minQty")}</dt><dt className="text-[var(--color-muted-foreground)]">{t("pricing.unitPrice")}</dt><dd>{line.minQty}</dd><dd>{formatMoney(line.unitPrice, line.currency)}</dd>{canUpdate && <dd className="col-span-2"><Button size="sm" variant="outline" onClick={() => setRemoving({ list, line })}>{t("pricing.removeTier")}</Button></dd>}</div>)}</dl>
+          <div className="hidden overflow-x-auto sm:block"><table className="w-full min-w-[28rem] text-left text-sm"><thead><tr className="border-b"><th className="py-2">{t("pricing.product")}</th><th>{t("pricing.minQty")}</th><th>{t("pricing.unitPrice")}</th>{canUpdate && <th><span className="sr-only">{t("pricing.actions")}</span></th>}</tr></thead><tbody>{list.lines.map(line => <tr key={line.id} className="border-b border-[var(--color-border)]"><td className="py-2">{productLabel(line)}</td><td>{line.minQty}</td><td>{formatMoney(line.unitPrice, line.currency)}</td>{canUpdate && <td className="text-right"><Button size="sm" variant="ghost" aria-label={`${t("pricing.removeTier")} ${productLabel(line)} ${line.minQty}`} onClick={() => setRemoving({ list, line })}>{t("pricing.removeTier")}</Button></td>}</tr>)}</tbody></table></div>
         </>}
         {canEditTiers && <Button size="sm" variant="outline" onClick={() => setEditingLines(list)}>{t("pricing.addOrReplaceTier")}</Button>}
       </article>)}</div>}
@@ -109,8 +120,21 @@ export function PricingPanel() {
 
     {creating && canCreate && <CreatePriceListDialog customers={canCreateCustomerPrice ? customerItems : []} levels={levelItems} onClose={() => setCreating(false)} />}
     {editingLines && canEditTiers && <PriceTierDialog list={editingLines} onClose={() => setEditingLines(null)} />}
+    <ConfirmDialog open={!!removing && canUpdate} onOpenChange={open => { if (!open && !remove.isPending) { setRemoving(null); remove.reset(); } }} title={t("pricing.removeTierTitle")} description={<>{removing ? t("pricing.removeTierConfirm").replace("{list}", removing.list.name).replace("{product}", productLabel(removing.line)).replace("{qty}", String(removing.line.minQty)) : ""}{remove.isError && <span role="alert" className="mt-3 block text-[var(--color-destructive)]">{describe(remove.error, t("pricing.requestFailed"))}</span>}</>} confirmLabel={t("pricing.removeTier")} destructive pending={remove.isPending} onConfirm={() => { if (removing && canUpdate && !remove.isPending) remove.mutate(removing); }} />
     {locking && canLock && <PriceLockDialog customers={customerItems} onClose={() => setLocking(false)} />}
   </div>;
+}
+
+/** 固定讲清楚报价从上往下找的顺序，运营不用去猜优先级数字管什么。 */
+function PriorityGuide() {
+  const t = useT();
+  return <section aria-label={t("pricing.orderTitle")} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 text-sm">
+    <h3 className="font-semibold">{t("pricing.orderTitle")}</h3>
+    <ol className="mt-2 list-decimal space-y-1 pl-5">
+      {[1, 2, 3, 4, 5, 6].map(step => <li key={step}>{t(`pricing.orderStep${step}`)}</li>)}
+    </ol>
+    <p className="mt-2 text-[var(--color-muted-foreground)]">{t("pricing.orderPriorityNote")}</p>
+  </section>;
 }
 
 function CreatePriceListDialog({ customers, levels, onClose }: { customers: CustomerOrgDto[]; levels: CustomerLevelDto[]; onClose: () => void }) {
@@ -147,7 +171,7 @@ function PriceTierDialog({ list, onClose }: { list: PriceListDto; onClose: () =>
   const attempt = useRef<{ body: string; key: string } | null>(null);
   const mutation = useMutation({ mutationFn: ({ input, key }: { input: Parameters<typeof upsertPriceListLine>[0]; key: string }) => upsertPriceListLine(input, key), onSuccess: async () => { await cache.invalidateQueries({ queryKey: priceKey }); toast.success(t("pricing.tierSaved")); onClose(); } });
   function submit(event: FormEvent) { event.preventDefault(); if (mutation.isPending || !unitPrice.trim() || !Number.isFinite(Number(unitPrice))) return; const input = { priceListId: list.id, productId, minQty: Number(minQty), unitPrice: Number(unitPrice), currency: "USD" }; const body = JSON.stringify(input); if (attempt.current?.body !== body) attempt.current = { body, key: newUuid() }; if (productId && input.minQty > 0 && input.unitPrice >= 0) mutation.mutate({ input, key: attempt.current.key }); }
-  return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent><DialogHeader><DialogTitle>{t("pricing.addOrReplaceTier")}</DialogTitle><DialogDescription>{list.name} · {t("pricing.tierIdentity")}</DialogDescription></DialogHeader><form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="space-y-4"><CatalogChoice kind="products" value={productId} onChange={setProductId} disabled={mutation.isPending} /><div className="grid gap-4 sm:grid-cols-2"><Field id="tier-quantity" label={t("pricing.minQty")} required><Input id="tier-quantity" type="number" min="0.001" step="0.001" required value={minQty} onChange={event => setMinQty(event.target.value)} /></Field><Field id="tier-price" label={t("pricing.unitPriceUsd")} required><Input id="tier-price" type="number" min="0" step="0.01" required value={unitPrice} onChange={event => setUnitPrice(event.target.value)} /></Field></div></fieldset>{mutation.isError && <p role="alert" className="text-sm text-[var(--color-destructive)]">{describe(mutation.error, t("pricing.requestFailed"))}</p>}</DialogBody><DialogFooter><Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>{t("chrome.cancel")}</Button><Button type="submit" disabled={!productId || Number(minQty) <= 0 || !unitPrice || Number(unitPrice) < 0 || mutation.isPending}>{t(mutation.isPending ? "pricing.saving" : "pricing.saveTier")}</Button></DialogFooter></form></DialogContent></Dialog>;
+  return <Dialog open onOpenChange={open => !open && !mutation.isPending && onClose()}><DialogContent><DialogHeader><DialogTitle>{t("pricing.addOrReplaceTier")}</DialogTitle><DialogDescription>{list.name} · {t("pricing.tierIdentity")}</DialogDescription></DialogHeader><form onSubmit={submit}><DialogBody className="space-y-4"><fieldset disabled={mutation.isPending} className="space-y-4"><CatalogChoice kind="products" value={productId} onChange={setProductId} disabled={mutation.isPending} /><div className="grid gap-4 sm:grid-cols-2"><Field id="tier-quantity" label={t("pricing.minQty")} required><Input id="tier-quantity" type="number" min="0.001" step="0.001" required value={minQty} onChange={event => setMinQty(event.target.value)} /></Field><Field id="tier-price" label={t("pricing.unitPriceUsd")} required><Input id="tier-price" type="number" min="0" step="0.01" required value={unitPrice} onChange={event => setUnitPrice(event.target.value)} /></Field></div></fieldset>{mutation.isError && <p role="alert" className="text-sm text-[var(--color-destructive)]">{mutation.error instanceof ApiRequestError && mutation.error.status === 409 ? t("pricing.priorityConflict") : describe(mutation.error, t("pricing.requestFailed"))}</p>}</DialogBody><DialogFooter><Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>{t("chrome.cancel")}</Button><Button type="submit" disabled={!productId || Number(minQty) <= 0 || !unitPrice || Number(unitPrice) < 0 || mutation.isPending}>{t(mutation.isPending ? "pricing.saving" : "pricing.saveTier")}</Button></DialogFooter></form></DialogContent></Dialog>;
 }
 
 function PriceLockDialog({ customers, onClose }: { customers: CustomerOrgDto[]; onClose: () => void }) {

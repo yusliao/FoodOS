@@ -45,6 +45,9 @@ public sealed class CreatePriceListCommandHandler(CatalogDbContext dbContext)
                 throw new NotFoundException("One or more products were not found.");
             }
 
+            await PriceListConflicts.EnsureNoSamePriorityConflictAsync(dbContext, list, productIds, cancellationToken)
+                .ConfigureAwait(false);
+
             foreach (var line in lines)
             {
                 list.UpsertLine(line.ProductId, line.MinQty, line.UnitPrice, line.Currency);

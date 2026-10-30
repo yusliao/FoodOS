@@ -98,6 +98,48 @@ test("tier upsert uses product choice, USD and the price-list update permission"
   expect(write?.key).toBeTruthy();
 });
 
+test("pricing explains the quote order", async ({ page }) => {
+  await setup(page, [PLV]);
+  await page.goto("/catalog/pricing");
+  const guide = page.getByRole("region", { name: "Quote order: checked top to bottom, first match wins" });
+  await expect(guide.getByRole("listitem")).toHaveCount(6);
+  await expect(guide.getByRole("listitem").first()).toContainText("Price lock");
+});
+
+test("a tier can be removed after confirmation, only with the update permission", async ({ page }) => {
+  await setup(page, [PLV, PV]);
+  await page.goto("/catalog/pricing");
+  await expect(page.getByRole("cell", { name: `${product.sku} · ${product.name}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
+
+  await setup(page, [PLV, PLU, PV]);
+  let deleted: { method: string; tenant: string } | undefined;
+  await page.route(`**/api/v1/catalog/price-lists/${priceList.id}/lines/line-1`, async route => {
+    deleted = { method: route.request().method(), tenant: route.request().headers().tenant };
+    await route.fulfill({ status: 204, body: "" });
+  });
+  await page.goto("/catalog/pricing");
+  await page.getByRole("button", { name: `Remove ${product.sku} · ${product.name} 5` }).click();
+  const confirm = page.getByRole("dialog", { name: "Remove price tier" });
+  await expect(confirm).toContainText("Acme contract");
+  await confirm.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  expect(deleted).toEqual({ method: "DELETE", tenant: "root" });
+});
+
+test("a same-priority conflict is explained instead of the raw server error", async ({ page }) => {
+  await setup(page, [PLV, PLU, PV]);
+  await page.route(`**/api/v1/catalog/price-lists/${priceList.id}/lines`, route => route.fulfill({ status: 409, json: { title: "Conflict", status: 409, detail: "Price list 'Other' has the same kind and priority 10" } }));
+  await page.goto("/catalog/pricing");
+  await page.getByRole("button", { name: "Add or replace tier" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Product", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: `${product.sku} · ${product.name}`, exact: true }).click();
+  await dialog.getByLabel("Unit price (USD)").fill("2.25");
+  await dialog.getByRole("button", { name: "Save tier" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("same priority and overlapping dates");
+});
+
 test("customer price lock is an explicit write-only upsert", async ({ page }) => {
   await setup(page, [PLV, PLU, PV, CV]);
   let write: { body: Record<string, unknown>; tenant: string; key: string } | undefined;

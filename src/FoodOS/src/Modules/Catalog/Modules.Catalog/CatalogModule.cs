@@ -40,6 +40,7 @@ using FSH.Modules.Catalog.Features.v1.CustomerLevels.GetCustomerLevelAssignments
 using FSH.Modules.Catalog.Features.v1.CustomerLevels.GetCustomerLevels;
 using FSH.Modules.Catalog.Features.v1.CustomerLevels.UpdateCustomerLevel;
 using FSH.Modules.Catalog.Features.v1.PriceLists.CreatePriceList;
+using FSH.Modules.Catalog.Features.v1.PriceLists.DeletePriceListLine;
 using FSH.Modules.Catalog.Features.v1.PriceLists.GetPriceListById;
 using FSH.Modules.Catalog.Features.v1.PriceLists.GetPriceLists;
 using FSH.Modules.Catalog.Features.v1.PriceLists.QuoteProductPrice;
@@ -142,6 +143,7 @@ public sealed class CatalogModule : IModule
         group.MapGetPriceListByIdEndpoint();
         group.MapCreatePriceListEndpoint();
         group.MapUpsertPriceListLineEndpoint();
+        group.MapDeletePriceListLineEndpoint();
         group.MapUpsertProductPriceLockEndpoint();
         group.MapGetProductPriceQuoteEndpoint();
 

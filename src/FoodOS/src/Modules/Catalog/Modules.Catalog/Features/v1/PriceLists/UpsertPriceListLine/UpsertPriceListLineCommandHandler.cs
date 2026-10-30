@@ -27,6 +27,8 @@ public sealed class UpsertPriceListLineCommandHandler(CatalogDbContext dbContext
             throw new NotFoundException($"Product {command.ProductId} not found.");
         }
 
+        await PriceListConflicts.EnsureNoSamePriorityConflictAsync(dbContext, list, [command.ProductId], cancellationToken).ConfigureAwait(false);
+
         var existing = list.Lines.FirstOrDefault(l =>
             l.ProductId == command.ProductId && l.MinQty == command.MinQty);
         if (existing is not null)

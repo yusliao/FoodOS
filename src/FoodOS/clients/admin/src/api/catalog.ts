@@ -218,6 +218,10 @@ export function upsertPriceListLine(input: {
   });
 }
 
+export function deletePriceListLine(priceListId: string, lineId: string) {
+  return apiFetch<void>(`/api/v1/catalog/price-lists/${encodeURIComponent(priceListId)}/lines/${encodeURIComponent(lineId)}`, { method: "DELETE" });
+}
+
 export function upsertPriceLock(input: {
   customerOrgId: string;
   productId: string;
