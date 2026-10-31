@@ -29,7 +29,8 @@ services:
       JwtOptions__SigningKey: ${FOODOS_JWT_SIGNING_KEY:?set FOODOS_JWT_SIGNING_KEY}
       Seed__DefaultAdminPassword: ${FOODOS_SEED_ADMIN_PASSWORD:?set FOODOS_SEED_ADMIN_PASSWORD}
     volumes:
-      - ${FOODOS_RELEASE_DIR:?set FOODOS_RELEASE_DIR}/migrator:/app:ro
+      # The migrator ships inside api/ (same dependencies, see Publish-FoodOs.ps1).
+      - ${FOODOS_RELEASE_DIR:?set FOODOS_RELEASE_DIR}/api:/app:ro
     depends_on:
       valkey:
         condition: service_healthy

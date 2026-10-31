@@ -13,8 +13,7 @@
   nginx/                     # 四个端口的代理、前端运行配置模板
   minio/                     # 独立 bucket 的访问策略与 CORS
   releases/<版本号>/
-    api/                     # dotnet publish 的全部输出，含 wwwroot/ 与 audit-dlq/ 挂载点
-    migrator/                # dotnet publish 的全部输出，迁移时才运行
+    api/                     # API 与 DbMigrator 的 dotnet publish 输出（两者依赖相同，共用一份），含 wwwroot/ 与 audit-dlq/ 挂载点
     admin/                   # Vite dist 的全部内容
     dashboard/               # Vite dist 的全部内容
   data/api-wwwroot/          # API 可写目录
@@ -31,7 +30,7 @@
 .\Publish-FoodOs.ps1 -ReleaseId 20260928-ip2
 ```
 
-脚本在 `releases/20260928-ip2` 下创建四个独立目录。将本目录的 `compose.yml`、`nginx/`、`minio/`、`foodos.env.example` 和整个版本目录上传到服务器 `/opt/foodos/`。不要上传开发机已有的 `.env` 或 `foodos.env`。发布输出没有提交到 Git。部署前逐个检查 DLL、`index.html` 存在；不要把新发布文件覆盖到正在运行的旧版本目录。
+脚本在 `releases/20260928-ip2` 下创建 `api`、`admin`、`dashboard` 三个目录；migrator 发布在 `api/` 里，与 API 共用依赖（两者依赖版本不一致时脚本会报错）。将本目录的 `compose.yml`、`nginx/`、`minio/`、`foodos.env.example` 和整个版本目录上传到服务器 `/opt/foodos/`。不要上传开发机已有的 `.env` 或 `foodos.env`。发布输出没有提交到 Git。部署前逐个检查 DLL、`index.html` 存在；不要把新发布文件覆盖到正在运行的旧版本目录。
 
 本次已生成 `releases/20260928-ip1`。如果使用同目录下的 `foodos-ip-20260928-ip1.tar.gz`，将归档上传至服务器后执行：
 
@@ -106,7 +105,7 @@ install -d -o 1654 -g 1654 -m 0750 data/api-wwwroot data/audit-dlq
 
 ```bash
 test -f releases/20260928-ip1/api/FoodOS.Api.dll
-test -f releases/20260928-ip1/migrator/FoodOS.DbMigrator.dll
+test -f releases/<版本号>/api/FoodOS.DbMigrator.dll   # 20261030 及以前的版本在 migrator/ 下
 test -f releases/20260928-ip1/admin/index.html
 test -f releases/20260928-ip1/dashboard/index.html
 ss -ltnp

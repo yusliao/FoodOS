@@ -11,7 +11,7 @@ if (Test-Path -LiteralPath $releaseRoot) {
     throw "Release directory already exists: $releaseRoot"
 }
 
-foreach ($name in @('api', 'migrator', 'admin', 'dashboard')) {
+foreach ($name in @('api', 'admin', 'dashboard')) {
     New-Item -ItemType Directory -Path (Join-Path $releaseRoot $name) -Force | Out-Null
 }
 
@@ -21,9 +21,35 @@ function Assert-ExitCode([string]$step) {
     }
 }
 
+# linux-x64 only ships that platform's native libs. The only satellite we need is zh (Hangfire dashboard).
+$publishArgs = @('-c', 'Release', '-r', 'linux-x64', '--self-contained', 'false',
+                 '-p:SatelliteResourceLanguages=zh')
+
+# DbMigrator references every module, so its output is the API's output plus its own entry files.
+# Merge it into api/ instead of shipping a second ~70 MB copy. Shared files must be byte-identical;
+# a mismatch means the two projects resolved different package versions (pin it in Directory.Packages.props).
+function Merge-Into([string]$source, [string]$target) {
+    $conflicts = @()
+    foreach ($file in Get-ChildItem -LiteralPath $source -Recurse -File) {
+        $relative = [IO.Path]::GetRelativePath($source, $file.FullName)
+        $destination = Join-Path $target $relative
+        if (Test-Path -LiteralPath $destination) {
+            if ((Get-FileHash -LiteralPath $file.FullName).Hash -ne (Get-FileHash -LiteralPath $destination).Hash) {
+                $conflicts += $relative
+            }
+            continue
+        }
+        New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $destination
+    }
+    if ($conflicts) {
+        throw "DbMigrator and API publish outputs differ in: $($conflicts -join ', '). Align the package versions before releasing."
+    }
+}
+
 Push-Location $projectRoot
 try {
-    & dotnet publish 'src/Host/FoodOS.Api/FoodOS.Api.csproj' -c Release -r linux-x64 --self-contained false -o (Join-Path $releaseRoot 'api')
+    & dotnet publish 'src/Host/FoodOS.Api/FoodOS.Api.csproj' @publishArgs -o (Join-Path $releaseRoot 'api')
     Assert-ExitCode 'API publish'
     # /app is mounted read-only; nested bind mount targets must survive the upload.
     foreach ($mountpoint in @('wwwroot', 'audit-dlq')) {
@@ -32,8 +58,11 @@ try {
         New-Item -ItemType File -Path (Join-Path $mountPath 'MOUNTPOINT') -Force | Out-Null
     }
 
-    & dotnet publish 'src/Host/FoodOS.DbMigrator/FoodOS.DbMigrator.csproj' -c Release -r linux-x64 --self-contained false -o (Join-Path $releaseRoot 'migrator')
+    $migratorTemp = Join-Path $releaseRoot '.migrator-publish'
+    & dotnet publish 'src/Host/FoodOS.DbMigrator/FoodOS.DbMigrator.csproj' @publishArgs -o $migratorTemp
     Assert-ExitCode 'DbMigrator publish'
+    Merge-Into $migratorTemp (Join-Path $releaseRoot 'api')
+    Remove-Item -LiteralPath $migratorTemp -Recurse -Force
 
     foreach ($app in @('admin', 'dashboard')) {
         $appRoot = Join-Path $projectRoot "clients/$app"
@@ -80,7 +109,7 @@ finally {
     Pop-Location
 }
 
-foreach ($required in @('api/FoodOS.Api.dll', 'migrator/FoodOS.DbMigrator.dll', 'admin/index.html', 'dashboard/index.html')) {
+foreach ($required in @('api/FoodOS.Api.dll', 'api/FoodOS.DbMigrator.dll', 'admin/index.html', 'dashboard/index.html')) {
     if (-not (Test-Path -LiteralPath (Join-Path $releaseRoot $required))) {
         throw "Missing published file: $required"
     }
