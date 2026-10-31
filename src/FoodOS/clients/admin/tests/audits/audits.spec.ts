@@ -126,4 +126,32 @@ test.describe("audit detail", () => {
     // Payload pane shows the JSON we returned.
     await expect(sheet.getByText(/"action": "login"/)).toBeVisible();
   });
+
+  test("copies the payload over plain HTTP where navigator.clipboard is missing", async ({ page }) => {
+    // The IP deployment is served over http://, an insecure context without navigator.clipboard.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", { value: undefined });
+      const copied: string[] = [];
+      (window as unknown as { __copied: string[] }).__copied = copied;
+      document.execCommand = command => {
+        if (command !== "copy") return false;
+        const active = document.activeElement;
+        copied.push(active instanceof HTMLTextAreaElement ? active.value : "");
+        return true;
+      };
+    });
+    await mockJsonResponse(page, "**/api/v1/audits/?*", paged([AUDIT_ROW], { pageSize: 25 }));
+    await mockJsonResponse(page, "**/api/v1/audits/summary*", SUMMARY);
+    await mockJsonResponse(page, `**/api/v1/audits/${AUDIT_DETAIL.id}`, AUDIT_DETAIL);
+
+    await page.goto("/audits");
+    await page.getByRole("main").getByText("POST /api/v1/identity/token", { exact: true }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "Copy", exact: true }).click();
+
+    await expect(sheet.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+    const copied = await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied);
+    expect(copied).toHaveLength(1);
+    expect(copied[0]).toContain('"action": "login"');
+  });
 });

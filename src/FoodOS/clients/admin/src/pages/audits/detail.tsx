@@ -23,6 +23,7 @@ import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/locale-provider";
 import { useAuth } from "@/auth/use-auth";
 import { AuditingPermissions } from "@/lib/permissions";
+import { copyText } from "@/lib/clipboard";
 
 // ─────────────────────────────────────────────────────────────────────────
 // AuditDetailSheet — side sheet shown when an audit row is clicked on the
@@ -224,7 +225,7 @@ function CorrelationChip({ label, value }: { label: string; value: string | null
   const onCopy = async () => {
     if (!hasValue) return;
     try {
-      await navigator.clipboard.writeText(value!);
+      await copyText(value!);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
@@ -351,7 +352,7 @@ function PayloadPanel({ payload }: { payload: unknown }) {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(json);
+      await copyText(json);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {

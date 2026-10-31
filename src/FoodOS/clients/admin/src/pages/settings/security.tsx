@@ -43,6 +43,7 @@ import {
 import { ApiRequestError } from "@/lib/api-client";
 import { useT } from "@/i18n/locale-provider";
 import { cn } from "@/lib/cn";
+import { copyText } from "@/lib/clipboard";
 
 const SECURITY_WRITE = ["identity", "security", "write"];
 
@@ -384,7 +385,7 @@ function TwoFactorEnroll() {
   const copyKey = async () => {
     if (!enrollment) return;
     try {
-      await navigator.clipboard.writeText(enrollment.sharedKey);
+      await copyText(enrollment.sharedKey);
       setCopiedKey(true);
       window.setTimeout(() => setCopiedKey(false), 1500);
     } catch {

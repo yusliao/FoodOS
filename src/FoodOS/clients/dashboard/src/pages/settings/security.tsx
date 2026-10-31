@@ -54,6 +54,7 @@ import {
 import { ApiRequestError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useLocale, useT } from "@/i18n/locale-provider";
+import { copyText } from "@/lib/clipboard";
 
 const PROFILE_KEY = ["identity", "me"] as const;
 
@@ -652,7 +653,7 @@ function TwoFactorEnroll() {
   const copyKey = async () => {
     if (!enrollment) return;
     try {
-      await navigator.clipboard.writeText(enrollment.sharedKey);
+      await copyText(enrollment.sharedKey);
       setCopiedKey(true);
       window.setTimeout(() => setCopiedKey(false), 1500);
     } catch {

@@ -39,6 +39,7 @@ import { describe } from "@/lib/list-helpers";
 import { useUserByUsername, useUserDisplay } from "@/lib/use-user-display";
 import { usePresence } from "@/realtime/use-presence";
 import { groupReactions, shortTime } from "@/pages/chat/chat-utils";
+import { copyText } from "@/lib/clipboard";
 
 const QUICK_REACTIONS = ["👍", "🎉", "❤️", "👀", "🔥", "🚀"] as const;
 
@@ -559,8 +560,7 @@ function MentionPill({ username }: { username: string }) {
 
   const copy = () => {
     const text = `@${username}`;
-    void navigator.clipboard
-      ?.writeText(text)
+    void copyText(text)
       .then(() => toast.success(t("chat.copied").replace("{text}", text)))
       .catch(() => toast.error(t("chat.copyFailed")));
   };

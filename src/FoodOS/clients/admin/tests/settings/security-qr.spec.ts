@@ -12,6 +12,7 @@ for (const culture of ["en-US", "zh-CN"]) {
     await page.addInitScript(c => {
       localStorage.setItem("foodos.culture", c);
       Object.defineProperty(navigator, "clipboard", { value: { writeText: async () => { throw new Error("Clipboard denied"); } } });
+      document.execCommand = () => false;
     }, culture);
     await page.setViewportSize({ width: 390, height: 844 });
     let enrolls = 0;

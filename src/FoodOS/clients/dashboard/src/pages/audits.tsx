@@ -61,6 +61,7 @@ import {
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/cn";
 import { useLocale, useT } from "@/i18n/locale-provider";
+import { copyText } from "@/lib/clipboard";
 
 type TFn = (key: string, fallback?: string) => string;
 
@@ -1449,7 +1450,7 @@ function CopyButton({ value }: { value: string }) {
       className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
       onClick={async () => {
         try {
-          await navigator.clipboard.writeText(value);
+          await copyText(value);
           setCopied(true);
           window.setTimeout(() => setCopied(false), 1200);
         } catch {
