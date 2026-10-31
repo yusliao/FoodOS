@@ -82,9 +82,9 @@ mc admin user add shared foodos "$FOODOS_MINIO_SECRET"
 unset FOODOS_MINIO_SECRET
 mc admin policy attach shared foodos-bucket --user foodos
 mc cors set shared/foodos /opt/foodos/minio/foodos-cors.xml
+mc cors get shared/foodos
 mc anonymous set-json /opt/foodos/minio/foodos-public-read.json shared/foodos
 mc anonymous get-json shared/foodos
-mc cors get shared/foodos
 mc alias rm shared
 ```
 
