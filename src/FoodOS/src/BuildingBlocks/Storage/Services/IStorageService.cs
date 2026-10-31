@@ -51,7 +51,8 @@ public interface IStorageService
 
     /// <summary>
     /// HEAD the object at <paramref name="storageKey"/>. Returns <c>null</c> when the object does not
-    /// exist. The Files module's finalize handler uses this to verify size + content-type vs declared
+    /// exist; throws when the store cannot be reached or refuses the request, so callers do not mistake
+    /// an outage for a missing upload. The Files module's finalize handler uses this to verify size + content-type vs declared
     /// values before transitioning a row out of <c>PendingUpload</c>.
     /// </summary>
     Task<StoredObjectMetadata?> HeadObjectAsync(

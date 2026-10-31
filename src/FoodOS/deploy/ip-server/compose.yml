@@ -61,7 +61,10 @@ services:
       CorsOptions__AllowedHeaders__7: x-fsh-app
       OriginOptions__OriginUrl: ${FOODOS_API_URL:?set FOODOS_API_URL}
       Storage__Provider: s3
-      Storage__S3__ServiceUrl: ${FOODOS_MINIO_URL:?set FOODOS_MINIO_URL}
+      # The API reaches MinIO on the shared Docker network; containers here cannot loop back to the
+      # host's public IP. Browsers still get presigned/public URLs on FOODOS_MINIO_URL.
+      Storage__S3__ServiceUrl: ${FOODOS_MINIO_INTERNAL_URL:-http://checkpay-minio:9000}
+      Storage__S3__PublicServiceUrl: ${FOODOS_MINIO_URL:?set FOODOS_MINIO_URL}
       Storage__S3__AccessKey: ${FOODOS_MINIO_ACCESS_KEY:?set FOODOS_MINIO_ACCESS_KEY}
       Storage__S3__SecretKey: ${FOODOS_MINIO_SECRET_KEY:?set FOODOS_MINIO_SECRET_KEY}
       Storage__S3__Bucket: foodos

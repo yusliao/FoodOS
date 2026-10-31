@@ -82,11 +82,13 @@ mc admin user add shared foodos "$FOODOS_MINIO_SECRET"
 unset FOODOS_MINIO_SECRET
 mc admin policy attach shared foodos-bucket --user foodos
 mc cors set shared/foodos /opt/foodos/minio/foodos-cors.xml
+mc anonymous set-json /opt/foodos/minio/foodos-public-read.json shared/foodos
+mc anonymous get-json shared/foodos
 mc cors get shared/foodos
 mc alias rm shared
 ```
 
-也可通过现有 MinIO Console 创建 bucket、用户和策略，再使用 `mc cors set` 写入 bucket CORS。`mc` 命令及 CORS 文件格式以 [MinIO 文档](https://docs.min.io/aistor/reference/cli/mc-cors/mc-cors-set/) 为准。将该专用用户的凭据填入 `foodos.env`，不要填 CheckPay 的凭据或 MinIO 管理员凭据。bucket 保持私有；依赖永久公开对象 URL 的图片预览可能仍需应用适配，上传和按需签名下载必须单独验收。
+也可通过现有 MinIO Console 创建 bucket、用户和策略，再使用 `mc cors set` 写入 bucket CORS。`mc` 命令及 CORS 文件格式以 [MinIO 文档](https://docs.min.io/aistor/reference/cli/mc-cors/mc-cors-set/) 为准。将该专用用户的凭据填入 `foodos.env`，不要填 CheckPay 的凭据或 MinIO 管理员凭据。bucket 整体保持私有，只用 [foodos-public-read.json](minio/foodos-public-read.json) 对头像（`tenants/*/user/*`）和商品图（`tenants/*/product/*`）开放匿名读取，这两类上传在系统里都是公开文件，页面直接用对象 URL 显示；签收凭证、工单附件、聊天文件等其他前缀仍需签名下载。
 
 ## 4. 配置服务器
 
@@ -121,7 +123,7 @@ docker run --rm --network checkpay_app-network curlimages/curl:latest -fsS http:
 docker compose --env-file foodos.env -f compose.yml --profile ops run --rm migrator list-pending
 ```
 
-如果诊断容器不能从 FoodOS 网络到达上述 IP/端口，先解决该服务器的容器到公网 IP 回环路由；API 需要用同一个公开 MinIO URL 访问对象存储，预签名 URL 才能被浏览器使用。若 `list-pending` 报 PostgreSQL 16 兼容错误，停止部署并检查迁移，不要改动 CheckPay 数据。
+API 通过 Docker 网络 `checkpay_app-network` 直连 `http://checkpay-minio:9000`（`FOODOS_MINIO_INTERNAL_URL`，可覆盖），只把 `FOODOS_MINIO_URL` 用于签发给浏览器的上传/下载地址和公开图片地址。主机防火墙通常不允许容器回环访问本机公网 IP，所以 API 不能直接用公网地址访问 MinIO，否则上传最后一步会卡到超时。上面的诊断容器只用于确认浏览器地址本身可用。若 `list-pending` 报 PostgreSQL 16 兼容错误，停止部署并检查迁移，不要改动 CheckPay 数据。
 
 在确认新数据库与备份后，执行写库迁移并启动 API：
 

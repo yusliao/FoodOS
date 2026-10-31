@@ -15,6 +15,15 @@ public sealed class S3StorageOptions
     public string? ServiceUrl { get; set; }
 
     /// <summary>
+    /// Endpoint browsers use for presigned URLs and public links, when it differs from
+    /// <see cref="ServiceUrl"/> — e.g. the API reaches MinIO on a private Docker network
+    /// ("http://minio:9000") while browsers go through a public proxy ("http://203.0.113.5:18083").
+    /// Presigned signatures cover the host, so they must be signed for the address the browser calls.
+    /// Leave empty when one address serves both.
+    /// </summary>
+    public string? PublicServiceUrl { get; set; }
+
+    /// <summary>
     /// Explicit access key. When either <see cref="AccessKey"/> or <see cref="SecretKey"/>
     /// is empty, the AWS SDK's ambient credential chain is used instead.
     /// </summary>
