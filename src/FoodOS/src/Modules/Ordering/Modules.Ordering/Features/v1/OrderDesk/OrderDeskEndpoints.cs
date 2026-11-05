@@ -27,11 +27,18 @@ public static class OrderDeskEndpoints
             .WithSummary("Stores the current agent placed service orders for in the last 90 days, most frequent first")
             .RequirePermission(OrderingPermissions.OrderDesk.View);
 
+        endpoints.MapGet("/product-categories",
+                (IMediator mediator, CancellationToken ct) =>
+                    mediator.Send(new GetOrderDeskProductCategoriesQuery(), ct))
+            .WithName("GetOrderDeskProductCategories")
+            .WithSummary("Categories that hold active products, with their product counts")
+            .RequirePermission(OrderingPermissions.OrderDesk.View);
+
         endpoints.MapGet("/stores/{storeId:guid}/products",
-                (Guid storeId, string term, int? limit, IMediator mediator, CancellationToken ct) =>
-                    mediator.Send(new SuggestOrderDeskProductsQuery(storeId, term, limit ?? 10), ct))
-            .WithName("SuggestOrderDeskProducts")
-            .WithSummary("Type-ahead product candidates with the store's contract price and availability")
+                (Guid storeId, Guid? categoryId, string? term, int? pageNumber, int? pageSize, IMediator mediator, CancellationToken ct) =>
+                    mediator.Send(new BrowseOrderDeskProductsQuery(storeId, categoryId, term, pageNumber ?? 1, pageSize ?? 50), ct))
+            .WithName("BrowseOrderDeskProducts")
+            .WithSummary("Page through active products with the store's price and availability, by category and/or keyword")
             .RequirePermission(OrderingPermissions.OrderDesk.View);
 
         endpoints.MapPost("/stores/{storeId:guid}/quote",

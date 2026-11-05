@@ -26,7 +26,7 @@ public sealed partial class CustomerShopIsolationTests
         string storeCode = $"DK{suffix}".ToUpperInvariant();
         Guid storeId = await CreateStoreAsync(rootClient, orgId, warehouse.Id, storeCode);
         string sku = $"DESK-{suffix}".ToUpperInvariant();
-        Guid productId = await CreateNamedProductAsync(rootClient, sku, $"冰鲜三文鱼刺身 {suffix}");
+        var (productId, categoryId) = await CreateNamedProductAsync(rootClient, sku, $"冰鲜三文鱼刺身 {suffix}");
 
         // Caller contacts: phone numbers are matched on their digits.
         int exchange = System.Security.Cryptography.RandomNumberGenerator.GetInt32(200, 999);
@@ -64,21 +64,36 @@ public sealed partial class CustomerShopIsolationTests
                 .ShouldContain(item => item.StoreId == storeId);
         }
 
-        // Type-ahead: pinyin initials, full pinyin and exact SKU all find the product with the store price.
+        // 客服按分类浏览上架商品：分类筛选只出现有上架商品的分类，列表带门店价和可售状态
+        using var categories = await rootClient.GetAsync($"{OrderDeskBasePath}/product-categories");
+        categories.StatusCode.ShouldBe(HttpStatusCode.OK, await categories.Content.ReadAsStringAsync());
+        (await categories.DeserializeAsync<IReadOnlyList<OrderDeskProductCategoryDto>>())
+            .Single(item => item.Id == categoryId).ProductCount.ShouldBe(1);
+        using var browse = await rootClient.GetAsync(
+            $"{OrderDeskBasePath}/stores/{storeId}/products?categoryId={categoryId}&pageNumber=1&pageSize=50");
+        browse.StatusCode.ShouldBe(HttpStatusCode.OK, await browse.Content.ReadAsStringAsync());
+        var browsed = await browse.DeserializeAsync<PagedResponse<OrderDeskProductDto>>();
+        browsed.TotalCount.ShouldBe(1);
+        var listed = browsed.Items.ShouldHaveSingleItem();
+        listed.ProductId.ShouldBe(productId);
+        listed.CategoryId.ShouldBe(categoryId);
+        listed.CategoryName.ShouldNotBeNullOrWhiteSpace();
+        listed.UnitPrice.ShouldBe(9.5m);
+        listed.Currency.ShouldBe("USD");
+        listed.AvailabilityStatus.ShouldBe("notConfigured");
+
+        // 关键字过滤：拼音首字母、全拼、中文和 SKU 都能在列表里找到这个商品
         foreach (string term in new[] { "bxswycs", "sanwenyu", "三文鱼", $"desk-{suffix}" })
         {
-            using var suggest = await rootClient.GetAsync(
-                $"{OrderDeskBasePath}/stores/{storeId}/products?term={Uri.EscapeDataString(term)}&limit=20");
-            suggest.StatusCode.ShouldBe(HttpStatusCode.OK, await suggest.Content.ReadAsStringAsync());
-            var candidates = await suggest.DeserializeAsync<IReadOnlyList<OrderDeskProductDto>>();
-            var candidate = candidates.SingleOrDefault(item => item.ProductId == productId).ShouldNotBeNull($"term '{term}'");
-            candidate.UnitPrice.ShouldBe(9.5m);
-            candidate.Currency.ShouldBe("USD");
-            candidate.AvailabilityStatus.ShouldBe("notConfigured");
+            using var filtered = await rootClient.GetAsync(
+                $"{OrderDeskBasePath}/stores/{storeId}/products?term={Uri.EscapeDataString(term)}&pageSize=20");
+            filtered.StatusCode.ShouldBe(HttpStatusCode.OK, await filtered.Content.ReadAsStringAsync());
+            (await filtered.DeserializeAsync<PagedResponse<OrderDeskProductDto>>()).Items
+                .ShouldContain(item => item.ProductId == productId, $"term '{term}'");
         }
 
         using var exactSku = await rootClient.GetAsync($"{OrderDeskBasePath}/stores/{storeId}/products?term={sku}");
-        (await exactSku.DeserializeAsync<IReadOnlyList<OrderDeskProductDto>>())[0].ProductId.ShouldBe(productId);
+        (await exactSku.DeserializeAsync<PagedResponse<OrderDeskProductDto>>()).Items.First().ProductId.ShouldBe(productId);
 
         using var quote = await rootClient.PostAsJsonAsync(
             $"{OrderDeskBasePath}/stores/{storeId}/quote",
@@ -164,6 +179,25 @@ public sealed partial class CustomerShopIsolationTests
         using var callerAfter = await rootClient.GetAsync($"{OrderDeskBasePath}/callers?term={phoneDigits}");
         (await callerAfter.DeserializeAsync<IReadOnlyList<OrderDeskCallerDto>>())
             .Single(item => item.StoreId == storeId).LastOrderAt.ShouldNotBeNull();
+
+        // 下架后不再出现在客服的商品列表和分类筛选里
+        using var catalogProduct = await rootClient.GetAsync($"{TestConstants.CatalogBasePath}/products/{productId}");
+        var current = await catalogProduct.DeserializeAsync<FSH.Modules.Catalog.Contracts.Dtos.ProductDto>();
+        using var deactivate = await rootClient.PutAsJsonAsync($"{TestConstants.CatalogBasePath}/products/{productId}", new
+        {
+            productId,
+            name = current.Name,
+            description = current.Description,
+            brandId = current.BrandId,
+            categoryId,
+            isActive = false,
+        });
+        deactivate.StatusCode.ShouldBe(HttpStatusCode.OK, await deactivate.Content.ReadAsStringAsync());
+        using var afterDeactivate = await rootClient.GetAsync($"{OrderDeskBasePath}/stores/{storeId}/products?categoryId={categoryId}");
+        (await afterDeactivate.DeserializeAsync<PagedResponse<OrderDeskProductDto>>()).TotalCount.ShouldBe(0);
+        using var categoriesAfter = await rootClient.GetAsync($"{OrderDeskBasePath}/product-categories");
+        (await categoriesAfter.DeserializeAsync<IReadOnlyList<OrderDeskProductCategoryDto>>())
+            .ShouldNotContain(item => item.Id == categoryId);
     }
 
     [Fact]
@@ -192,6 +226,8 @@ public sealed partial class CustomerShopIsolationTests
         using var staff = await _auth.CreateAuthenticatedClientAsync(staffEmail, staffPassword);
         using var staffCallers = await staff.GetAsync($"{OrderDeskBasePath}/callers?term=DP");
         staffCallers.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var staffProducts = await staff.GetAsync($"{OrderDeskBasePath}/stores/{storeId}/products");
+        staffProducts.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         // The seeded customer service position can take the order end to end.
         var (agentEmail, agentPassword, agentId) = await CreateRootStaffAsync(
@@ -199,6 +235,11 @@ public sealed partial class CustomerShopIsolationTests
         using var agent = await _auth.CreateAuthenticatedClientAsync(agentEmail, agentPassword);
         using var agentCallers = await agent.GetAsync($"{OrderDeskBasePath}/callers?term=DP{suffix}");
         agentCallers.StatusCode.ShouldBe(HttpStatusCode.OK, await agentCallers.Content.ReadAsStringAsync());
+        // 客服不需要商品目录权限也能浏览商品和分类
+        using var agentCategories = await agent.GetAsync($"{OrderDeskBasePath}/product-categories");
+        agentCategories.StatusCode.ShouldBe(HttpStatusCode.OK, await agentCategories.Content.ReadAsStringAsync());
+        using var agentProducts = await agent.GetAsync($"{OrderDeskBasePath}/stores/{storeId}/products?pageSize=10");
+        agentProducts.StatusCode.ShouldBe(HttpStatusCode.OK, await agentProducts.Content.ReadAsStringAsync());
         using var agentPlace = await PostOrderDeskOrderAsync(agent, storeId, Guid.NewGuid().ToString("N"), productId, 2m);
         agentPlace.StatusCode.ShouldBe(HttpStatusCode.OK, await agentPlace.Content.ReadAsStringAsync());
         Guid orderId = await agentPlace.DeserializeAsync<Guid>();
@@ -314,7 +355,7 @@ public sealed partial class CustomerShopIsolationTests
         return client.SendAsync(request);
     }
 
-    private static async Task<Guid> CreateNamedProductAsync(HttpClient client, string sku, string name)
+    private static async Task<(Guid ProductId, Guid CategoryId)> CreateNamedProductAsync(HttpClient client, string sku, string name)
     {
         using var brand = await client.PostAsJsonAsync($"{TestConstants.CatalogBasePath}/brands",
             new { name = $"Brand-{Guid.NewGuid():N}", description = (string?)null, logoUrl = (string?)null });
@@ -322,19 +363,20 @@ public sealed partial class CustomerShopIsolationTests
         using var category = await client.PostAsJsonAsync($"{TestConstants.CatalogBasePath}/categories",
             new { name = $"Category-{Guid.NewGuid():N}", description = (string?)null, parentCategoryId = (Guid?)null });
         category.EnsureSuccessStatusCode();
+        Guid categoryId = await category.DeserializeAsync<Guid>();
         using var product = await client.PostAsJsonAsync($"{TestConstants.CatalogBasePath}/products", new
         {
             sku,
             name,
             description = "Order desk product",
             brandId = await brand.DeserializeAsync<Guid>(),
-            categoryId = await category.DeserializeAsync<Guid>(),
+            categoryId,
             priceAmount = 9.5m,
             priceCurrency = "USD",
             stock = 0,
         });
         product.StatusCode.ShouldBe(HttpStatusCode.OK, await product.Content.ReadAsStringAsync());
-        return await product.DeserializeAsync<Guid>();
+        return (await product.DeserializeAsync<Guid>(), categoryId);
     }
 
     private async Task<(string Email, string Password, string UserId)> CreateRootStaffAsync(string handle, string? roleName)

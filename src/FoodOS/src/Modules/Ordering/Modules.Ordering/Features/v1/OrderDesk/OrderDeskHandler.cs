@@ -1,6 +1,8 @@
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Shared.Persistence;
 using FSH.Modules.Catalog.Contracts.Dtos;
+using FSH.Modules.Catalog.Contracts.v1.Categories;
 using FSH.Modules.Catalog.Contracts.v1.CustomerLevels;
 using FSH.Modules.Catalog.Contracts.v1.PriceLists;
 using FSH.Modules.Catalog.Contracts.v1.Products;
@@ -29,7 +31,8 @@ public sealed class OrderDeskHandler(
     TimeProvider clock)
     : IQueryHandler<SearchOrderDeskCallersQuery, IReadOnlyList<OrderDeskCallerDto>>,
       IQueryHandler<GetMyOrderDeskCallersQuery, IReadOnlyList<OrderDeskFrequentCallerDto>>,
-      IQueryHandler<SuggestOrderDeskProductsQuery, IReadOnlyList<OrderDeskProductDto>>,
+      IQueryHandler<BrowseOrderDeskProductsQuery, PagedResponse<OrderDeskProductDto>>,
+      IQueryHandler<GetOrderDeskProductCategoriesQuery, IReadOnlyList<OrderDeskProductCategoryDto>>,
       IQueryHandler<QuoteOrderDeskLinesQuery, IReadOnlyList<OrderDeskQuoteLineDto>>,
       IQueryHandler<GetOrderDeskStoreHistoryQuery, OrderDeskStoreHistoryDto>,
       ICommandHandler<PlaceOrderDeskOrderCommand, Guid>
@@ -117,52 +120,41 @@ public sealed class OrderDeskHandler(
             .ToList();
     }
 
-    public async ValueTask<IReadOnlyList<OrderDeskProductDto>> Handle(
-        SuggestOrderDeskProductsQuery query,
+    public async ValueTask<PagedResponse<OrderDeskProductDto>> Handle(
+        BrowseOrderDeskProductsQuery query,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         var store = await RequireStoreAsync(query.StoreId, cancellationToken).ConfigureAwait(false);
-        var products = await mediator.Send(new SuggestProductsQuery(query.Term, query.Limit), cancellationToken)
-            .ConfigureAwait(false);
-        if (products.Count == 0)
-        {
-            return [];
-        }
-
-        var quotes = await mediator.Send(
-                new QuoteProductPricesQuery(
-                    store.CustomerOrgId,
-                    products.Select(product => new ProductPriceRequestDto(product.Id, 1m)).ToList()),
-                cancellationToken)
-            .ConfigureAwait(false);
-        var quoteByProduct = quotes.ToDictionary(quote => quote.ProductId);
-        var warehouse = await StoreWarehouseResolver.ResolveAsync(mediator, store.DefaultWarehouseId, cancellationToken)
-            .ConfigureAwait(false);
-        var availability = await ProductAvailability.GetAsync(
-                availabilityReader,
-                warehouse?.Code,
-                products.Select(product => (product.Sku, product.BaseUom, 1m)).ToList(),
+        string? term = string.IsNullOrWhiteSpace(query.Term) ? null : query.Term.Trim();
+        // 只给客服看上架商品；有关键字按相关度，否则按分类、名称浏览
+        var page = await mediator.Send(
+                new SearchProductsQuery(
+                    Search: term,
+                    CategoryId: query.CategoryId,
+                    IsActive: true,
+                    PageNumber: query.PageNumber,
+                    PageSize: query.PageSize,
+                    SortBy: term is null ? "category" : "relevance"),
                 cancellationToken)
             .ConfigureAwait(false);
 
-        return products.Select(product =>
+        return new PagedResponse<OrderDeskProductDto>
         {
-            var quote = quoteByProduct[product.Id];
-            var stock = ProductAvailability.For(availability, product.Sku, product.BaseUom);
-            return new OrderDeskProductDto(
-                product.Id,
-                product.Sku,
-                product.Name,
-                product.BaseUom,
-                product.CatchWeight,
-                product.ThumbnailUrl,
-                quote.UnitPrice,
-                quote.Currency,
-                quote.Source,
-                stock.IsAvailable,
-                stock.Status);
-        }).ToList();
+            Items = await ToOrderDeskProductsAsync(store, page.Items, cancellationToken).ConfigureAwait(false),
+            PageNumber = page.PageNumber,
+            PageSize = page.PageSize,
+            TotalCount = page.TotalCount,
+            TotalPages = page.TotalPages,
+        };
+    }
+
+    public async ValueTask<IReadOnlyList<OrderDeskProductCategoryDto>> Handle(
+        GetOrderDeskProductCategoriesQuery query,
+        CancellationToken cancellationToken)
+    {
+        var categories = await mediator.Send(new GetActiveProductCategoriesQuery(), cancellationToken).ConfigureAwait(false);
+        return categories.Select(item => new OrderDeskProductCategoryDto(item.Id, item.Name, item.ActiveProductCount)).ToList();
     }
 
     public async ValueTask<IReadOnlyList<OrderDeskQuoteLineDto>> Handle(
@@ -405,5 +397,55 @@ public sealed class OrderDeskHandler(
                 };
             })
             .ToList();
+    }
+
+    /// <summary>Adds the store's price (at quantity 1) and WMS availability to catalog products.</summary>
+    private async Task<List<OrderDeskProductDto>> ToOrderDeskProductsAsync(
+        Store store,
+        IReadOnlyCollection<ProductDto> products,
+        CancellationToken cancellationToken)
+    {
+        if (products.Count == 0)
+        {
+            return [];
+        }
+
+        var quotes = await mediator.Send(
+                new QuoteProductPricesQuery(
+                    store.CustomerOrgId,
+                    products.Select(product => new ProductPriceRequestDto(product.Id, 1m)).ToList()),
+                cancellationToken)
+            .ConfigureAwait(false);
+        var quoteByProduct = quotes.ToDictionary(quote => quote.ProductId);
+        var warehouse = await StoreWarehouseResolver.ResolveAsync(mediator, store.DefaultWarehouseId, cancellationToken)
+            .ConfigureAwait(false);
+        var availability = await ProductAvailability.GetAsync(
+                availabilityReader,
+                warehouse?.Code,
+                products.Select(product => (product.Sku, product.BaseUom, 1m)).ToList(),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return products.Select(product =>
+        {
+            var quote = quoteByProduct[product.Id];
+            var stock = ProductAvailability.For(availability, product.Sku, product.BaseUom);
+            return new OrderDeskProductDto(
+                product.Id,
+                product.Sku,
+                product.Name,
+                product.BaseUom,
+                product.CatchWeight,
+                product.ThumbnailUrl,
+                quote.UnitPrice,
+                quote.Currency,
+                quote.Source,
+                stock.IsAvailable,
+                stock.Status)
+            {
+                CategoryId = product.CategoryId,
+                CategoryName = product.CategoryName,
+            };
+        }).ToList();
     }
 }

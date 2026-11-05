@@ -12,13 +12,14 @@ public sealed class SearchOrderDeskCallersQueryValidator : AbstractValidator<Sea
     }
 }
 
-public sealed class SuggestOrderDeskProductsQueryValidator : AbstractValidator<SuggestOrderDeskProductsQuery>
+public sealed class BrowseOrderDeskProductsQueryValidator : AbstractValidator<BrowseOrderDeskProductsQuery>
 {
-    public SuggestOrderDeskProductsQueryValidator()
+    public BrowseOrderDeskProductsQueryValidator()
     {
         RuleFor(query => query.StoreId).NotEmpty();
-        RuleFor(query => query.Term).NotEmpty().MaximumLength(100);
-        RuleFor(query => query.Limit).InclusiveBetween(1, 20);
+        RuleFor(query => query.Term).MaximumLength(100);
+        RuleFor(query => query.PageNumber).GreaterThanOrEqualTo(1);
+        RuleFor(query => query.PageSize).InclusiveBetween(1, 100);
     }
 }
 

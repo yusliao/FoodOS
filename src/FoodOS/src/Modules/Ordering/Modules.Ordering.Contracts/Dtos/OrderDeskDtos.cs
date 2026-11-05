@@ -27,7 +27,7 @@ public sealed record OrderDeskCallerDto(
 /// <summary>A store the current agent often orders for, with how many service orders they placed.</summary>
 public sealed record OrderDeskFrequentCallerDto(OrderDeskCallerDto Caller, int OrderCount);
 
-/// <summary>Type-ahead product candidate with the store's contract price and WMS availability.</summary>
+/// <summary>An orderable product with the store's price (lock, contract, level or catalog) and WMS availability.</summary>
 public sealed record OrderDeskProductDto(
     Guid ProductId,
     string Sku,
@@ -39,7 +39,14 @@ public sealed record OrderDeskProductDto(
     string Currency,
     string PriceSource,
     bool IsAvailable,
-    string AvailabilityStatus);
+    string AvailabilityStatus)
+{
+    public Guid? CategoryId { get; init; }
+
+    public string? CategoryName { get; init; }
+}
+
+public sealed record OrderDeskProductCategoryDto(Guid Id, string Name, int ProductCount);
 
 public sealed record OrderDeskQuoteLineDto(
     Guid ProductId,

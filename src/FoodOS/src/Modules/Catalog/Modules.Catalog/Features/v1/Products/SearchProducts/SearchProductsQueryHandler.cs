@@ -37,9 +37,22 @@ public sealed class SearchProductsQueryHandler(CatalogDbContext dbContext)
 
         var words = ProductSearch.Words(query.Search);
         q = ProductSearch.Match(q, words);
-        q = words.Length > 0 && string.Equals(query.SortBy, "relevance", StringComparison.OrdinalIgnoreCase)
-            ? ProductSearch.OrderByRelevance(q, words)
-            : ApplySort(q, query.SortBy, query.SortDir);
+        if (words.Length > 0 && string.Equals(query.SortBy, "relevance", StringComparison.OrdinalIgnoreCase))
+        {
+            q = ProductSearch.OrderByRelevance(q, words);
+        }
+        else if (string.Equals(query.SortBy, "category", StringComparison.OrdinalIgnoreCase))
+        {
+            // 按分类名再按商品名排，浏览时同类商品挨在一起
+            var categories = dbContext.Categories.AsNoTracking();
+            q = q.OrderBy(p => categories.Where(c => c.Id == p.CategoryId).Select(c => c.Name).FirstOrDefault())
+                .ThenBy(p => p.Name)
+                .ThenBy(p => p.Id);
+        }
+        else
+        {
+            q = ApplySort(q, query.SortBy, query.SortDir);
+        }
 
         long total = await q.LongCountAsync(cancellationToken).ConfigureAwait(false);
         var products = await q

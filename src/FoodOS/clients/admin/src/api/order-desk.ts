@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-client";
+import type { PagedResponse } from "@/api/catalog";
 
 const base = "/api/v1/ordering/order-desk";
 
@@ -16,7 +17,10 @@ export type OrderDeskCaller = {
 export type OrderDeskProduct = {
   productId: string; sku: string; name: string; baseUom: string; catchWeight: boolean; thumbnailUrl: string | null;
   unitPrice: number; currency: string; priceSource: string; isAvailable: boolean; availabilityStatus: string;
+  categoryId?: string | null; categoryName?: string | null;
 };
+
+export type OrderDeskProductCategory = { id: string; name: string; productCount: number };
 
 export type OrderDeskQuoteLine = {
   productId: string; quantity: number; unitPrice: number; currency: string; priceSource: string; lineTotal: number;
@@ -53,9 +57,21 @@ export function getMyCallers(signal?: AbortSignal) {
   return apiFetch<OrderDeskFrequentCaller[]>(`${base}/callers/mine?limit=12`, { signal });
 }
 
-export function suggestProducts(storeId: string, term: string, signal?: AbortSignal) {
-  return apiFetch<OrderDeskProduct[]>(
-    `${base}/stores/${encodeURIComponent(storeId)}/products?${new URLSearchParams({ term, limit: "10" })}`, { signal });
+/** Categories that hold active products, for the category filter. */
+export function getProductCategories(signal?: AbortSignal) {
+  return apiFetch<OrderDeskProductCategory[]>(`${base}/product-categories`, { signal });
+}
+
+/** One page of active products with the store's price; ordered by category and name unless a keyword is given. */
+export function browseProducts(
+  storeId: string,
+  params: { categoryId?: string; term?: string; pageNumber: number; pageSize?: number },
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ pageNumber: String(params.pageNumber), pageSize: String(params.pageSize ?? 50) });
+  if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.term) query.set("term", params.term);
+  return apiFetch<PagedResponse<OrderDeskProduct>>(`${base}/stores/${encodeURIComponent(storeId)}/products?${query}`, { signal });
 }
 
 export function quoteLines(storeId: string, lines: OrderDeskLineInput[], signal?: AbortSignal) {

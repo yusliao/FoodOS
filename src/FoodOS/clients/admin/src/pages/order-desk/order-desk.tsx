@@ -1,10 +1,10 @@
-import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Headset, History, Minus, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Headset, History, Minus, Package, Plus, Search, Star, Trash2 } from "lucide-react";
 import {
-  getMyCallers, getStoreHistory, placeOrderDeskOrder, quoteLines, searchCallers, suggestProducts,
+  browseProducts, getMyCallers, getProductCategories, getStoreHistory, placeOrderDeskOrder, quoteLines, searchCallers,
   type OrderDeskCaller, type OrderDeskOrder, type OrderDeskProduct, type OrderDeskStoreHistory,
 } from "@/api/order-desk";
 import { useAuth } from "@/auth/use-auth";
@@ -23,6 +23,9 @@ type DeskLine = {
   productId: string; sku: string; name: string; baseUom: string; catchWeight: boolean;
   quantity: number; unitPrice: number | null; currency: string;
 };
+type DeskProduct = Pick<DeskLine, "productId" | "sku" | "name" | "baseUom" | "catchWeight" | "unitPrice" | "currency">;
+
+const PAGE_SIZE = 50;
 
 const historyKey = (storeId: string) => ["order-desk", "history", storeId] as const;
 
@@ -166,7 +169,7 @@ function OrderWorkspace({ caller, canPlace }: { caller: OrderDeskCaller; canPlac
     },
   });
 
-  const addLine = (product: Pick<DeskLine, "productId" | "sku" | "name" | "baseUom" | "catchWeight" | "unitPrice" | "currency">, quantity: number) => {
+  const addLine = (product: DeskProduct, quantity: number) => {
     setPlaced(null);
     setLines(current => current.some(line => line.productId === product.productId)
       ? current.map(line => line.productId === product.productId ? { ...line, quantity: line.quantity + quantity } : line)
@@ -174,6 +177,8 @@ function OrderWorkspace({ caller, canPlace }: { caller: OrderDeskCaller; canPlac
   };
   const setQuantity = (productId: string, quantity: number) =>
     setLines(current => current.map(line => line.productId === productId ? { ...line, quantity } : line));
+  const removeLine = (productId: string) => setLines(current => current.filter(line => line.productId !== productId));
+  const quantities = useMemo(() => new Map(lines.map(line => [line.productId, line.quantity])), [lines]);
   const copyOrder = (order: OrderDeskOrder) => {
     for (const line of order.lines) {
       addLine({ productId: line.productId, sku: line.sku, name: line.name || line.productId, baseUom: line.baseUom, catchWeight: false, unitPrice: null, currency: line.currency }, line.orderedQty);
@@ -187,10 +192,13 @@ function OrderWorkspace({ caller, canPlace }: { caller: OrderDeskCaller; canPlac
     place.mutate({ storeId: caller.storeId, lines: requestLines, key: attempt.current.key });
   };
 
-  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <ProductBrowser storeId={caller.storeId} quantities={quantities}
+      onAdd={product => addLine(product, 1)}
+      onSetQuantity={(productId, quantity) => quantity > 0 ? setQuantity(productId, quantity) : removeLine(productId)} />
+    <div className="min-w-0 space-y-6">
     <section className="min-w-0 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5" aria-labelledby="order-lines">
-      <h2 id="order-lines" className="font-semibold">{t("orderDesk.linesTitle")}</h2>
-      <ProductPicker storeId={caller.storeId} onPick={product => addLine({ ...product, unitPrice: product.unitPrice }, 1)} />
+      <h2 id="order-lines" className="font-semibold">{t("orderDesk.linesTitle")}{lines.length > 0 ? ` · ${t("orderDesk.selectedCount").replace("{n}", String(lines.length))}` : ""}</h2>
       {lines.length === 0 && <p className="text-sm text-[var(--color-muted-foreground)]">{t("orderDesk.noLines")}</p>}
       {lines.length > 0 && <ul className="divide-y divide-[var(--color-border)]">
         {priced.map(line => <li key={line.productId} className="flex flex-wrap items-center gap-3 py-3 text-sm">
@@ -206,7 +214,7 @@ function OrderWorkspace({ caller, canPlace }: { caller: OrderDeskCaller; canPlac
             <Button size="icon-xs" variant="outline" aria-label={t("orderDesk.increase")} onClick={() => setQuantity(line.productId, line.quantity + 1)}><Plus /></Button>
           </div>
           <span className="w-24 text-right tabular-nums">{line.lineTotal === null ? "—" : money(line.lineTotal, line.currency)}</span>
-          <Button size="icon-xs" variant="ghost" aria-label={`${t("orderDesk.remove")} ${line.name}`} onClick={() => setLines(current => current.filter(item => item.productId !== line.productId))}><Trash2 /></Button>
+          <Button size="icon-xs" variant="ghost" aria-label={`${t("orderDesk.remove")} ${line.name}`} onClick={() => removeLine(line.productId)}><Trash2 /></Button>
         </li>)}
       </ul>}
       {quote.isError && <ErrorBand message={describe(quote.error, t("orderDesk.quoteFailed"))} />}
@@ -221,59 +229,136 @@ function OrderWorkspace({ caller, canPlace }: { caller: OrderDeskCaller; canPlac
       {placed && <p role="status" className="rounded-lg bg-[var(--color-muted)] p-3 text-sm">{t("orderDesk.placedHint")} <Link className="underline" to={`/orders/${placed}`}>{t("orderDesk.viewOrder")}</Link></p>}
     </section>
     <StoreHistoryPanel history={history} onAdd={addLine} onCopy={copyOrder} />
+    </div>
   </div>;
 }
 
-function ProductPicker({ storeId, onPick }: { storeId: string; onPick: (product: OrderDeskProduct) => void }) {
+/**
+ * Active products the agent scrolls through and adds with the +/- stepper. Categories narrow the list;
+ * the keyword box filters it in place (name, pinyin, SKU, barcode) instead of opening a dropdown.
+ */
+function ProductBrowser({ storeId, quantities, onAdd, onSetQuantity }: {
+  storeId: string;
+  quantities: ReadonlyMap<string, number>;
+  onAdd: (product: DeskProduct) => void;
+  onSetQuantity: (productId: string, quantity: number) => void;
+}) {
   const { t, culture } = useLocale();
-  const listId = useId();
+  const [categoryId, setCategoryId] = useState("");
   const [input, setInput] = useState("");
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
   const [term, debouncing] = useDebouncedSearch(input);
-  const suggestions = useQuery({
-    queryKey: ["order-desk", "products", storeId, term],
-    queryFn: ({ signal }) => suggestProducts(storeId, term, signal),
-    enabled: term.length >= 1,
+  const categories = useQuery({ queryKey: ["order-desk", "product-categories"], queryFn: ({ signal }) => getProductCategories(signal) });
+  const products = useInfiniteQuery({
+    queryKey: ["order-desk", "products", storeId, categoryId, term],
+    queryFn: ({ pageParam, signal }) => browseProducts(storeId, { categoryId: categoryId || undefined, term: term || undefined, pageNumber: pageParam, pageSize: PAGE_SIZE }, signal),
+    initialPageParam: 1,
+    getNextPageParam: last => last.hasNext ? last.pageNumber + 1 : undefined,
   });
-  const items = term.length >= 1 ? suggestions.data ?? [] : [];
-  const pick = (product: OrderDeskProduct) => {
-    onPick(product);
-    setInput("");
-    setActive(0);
-  };
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActive(index => Math.min(index + 1, items.length - 1)); }
-    else if (event.key === "ArrowUp") { event.preventDefault(); setActive(index => Math.max(index - 1, 0)); }
-    else if (event.key === "Enter" && items[active]) { event.preventDefault(); pick(items[active]); }
-    else if (event.key === "Escape") setOpen(false);
-  };
-  const showList = open && term.length >= 1;
-  return <div className="relative">
+  const items = useMemo(() => products.data?.pages.flatMap(page => page.items) ?? [], [products.data]);
+  const totalCount = products.data?.pages[0]?.totalCount ?? 0;
+  const money = (amount: number, code: string) => new Intl.NumberFormat(culture, { style: "currency", currency: code }).format(amount);
+
+  // 滚到列表底部自动加载下一批
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = products;
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasNextPage || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting) && !isFetchingNextPage) void fetchNextPage();
+    }, { root: scrollRef.current, rootMargin: "200px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
+
+  const chip = (id: string, label: string, count?: number) => <button key={id || "all"} type="button" aria-pressed={categoryId === id}
+    onClick={() => { setCategoryId(id); scrollRef.current?.scrollTo({ top: 0 }); }}
+    className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-2 ${categoryId === id
+      ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
+      : "border-[var(--color-border)] hover:bg-[var(--color-accent)]"}`}>
+    {label}{count !== undefined && <span className="ml-1 opacity-70">{count}</span>}
+  </button>;
+
+  return <section className="min-w-0 space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5" aria-labelledby="desk-products">
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 id="desk-products" className="flex items-center gap-2 font-semibold"><Package className="size-4" aria-hidden />{t("orderDesk.productsTitle")}</h2>
+      {products.isSuccess && <span className="text-sm text-[var(--color-muted-foreground)]">{t("orderDesk.productCount").replace("{n}", String(totalCount))}</span>}
+    </div>
+    <div role="group" aria-label={t("orderDesk.categoryFilter")} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {chip("", t("orderDesk.allCategories"))}
+      {categories.data?.map(category => chip(category.id, category.name, category.productCount))}
+    </div>
+    {categories.isError && <ErrorBand message={describe(categories.error, t("orderDesk.categoriesFailed"))} />}
     <label className="relative block">
       <span className="sr-only">{t("orderDesk.productSearch")}</span>
       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" aria-hidden />
-      <Input role="combobox" aria-expanded={showList} aria-controls={listId} aria-autocomplete="list"
-        aria-activedescendant={showList && items[active] ? `${listId}-${active}` : undefined}
-        className="pl-9" value={input} maxLength={100} placeholder={t("orderDesk.productPlaceholder")}
-        onChange={event => { setInput(event.target.value); setOpen(true); setActive(0); }}
-        onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={onKeyDown} />
+      <Input className="pl-9" type="search" value={input} maxLength={100} placeholder={t("orderDesk.productPlaceholder")}
+        onChange={event => { setInput(event.target.value); scrollRef.current?.scrollTo({ top: 0 }); }} />
     </label>
-    {showList && <ul id={listId} role="listbox" aria-label={t("orderDesk.productSearch")}
-      className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-popover,var(--color-card))] p-1 shadow-lg">
-      {(suggestions.isPending || debouncing) && <li className="px-3 py-2 text-sm text-[var(--color-muted-foreground)]">{t("orderDesk.searching")}</li>}
-      {suggestions.isError && <li className="px-3 py-2 text-sm" role="alert">{describe(suggestions.error, t("orderDesk.requestFailed"))}</li>}
-      {suggestions.isSuccess && !debouncing && items.length === 0 && <li className="px-3 py-2 text-sm">{t("orderDesk.noProducts")}</li>}
-      {items.map((product, index) => <li key={product.productId} id={`${listId}-${index}`} role="option" aria-selected={index === active}
-        className={`flex cursor-pointer flex-wrap items-center gap-2 rounded-md px-3 py-2 text-sm ${index === active ? "bg-[var(--color-accent)]" : ""}`}
-        onMouseDown={event => { event.preventDefault(); pick(product); }} onMouseEnter={() => setActive(index)}>
-        <span className="min-w-0 flex-1"><span className="block break-words font-medium">{product.name}</span>
-          <span className="text-[var(--color-muted-foreground)]">{product.sku} · {product.baseUom}</span></span>
-        <AvailabilityBadge status={product.availabilityStatus} />
-        <span className="tabular-nums">{new Intl.NumberFormat(culture, { style: "currency", currency: product.currency }).format(product.unitPrice)}</span>
-      </li>)}
-    </ul>}
+    <div ref={scrollRef} className="max-h-[calc(100vh-22rem)] min-h-64 overflow-y-auto rounded-lg border border-[var(--color-border)]">
+      {(products.isPending || debouncing) && <LoadingRow label={t("orderDesk.loading")} />}
+      {products.isError && <div className="space-y-2 p-3"><ErrorBand message={describe(products.error, t("orderDesk.requestFailed"))} />
+        <Button variant="outline" onClick={() => void products.refetch()}>{t("workbench.retry")}</Button></div>}
+      {products.isSuccess && !debouncing && items.length === 0 && <p role="status" className="p-4 text-sm text-[var(--color-muted-foreground)]">{t("orderDesk.noProducts")}</p>}
+      {items.length > 0 && <ul aria-label={t("orderDesk.productsTitle")} className="divide-y divide-[var(--color-border)]">
+        {items.map((product, index) => {
+          const quantity = quantities.get(product.productId) ?? 0;
+          // WMS 明确库存不足才拦；未接 WMS（待同步）照常可下，平台承诺后由仓库确认
+          const blocked = product.availabilityStatus === "insufficient";
+          const showCategory = !categoryId && !term && !!product.categoryName && product.categoryName !== items[index - 1]?.categoryName;
+          return <li key={product.productId}>
+            {showCategory && <p className="bg-[var(--color-muted)] px-3 py-1 text-xs font-medium text-[var(--color-muted-foreground)]">{product.categoryName}</p>}
+            <div className={`flex flex-wrap items-center gap-3 px-3 py-2.5 text-sm ${quantity > 0 ? "bg-[var(--color-accent)]" : ""} ${blocked ? "opacity-60" : ""}`}>
+              <div className="min-w-0 flex-1">
+                <p className="break-words font-medium">{product.name}</p>
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[var(--color-muted-foreground)]">
+                  <span>{product.sku} · {product.baseUom}</span>
+                  {product.catchWeight && <Badge variant="muted">{t("orderDesk.catchWeight")}</Badge>}
+                  <AvailabilityBadge status={product.availabilityStatus} />
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-medium tabular-nums">{money(product.unitPrice, product.currency)}</p>
+                <p className="text-xs text-[var(--color-muted-foreground)]">{t(`pricing.source${product.priceSource}`, product.priceSource)}</p>
+              </div>
+              <ProductStepper product={product} quantity={quantity} blocked={blocked}
+                onAdd={() => onAdd(toDeskProduct(product))} onSetQuantity={value => onSetQuantity(product.productId, value)} />
+            </div>
+          </li>;
+        })}
+      </ul>}
+      <div ref={sentinelRef} aria-hidden className="h-px" />
+      {products.hasNextPage && <div className="p-3 text-center">
+        <Button variant="outline" size="sm" disabled={products.isFetchingNextPage} onClick={() => void products.fetchNextPage()}>
+          {products.isFetchingNextPage ? t("orderDesk.loadingMore") : t("orderDesk.loadMore")}
+        </Button>
+      </div>}
+      {products.isSuccess && !products.hasNextPage && items.length > 0 && <p className="p-3 text-center text-xs text-[var(--color-muted-foreground)]">{t("orderDesk.allLoaded").replace("{n}", String(totalCount))}</p>}
+    </div>
+  </section>;
+}
+
+function ProductStepper({ product, quantity, blocked, onAdd, onSetQuantity }: {
+  product: OrderDeskProduct; quantity: number; blocked: boolean; onAdd: () => void; onSetQuantity: (quantity: number) => void;
+}) {
+  const { t } = useLocale();
+  if (quantity <= 0) {
+    return <Button size="sm" variant="outline" disabled={blocked} aria-label={`${t("orderDesk.add")} ${product.name}`} onClick={onAdd}>
+      <Plus />{t("orderDesk.add")}
+    </Button>;
+  }
+  return <div className="flex items-center gap-1">
+    <Button size="icon-xs" variant="outline" aria-label={`${t("orderDesk.decrease")} ${product.name}`} onClick={() => onSetQuantity(quantity - 1)}><Minus /></Button>
+    <Input className="h-7 w-16 text-center" type="number" inputMode="decimal" min={0} step={product.catchWeight ? 0.01 : 1}
+      aria-label={`${t("orderDesk.quantity")} ${product.name}`} value={quantity}
+      onChange={event => { const value = Number(event.target.value); if (Number.isFinite(value)) onSetQuantity(value); }} />
+    <Button size="icon-xs" variant="outline" aria-label={`${t("orderDesk.increase")} ${product.name}`} disabled={blocked} onClick={() => onSetQuantity(quantity + 1)}><Plus /></Button>
   </div>;
+}
+
+function toDeskProduct(product: OrderDeskProduct): DeskProduct {
+  return { productId: product.productId, sku: product.sku, name: product.name, baseUom: product.baseUom, catchWeight: product.catchWeight, unitPrice: product.unitPrice, currency: product.currency };
 }
 
 function AvailabilityBadge({ status }: { status: string }) {
@@ -285,7 +370,7 @@ function AvailabilityBadge({ status }: { status: string }) {
 
 function StoreHistoryPanel({ history, onAdd, onCopy }: {
   history: UseQueryResult<OrderDeskStoreHistory>;
-  onAdd: (product: Pick<DeskLine, "productId" | "sku" | "name" | "baseUom" | "catchWeight" | "unitPrice" | "currency">, quantity: number) => void;
+  onAdd: (product: DeskProduct, quantity: number) => void;
   onCopy: (order: OrderDeskOrder) => void;
 }) {
   const { t, culture } = useLocale();

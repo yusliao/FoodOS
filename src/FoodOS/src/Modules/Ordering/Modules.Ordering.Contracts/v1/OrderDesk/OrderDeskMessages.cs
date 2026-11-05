@@ -1,3 +1,4 @@
+using FSH.Framework.Shared.Persistence;
 using FSH.Modules.Ordering.Contracts.Dtos;
 using Mediator;
 
@@ -12,8 +13,19 @@ public sealed record SearchOrderDeskCallersQuery(string Term, int Limit = 10) : 
 /// <summary>Stores the current agent placed service orders for in the last 90 days, most frequent first.</summary>
 public sealed record GetMyOrderDeskCallersQuery(int Limit = 12) : IQuery<IReadOnlyList<OrderDeskFrequentCallerDto>>;
 
-public sealed record SuggestOrderDeskProductsQuery(Guid StoreId, string Term, int Limit = 10)
-    : IQuery<IReadOnlyList<OrderDeskProductDto>>;
+/// <summary>
+/// Pages through active products with the store's prices and availability, optionally narrowed to one
+/// category and/or a keyword. Without a keyword they are ordered by category, then name.
+/// </summary>
+public sealed record BrowseOrderDeskProductsQuery(
+    Guid StoreId,
+    Guid? CategoryId = null,
+    string? Term = null,
+    int PageNumber = 1,
+    int PageSize = 50) : IQuery<PagedResponse<OrderDeskProductDto>>;
+
+/// <summary>Categories that hold active products, for the order desk's category filter.</summary>
+public sealed record GetOrderDeskProductCategoriesQuery : IQuery<IReadOnlyList<OrderDeskProductCategoryDto>>;
 
 public sealed record OrderDeskLineInput(Guid ProductId, decimal Quantity);
 
