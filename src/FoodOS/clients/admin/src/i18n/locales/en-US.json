@@ -506,6 +506,15 @@
     "openProfile": "Open profile menu",
     "admin": "Operator workbench"
   },
+  "tabs": {
+    "label": "Open pages",
+    "actions": "Tab actions",
+    "close": "Close",
+    "closeTab": "Close {title}",
+    "closeOthers": "Close others",
+    "closeRight": "Close tabs to the right",
+    "closeAll": "Close all"
+  },
   "languages": {
     "en-US": "English",
     "zh-CN": "中文"

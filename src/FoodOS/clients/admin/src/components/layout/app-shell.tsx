@@ -2,12 +2,14 @@ import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { WorkspaceTabs } from "@/components/layout/workspace-tabs";
 import {
   MobileNavProvider,
   MobileNavRoot,
 } from "@/components/layout/mobile-nav";
 import { InactivityGuard } from "@/components/auth/inactivity-guard";
 import { useT } from "@/i18n/locale-provider";
+import { useAuth } from "@/auth/use-auth";
 
 /**
  * AppShell — three-area layout: sidebar / topbar / main content.
@@ -16,6 +18,7 @@ import { useT } from "@/i18n/locale-provider";
  *   - Desktop sidebar collapses to a 52px icon rail via localStorage state.
  *   - MobileNavRoot mounts the Sheet drawer; MobileNavTrigger in the Topbar
  *     opens it on screens below `md`.
+ *   - WorkspaceTabs sits between the topbar and main (multi-page tabs).
  *   - Suspense boundary in main catches lazy-loaded route chunks.
  *
  * Note: admin does not yet have an ImpersonationBanner — the admin app is
@@ -24,6 +27,7 @@ import { useT } from "@/i18n/locale-provider";
  */
 export function AppShell() {
   const t = useT();
+  const { user } = useAuth();
   return (
     <MobileNavProvider>
       {/* Skip-to-content link — first focusable element. */}
@@ -39,6 +43,7 @@ export function AppShell() {
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar />
+            {user && <WorkspaceTabs key={user.id} userId={user.id} />}
             <main
               id="main-content"
               tabIndex={-1}

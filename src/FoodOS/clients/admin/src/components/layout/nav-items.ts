@@ -149,7 +149,7 @@ export function filterNavSpec(items: NavSpec[], granted: readonly string[]): Nav
   return items.filter((item) => canSeeNavItem(item, granted));
 }
 
-function canSeeNavItem(item: NavSpec, granted: readonly string[]): boolean {
+export function canSeeNavItem(item: NavSpec, granted: readonly string[]): boolean {
   if (item.anyPerms && item.anyPerms.length > 0 && !item.anyPerms.some((p) => granted.includes(p))) return false;
   return !item.perms || item.perms.every((p) => granted.includes(p));
 }

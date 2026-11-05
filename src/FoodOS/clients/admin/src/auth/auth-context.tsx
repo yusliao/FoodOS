@@ -6,6 +6,7 @@ import { issueToken } from "@/auth/api";
 import { refreshAccessToken } from "@/lib/api-client";
 import { getMyPermissions } from "@/api/users";
 import { useT } from "@/i18n/locale-provider";
+import { clearStoredTabs } from "@/components/layout/workspace-tabs-model";
 
 export type AuthUser = {
   id: string;
@@ -206,6 +207,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     sessionGeneration.current += 1;
+    // 退出登录清空已打开的页签，下个人登录从工作台开始。
+    clearStoredTabs();
     tokenStore.clear();
     queryClient.clear();
   }, [queryClient]);

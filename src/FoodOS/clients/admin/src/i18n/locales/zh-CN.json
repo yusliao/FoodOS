@@ -506,6 +506,15 @@
     "openProfile": "打开个人菜单",
     "admin": "运营工作台"
   },
+  "tabs": {
+    "label": "已打开的页面",
+    "actions": "页签操作",
+    "close": "关闭",
+    "closeTab": "关闭 {title}",
+    "closeOthers": "关闭其他",
+    "closeRight": "关闭右侧",
+    "closeAll": "关闭全部"
+  },
   "languages": {
     "en-US": "English",
     "zh-CN": "中文"

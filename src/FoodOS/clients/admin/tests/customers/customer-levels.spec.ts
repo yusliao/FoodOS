@@ -110,7 +110,7 @@ test("old contract pricing link opens the pricing tab and the menu no longer lis
   await expect(page).toHaveURL(/\/customers\?tab=pricing/);
   await expect(page.getByRole("heading", { name: "Customer levels" })).toBeVisible();
   // 只有定价查看权限：没有页签、没有写按钮，也不请求客户列表
-  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("tab")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "New level" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Contract pricing" })).toHaveCount(0);
   expect(requests.some(url => url.includes("/ordering/customer-orgs"))).toBe(false);
